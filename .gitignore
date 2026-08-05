@@ -1,0 +1,7 @@
+appsettings.*.json
+*.tfvars
+.env
+bin/
+obj/
+TestResults/
+*.jsonl

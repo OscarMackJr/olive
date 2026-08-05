@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup>
+    <UseAppHost>false</UseAppHost>
+  </PropertyGroup>
+</Project>

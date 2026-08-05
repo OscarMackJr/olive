@@ -1,0 +1,15 @@
+action_id: crm.case_note@1
+target_system: nexus_crm
+parameters:
+  type: object
+  additionalProperties: false
+  properties:
+    case_ref: { type: string }
+    note_ref: { type: string }
+  required: [case_ref, note_ref]
+required_purpose: [servicing, collections]
+required_approval: role:case_supervisor
+reversible: true
+max_rate:
+  limit: 10
+  window_seconds: 3600

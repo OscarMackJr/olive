@@ -1,0 +1,5 @@
+<Project>
+  <PropertyGroup>
+    <UseAppHost Condition="'$(UseAppHost)' != 'true'">false</UseAppHost>
+  </PropertyGroup>
+</Project>
