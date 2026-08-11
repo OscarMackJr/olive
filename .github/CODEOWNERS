@@ -1,0 +1,9 @@
+# EMS-CTRL-011 baseline
+# Replace twg-global-appdev with an existing GitHub team slug in OscarMackJr.
+* @OscarMackJr/twg-global-appdev
+/.github/ @OscarMackJr/twg-global-appdev
+/.github/workflows/ @OscarMackJr/twg-global-appdev
+/terraform/ @OscarMackJr/twg-global-appdev
+/infra/ @OscarMackJr/twg-global-appdev
+/sql/ @OscarMackJr/twg-global-appdev
+/migrations/ @OscarMackJr/twg-global-appdev
