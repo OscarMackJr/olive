@@ -82,6 +82,37 @@ public sealed class ArchitectureTests
         }
     }
 
+    // Olive's own code in every src project (not Npgsql's, which is a separate assembly) must not reference
+    // outbound HTTP or raw socket assemblies.
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void REQ_ACT_04_no_src_assembly_references_outbound_network_assemblies()
+    {
+        string[] bannedPrefixes = ["System.Net.Http", "System.Net.Sockets", "System.Net.Security", "System.Net.WebClient", "System.Net.Requests"];
+        var baseDir = new DirectoryInfo(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var (configuration, framework) = (baseDir.Parent!.Name, baseDir.Name);
+        foreach (var dir in SrcProjectDirs())
+        {
+            var name = Path.GetFileName(dir);
+            // Not every src project is referenced by the tests (the Migrator is not), so read the built file's metadata.
+            var path = Path.Combine(AppContext.BaseDirectory, name + ".dll");
+            if (!File.Exists(path))
+            {
+                path = Path.Combine(dir, "bin", configuration, framework, name + ".dll");
+            }
+
+            Assert.True(File.Exists(path), $"{name}: built assembly not found");
+            using var stream = File.OpenRead(path);
+            using var pe = new System.Reflection.PortableExecutable.PEReader(stream);
+            var md = System.Reflection.Metadata.PEReaderExtensions.GetMetadataReader(pe);
+            var refs = md.AssemblyReferences
+                .Select(h => md.GetString(md.GetAssemblyReference(h).Name))
+                .Where(n => bannedPrefixes.Any(p => n.StartsWith(p, StringComparison.Ordinal)))
+                .ToArray();
+            Assert.True(refs.Length == 0, $"{name} references {string.Join(",", refs)}");
+        }
+    }
+
     [Fact]
     [Trait("Category", "Architecture")]
     public void FND_02_direct_packages_match_allowlist_in_lockfiles()
@@ -119,6 +150,12 @@ public sealed class ArchitectureTests
         Assert.Contains("T:System.Net.Http.HttpClient;", banned);
         Assert.Contains("T:System.Net.Http.HttpClientHandler;", banned);
         Assert.Contains("T:System.Net.Http.SocketsHttpHandler;", banned);
+        Assert.Contains("T:System.Net.WebClient;", banned);
+        Assert.Contains("T:System.Net.Http.HttpMessageInvoker;", banned);
+        Assert.Contains("T:System.Net.Sockets.TcpClient;", banned);
+        Assert.Contains("T:System.Net.Sockets.Socket;", banned);
+        Assert.Contains("T:System.Net.Sockets.UdpClient;", banned);
+        Assert.Contains("T:System.Net.Security.SslStream;", banned);
 
         var editorconfig = File.ReadAllText(Path.Combine(TestPaths.Root, ".editorconfig"));
         Assert.Contains("dotnet_diagnostic.RS0030.severity = error", editorconfig);
