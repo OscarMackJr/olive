@@ -52,8 +52,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md — Role bootstrap, migrator, migration 0001 (proposal, proposal_event), Testcontainers fixture, DB-01..04 tests
-- [ ] 01-03-PLAN.md — Redacting secret types, introspection port and fixture stub, agent-key header, agents.yaml allowlist
+- [x] 01-02-PLAN.md — Role bootstrap, migrator, migration 0001 (proposal, proposal_event), Testcontainers fixture, DB-01..04 tests
+- [x] 01-03-PLAN.md — Redacting secret types, introspection port and fixture stub, agent-key header, agents.yaml allowlist
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -228,7 +228,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Walking Skeleton | 1/7 | In Progress|  |
+| 1. Foundation and Walking Skeleton | 3/7 | In Progress|  |
 | 2. Contract Integrity and Idempotent Submission | 0/TBD | Not started | - |
 | 3. Trace Verification | 0/TBD | Not started | - |
 | 4. Policy, Expiry and Refusal | 0/TBD | Not started | - |
