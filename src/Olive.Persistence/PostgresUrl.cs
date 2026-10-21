@@ -4,6 +4,18 @@ namespace Olive.Persistence;
 
 public static class PostgresUrl
 {
+    private static readonly Dictionary<string, SslMode> SslModes = new(StringComparer.Ordinal)
+    {
+        ["disable"] = SslMode.Disable,
+        ["allow"] = SslMode.Allow,
+        ["prefer"] = SslMode.Prefer,
+        ["require"] = SslMode.Require,
+        ["verify-ca"] = SslMode.VerifyCA,
+        ["verify-full"] = SslMode.VerifyFull,
+    };
+
+    private static string RequireValue(string value) => string.IsNullOrWhiteSpace(value) ? throw new FormatException() : value;
+
     public static string ToNpgsql(string url)
     {
         try
@@ -43,17 +55,33 @@ public static class PostgresUrl
                 }
             }
 
+            // libpq spellings only; an unknown or repeated parameter fails closed rather than being ignored (WR-06).
+            var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
             {
                 var kv = pair.Split('=', 2);
-                if (kv[0] == "sslmode")
+                if (kv.Length != 2 || !seen.Add(kv[0]))
                 {
-                    if (kv.Length != 2 || !Enum.TryParse<SslMode>(Uri.UnescapeDataString(kv[1]), true, out var mode))
-                    {
-                        throw new FormatException();
-                    }
+                    throw new FormatException();
+                }
 
-                    builder.SslMode = mode;
+                var value = Uri.UnescapeDataString(kv[1]);
+                switch (kv[0])
+                {
+                    case "sslmode":
+                        builder.SslMode = SslModes.TryGetValue(value, out var mode) ? mode : throw new FormatException();
+                        break;
+                    case "sslrootcert":
+                        builder.RootCertificate = RequireValue(value);
+                        break;
+                    case "sslcert":
+                        builder.SslCertificate = RequireValue(value);
+                        break;
+                    case "sslkey":
+                        builder.SslKey = RequireValue(value);
+                        break;
+                    default:
+                        throw new FormatException();
                 }
             }
 
