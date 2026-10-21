@@ -1,0 +1,8 @@
+{
+  "fixture-key-liam-alpha": "liam-alpha.json",
+  "fixture-key-liam-beta": "liam-beta.json",
+  "fixture-key-user": "user.json",
+  "fixture-key-application": "application.json",
+  "fixture-key-agent-not-allowlisted": "agent-not-allowlisted.json",
+  "fixture-key-inactive": "inactive.json"
+}

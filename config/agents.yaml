@@ -1,0 +1,4 @@
+# Agent allowlist (D-15, IDN-02). Source-controlled and change-managed like the catalog.
+# Not overridable by environment variable or appsettings.
+agents:
+  - agent_id: liam
