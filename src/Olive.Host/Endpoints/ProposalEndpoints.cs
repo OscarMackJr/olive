@@ -13,6 +13,7 @@ public static class ProposalEndpoints
     public const int MaxBodyBytes = 1_048_576;
     private const int MaxDepth = 64;
     private const int MaxRunIdLength = 256;
+    private const string LogCategory = "Olive.Host.Endpoints.ProposalEndpoints";
 
     public static IEndpointRouteBuilder MapProposalEndpoints(this IEndpointRouteBuilder app)
     {
@@ -22,7 +23,7 @@ public static class ProposalEndpoints
     }
 
     // Order (Decision section 15.2): introspect (auth handler), principal checks, then the body.
-    private static async Task<IResult> PostAsync(HttpContext http, IProposalStore store, IAgentAllowlist allowlist, CancellationToken ct)
+    private static async Task<IResult> PostAsync(HttpContext http, IProposalStore store, IAgentAllowlist allowlist, ILoggerFactory loggerFactory, CancellationToken ct)
     {
         var key = http.User.ToActiveKey();
         if (key.PrincipalType != PrincipalTypes.Agent)
@@ -79,9 +80,14 @@ public static class ProposalEndpoints
             {
                 id = await store.InsertAsync(key.TenantId, proposal, ct);
             }
-            catch (PostgresException e) when (e.SqlState is not null && e.SqlState.StartsWith("22", StringComparison.Ordinal))
+            catch (PostgresException e) when (e.SqlState is PostgresErrorCodes.NumericValueOutOfRange
+                                                 or PostgresErrorCodes.InvalidTextRepresentation
+                                                 or PostgresErrorCodes.UntranslatableCharacter
+                                                 or PostgresErrorCodes.CharacterNotInRepertoire)
             {
-                // Class 22 is a data exception, a client data fault (D-07). Message may echo values: never log or return it.
+                // Only the data faults a body can cause map to 400 (D-07); other class-22 faults reach the 500 handler.
+                // The message may echo values: log the SQL state only, and never return it (WR-11).
+                loggerFactory.CreateLogger(LogCategory).LogWarning("Proposal insert refused by database data check {SqlState}", e.SqlState);
                 return Invalid();
             }
 

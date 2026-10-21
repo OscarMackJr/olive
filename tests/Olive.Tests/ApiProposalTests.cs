@@ -245,15 +245,34 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         public Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct) => throw new NotSupportedException();
     }
 
-    [Fact]
-    public async Task API_01_class_22_database_error_maps_to_400()
+    [Theory]
+    [InlineData("22003")]
+    [InlineData("22P02")]
+    [InlineData("22P05")]
+    [InlineData("22021")]
+    public async Task API_01_body_caused_class_22_database_error_maps_to_400_and_logs_sql_state_only(string sqlState)
     {
         await using var db = await fixture.CreateDatabaseAsync();
-        await using var factory = new OliveApiFactory(db, configureServices: s => s.AddScoped<IProposalStore>(_ => new ThrowingStore("22003")));
+        await using var factory = new OliveApiFactory(db, configureServices: s => s.AddScoped<IProposalStore>(_ => new ThrowingStore(sqlState)));
         using var alpha = factory.CreateKeyClient(AlphaKey);
         var r = await alpha.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken);
         await AssertProblemAsync(r, HttpStatusCode.BadRequest, ProblemReasons.InvalidRequest, "secret-parameter-value");
         Assert.False(factory.Logs.HasErrorOrAbove);
+        Assert.Contains("Proposal insert refused by database data check " + sqlState, factory.Logs.Text);
+        Assert.DoesNotContain("secret-parameter-value", factory.Logs.Text);
+    }
+
+    // WR-11: class-22 faults a body cannot cause (for example from key-derived values) are server faults, not 400.
+    [Theory]
+    [InlineData("22001")]
+    [InlineData("22008")]
+    public async Task API_01_other_class_22_database_error_gives_500(string sqlState)
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, configureServices: s => s.AddScoped<IProposalStore>(_ => new ThrowingStore(sqlState)));
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.InternalServerError, r.StatusCode);
     }
 
     [Fact]
