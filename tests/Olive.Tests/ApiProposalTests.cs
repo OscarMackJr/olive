@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Npgsql;
+using Olive.Contracts;
 
 namespace Olive.Tests;
 
@@ -78,5 +79,171 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         using var beta = factory.CreateKeyClient(BetaKey);
         var cross = await beta.GetAsync($"/v1/proposals/{id}", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, cross.StatusCode);
+    }
+
+    internal static async Task<JsonElement> AssertProblemAsync(HttpResponseMessage r, HttpStatusCode status, string reason, params string[] forbidden)
+    {
+        Assert.Equal(status, r.StatusCode);
+        Assert.Equal("application/problem+json", r.Content.Headers.ContentType?.MediaType);
+        var text = await r.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var body = JsonDocument.Parse(text).RootElement;
+        Assert.Equal(reason, body.GetProperty("reason").GetString());
+        Assert.Equal((int)status, body.GetProperty("status").GetInt32());
+        Assert.DoesNotContain("Exception", text);
+        Assert.DoesNotContain("StackTrace", text);
+        foreach (var f in forbidden) { Assert.DoesNotContain(f, text); }
+        return body;
+    }
+
+    public static TheoryData<string> InvalidBodies() => new()
+    {
+        "not json",
+        "[]",
+        "\"run-1\"",
+        "{}",
+        "{\"run_id\":1}",
+        "{\"run_id\":\"\"}",
+        "{\"run_id\":null}",
+        "{\"run_id\":\"r\",\"parameters\":[]}",
+        "{\"run_id\":\"r\",\"parameters\":null}",
+        "{\"run_id\":\"r\",\"action_type\":5}",
+        "{\"run_id\":\"r\",\"nono_session_id\":{}}",
+        "{\"run_id\":\"r\",\"party_ref\":null}",
+        "{\"run_id\":\"r\",\"parameters\":{\"a\":\"\\u0000\"}}",
+        "{\"run_id\":\"r\",\"parameters\":{\"d\":" + new string('[', 70) + new string(']', 70) + "}}",
+    };
+
+    [Theory]
+    [MemberData(nameof(InvalidBodies))]
+    public async Task API_01_invalid_bodies_give_400_and_store_nothing(string body)
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", Json(body), TestContext.Current.CancellationToken);
+        await AssertProblemAsync(r, HttpStatusCode.BadRequest, ProblemReasons.InvalidRequest);
+        Assert.Equal(0, await CountRowsAsync(db, Alpha));
+        Assert.DoesNotContain("insert", factory.Events);
+    }
+
+    [Fact]
+    public async Task API_01_non_json_content_type_gives_400()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", new StringContent("{\"run_id\":\"r\"}", Encoding.UTF8, "text/plain"), TestContext.Current.CancellationToken);
+        await AssertProblemAsync(r, HttpStatusCode.BadRequest, ProblemReasons.InvalidRequest);
+        Assert.Equal(0, await CountRowsAsync(db, Alpha));
+    }
+
+    [Fact]
+    public async Task API_01_only_run_id_is_mandatory()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", Json("{\"run_id\":\"only\",\"unknown\":1}"), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+        Assert.Equal(1, await CountRowsAsync(db, Alpha));
+    }
+
+    private static string BodyOfSize(int total)
+    {
+        const string prefix = "{\"run_id\":\"r\",\"justification\":\"";
+        const string suffix = "\"}";
+        return prefix + new string('a', total - prefix.Length - suffix.Length) + suffix;
+    }
+
+    [Fact]
+    public async Task API_01_oversized_body_gives_413()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var body = BodyOfSize(1_048_577);
+        Assert.Equal(1_048_577, Encoding.UTF8.GetByteCount(body));
+        var r = await alpha.PostAsync("/v1/proposals", Json(body), TestContext.Current.CancellationToken);
+        await AssertProblemAsync(r, HttpStatusCode.RequestEntityTooLarge, ProblemReasons.PayloadTooLarge);
+        Assert.Equal(0, await CountRowsAsync(db, Alpha));
+    }
+
+    [Fact]
+    public async Task API_01_body_at_the_limit_is_accepted()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", Json(BodyOfSize(1_048_576)), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task API_01_duplicate_run_gives_409_and_other_tenant_may_reuse_run_id()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        using var beta = factory.CreateKeyClient(BetaKey);
+        Assert.Equal(HttpStatusCode.Created, (await alpha.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken)).StatusCode);
+        var dup = await alpha.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken);
+        await AssertProblemAsync(dup, HttpStatusCode.Conflict, ProblemReasons.DuplicateRun);
+        Assert.Equal(1, await CountRowsAsync(db, Alpha));
+        Assert.Equal(HttpStatusCode.Created, (await beta.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(1, await CountRowsAsync(db, Beta));
+    }
+
+    [Fact]
+    public async Task API_02_cross_tenant_and_missing_ids_give_identical_404()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        using var beta = factory.CreateKeyClient(BetaKey);
+        var post = await beta.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken);
+        var betaId = JsonDocument.Parse(await post.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).RootElement.GetProperty("proposal_id").GetGuid();
+
+        var cross = await alpha.GetAsync($"/v1/proposals/{betaId}", TestContext.Current.CancellationToken);
+        var missing = await alpha.GetAsync($"/v1/proposals/{Guid.NewGuid()}", TestContext.Current.CancellationToken);
+        var a = await AssertProblemAsync(cross, HttpStatusCode.NotFound, ProblemReasons.ProposalNotFound);
+        var b = await AssertProblemAsync(missing, HttpStatusCode.NotFound, ProblemReasons.ProposalNotFound);
+        Assert.Equal(a.GetProperty("type").GetString(), b.GetProperty("type").GetString());
+        Assert.Equal(a.GetProperty("title").GetString(), b.GetProperty("title").GetString());
+    }
+
+    [Fact]
+    public async Task API_02_malformed_id_is_not_found_not_server_error()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.GetAsync("/v1/proposals/not-a-guid", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NotFound, r.StatusCode);
+    }
+
+    [Fact]
+    public async Task API_01_error_responses_contain_no_session_key()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var texts = new List<string>();
+        foreach (var body in new[] { "not json", "{}", FullBody, FullBody })
+        {
+            var r = await alpha.PostAsync("/v1/proposals", Json(body), TestContext.Current.CancellationToken);
+            texts.Add(await r.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        }
+
+        using var bad = factory.CreateKeyClient("fixture-key-inactive");
+        var rb = await bad.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken);
+        texts.Add(await rb.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        foreach (var t in texts)
+        {
+            Assert.DoesNotContain(AlphaKey, t);
+            Assert.DoesNotContain("fixture-key-inactive", t);
+        }
+
+        Assert.DoesNotContain(AlphaKey, factory.Logs.Text);
+        Assert.DoesNotContain("fixture-key-inactive", factory.Logs.Text);
     }
 }
