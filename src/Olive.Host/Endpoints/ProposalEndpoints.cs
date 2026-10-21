@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Npgsql;
 using Olive.Application;
 using Olive.Contracts;
 using Olive.Domain;
@@ -73,7 +74,17 @@ public static class ProposalEndpoints
             // Tenant comes only from the introspected key, never from the body (IDN-04).
             var proposal = new NewProposal(key.AgentId, key.KeyId, key.OnBehalfOf, key.Purpose, key.ExpiresAt,
                 nonoSessionId, runId, actionType, partyRef, parametersJson, justification, traceRef);
-            var id = await store.InsertAsync(key.TenantId, proposal, ct);
+            Guid? id;
+            try
+            {
+                id = await store.InsertAsync(key.TenantId, proposal, ct);
+            }
+            catch (PostgresException e) when (e.SqlState is not null && e.SqlState.StartsWith("22", StringComparison.Ordinal))
+            {
+                // Class 22 is a data exception, a client data fault (D-07). Message may echo values: never log or return it.
+                return Invalid();
+            }
+
             if (id is null)
             {
                 return ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.DuplicateRun);
@@ -209,14 +220,59 @@ public static class ProposalEndpoints
         return IsWellFormed(name);
     }
 
-    private static bool AllStringsValid(JsonElement e)
+    // jsonb numeric holds roughly 131072 digits before the point and 16383 after; text expansion on GET is bounded
+    // by refusing exponents outside the double range and by a per-request total expansion budget (CR-02, D-07).
+    private const int MaxNumberChars = 64;
+    private const int MaxExponentDigits = 6;
+    private const int MaxExponent = 308;
+    private const int MaxNumberExpansionBudget = 65536;
+
+    // Adds the number's worst-case expanded digit count to budget; false when out of range or over budget.
+    private static bool IsNumberInRange(JsonElement e, ref int budget)
+    {
+        var raw = e.GetRawText();
+        if (raw.Length > MaxNumberChars)
+        {
+            return false;
+        }
+
+        var exponent = 0;
+        var mantissaEnd = raw.Length;
+        var ePos = raw.AsSpan().IndexOfAny('e', 'E');
+        if (ePos >= 0)
+        {
+            mantissaEnd = ePos;
+            var expText = raw.AsSpan(ePos + 1);
+            var digits = expText.Length > 0 && (expText[0] == '+' || expText[0] == '-') ? expText.Length - 1 : expText.Length;
+            if (digits is < 1 or > MaxExponentDigits
+                || !int.TryParse(expText, System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out exponent)
+                || exponent is < -MaxExponent or > MaxExponent)
+            {
+                return false;
+            }
+        }
+
+        var mantissaDigits = 0;
+        for (var i = 0; i < mantissaEnd; i++)
+        {
+            if (char.IsAsciiDigit(raw[i]))
+            {
+                mantissaDigits++;
+            }
+        }
+
+        budget += mantissaDigits + Math.Abs(exponent);
+        return budget <= MaxNumberExpansionBudget;
+    }
+
+    private static bool AllStringsValid(JsonElement e, ref int budget)
     {
         switch (e.ValueKind)
         {
             case JsonValueKind.Object:
                 foreach (var p in e.EnumerateObject())
                 {
-                    if (!TryGetPropertyName(p, out _) || !AllStringsValid(p.Value))
+                    if (!TryGetPropertyName(p, out _) || !AllStringsValid(p.Value, ref budget))
                     {
                         return false;
                     }
@@ -226,7 +282,7 @@ public static class ProposalEndpoints
             case JsonValueKind.Array:
                 foreach (var item in e.EnumerateArray())
                 {
-                    if (!AllStringsValid(item))
+                    if (!AllStringsValid(item, ref budget))
                     {
                         return false;
                     }
@@ -235,6 +291,8 @@ public static class ProposalEndpoints
                 return true;
             case JsonValueKind.String:
                 return TryGetCleanString(e, out _);
+            case JsonValueKind.Number:
+                return IsNumberInRange(e, ref budget);
             default:
                 return true;
         }
@@ -254,7 +312,8 @@ public static class ProposalEndpoints
         }
 
         // jsonb cannot store U+0000 or lone surrogates; refuse them as a client error rather than a database error.
-        if (!AllStringsValid(v))
+        var budget = 0;
+        if (!AllStringsValid(v, ref budget))
         {
             return false;
         }
