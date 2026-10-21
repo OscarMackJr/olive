@@ -48,7 +48,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 7 plansPlans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Scaffold restructure: .gitattributes, CPM and lockfiles, banned APIs, 11 projects, FND-01/02/03 tests
+- [x] 01-01-PLAN.md — Scaffold restructure: .gitattributes, CPM and lockfiles, banned APIs, 11 projects, FND-01/02/03 tests
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -228,7 +228,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Walking Skeleton | 0/TBD | Not started | - |
+| 1. Foundation and Walking Skeleton | 1/7 | In Progress|  |
 | 2. Contract Integrity and Idempotent Submission | 0/TBD | Not started | - |
 | 3. Trace Verification | 0/TBD | Not started | - |
 | 4. Policy, Expiry and Refusal | 0/TBD | Not started | - |
