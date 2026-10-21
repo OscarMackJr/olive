@@ -61,7 +61,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 01-05-PLAN.md — Walking skeleton slice: POST/GET /v1/proposals with introspection and principal checks
+- [x] 01-05-PLAN.md — Walking skeleton slice: POST/GET /v1/proposals with introspection and principal checks
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -228,7 +228,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Walking Skeleton | 4/7 | In Progress|  |
+| 1. Foundation and Walking Skeleton | 5/7 | In Progress|  |
 | 2. Contract Integrity and Idempotent Submission | 0/TBD | Not started | - |
 | 3. Trace Verification | 0/TBD | Not started | - |
 | 4. Policy, Expiry and Refusal | 0/TBD | Not started | - |
