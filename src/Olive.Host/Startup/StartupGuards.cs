@@ -44,18 +44,24 @@ public static class StartupGuards
             }
         }
 
+        // Resolution pass (WR-03): every closed service type from any assembly, keyed and unkeyed, so factory
+        // registrations are seen; each resolved instance is unwrapped through its IComponentDecorator chain.
         try
         {
             using var scope = provider.CreateScope();
-            var serviceTypes = services
-                .Where(d => !d.IsKeyedService && !d.ServiceType.IsGenericTypeDefinition && !d.ServiceType.ContainsGenericParameters
-                    && (d.ServiceType.Assembly.GetName().Name ?? "").StartsWith("Olive.", StringComparison.Ordinal))
-                .Select(d => d.ServiceType)
-                .Distinct()
-                .ToList();
-            foreach (var serviceType in serviceTypes)
+            var closed = services.Where(d => !d.ServiceType.IsGenericTypeDefinition && !d.ServiceType.ContainsGenericParameters).ToList();
+            foreach (var serviceType in closed.Where(d => !d.IsKeyedService).Select(d => d.ServiceType).Distinct())
             {
-                if (scope.ServiceProvider.GetServices(serviceType).Any(i => i is INonProductionOnly))
+                if (scope.ServiceProvider.GetServices(serviceType).Any(IsNonProduction))
+                {
+                    throw new StartupGuardException("FND-05", reason);
+                }
+            }
+
+            foreach (var (serviceType, key) in closed.Where(d => d.IsKeyedService && !Equals(d.ServiceKey, KeyedService.AnyKey))
+                .Select(d => (d.ServiceType, d.ServiceKey)).Distinct())
+            {
+                if (scope.ServiceProvider.GetKeyedServices(serviceType, key).Any(IsNonProduction))
                 {
                     throw new StartupGuardException("FND-05", reason);
                 }
@@ -69,5 +75,23 @@ public static class StartupGuards
         {
             throw new StartupGuardException("FND-05", "component resolution failed while checking for non-production components");
         }
+    }
+
+    private const int MaxDecoratorDepth = 32;
+
+    // A decorator chain deeper than the limit (or a cycle) is refused rather than trusted.
+    private static bool IsNonProduction(object? instance)
+    {
+        for (var depth = 0; instance is not null; depth++)
+        {
+            if (instance is INonProductionOnly || depth >= MaxDecoratorDepth)
+            {
+                return true;
+            }
+
+            instance = instance is IComponentDecorator d ? d.Inner : null;
+        }
+
+        return false;
     }
 }

@@ -150,6 +150,58 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task FND_05_production_stub_behind_decorator_refuses()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s => { s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector>(_ => new DecoratingIntrospector(new DecoratingIntrospector(StubKeyIntrospector.CreateDefault(TimeProvider.System)))); });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task FND_05_production_keyed_stub_factory_registration_refuses()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s =>
+            {
+                s.RemoveAll<IKeyIntrospector>();
+                s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>();
+                s.AddKeyedSingleton<IKeyIntrospector>("fixture", (_, _) => StubKeyIntrospector.CreateDefault(TimeProvider.System));
+            });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task FND_05_production_stub_factory_under_non_olive_service_type_refuses()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s =>
+            {
+                s.RemoveAll<IKeyIntrospector>();
+                s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>();
+                s.AddSingleton<TimeProvider>(_ => new NonProductionTimeProvider());
+            });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task FND_05_production_decorator_over_production_component_starts()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s => { s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector>(_ => new DecoratingIntrospector(new ThrowingKeyIntrospector())); });
+        Assert.Null(await TryStartAsync(factory));
+    }
+
+    [Fact]
     public async Task FND_05_production_positive_control_without_stub_starts()
     {
         await using var db = await fixture.CreateDatabaseAsync();
@@ -213,4 +265,14 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
         public Task<IntrospectionResult> IntrospectAsync(Olive.Domain.SessionKey key, CancellationToken ct) =>
             throw new NotSupportedException();
     }
+
+    // Not INonProductionOnly itself; the guard must see through it to what it wraps.
+    private sealed class DecoratingIntrospector(IKeyIntrospector inner) : IKeyIntrospector, IComponentDecorator
+    {
+        public object Inner => inner;
+
+        public Task<IntrospectionResult> IntrospectAsync(Olive.Domain.SessionKey key, CancellationToken ct) => inner.IntrospectAsync(key, ct);
+    }
+
+    private sealed class NonProductionTimeProvider : TimeProvider, INonProductionOnly;
 }
