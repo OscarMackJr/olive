@@ -7,11 +7,12 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
 {
     private static readonly string[] AllPrivileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"];
 
-    // proposal UPDATE is column-level (state only, migration 0002), so has_table_privilege reports false for UPDATE.
+    // proposal UPDATE is column-level (state only, migration 0002) and proposal INSERT is column-level (migration 0003),
+    // so has_table_privilege reports false for both on olive_app.
     // Phases 5 and 6 append queue_item, queue_item_event, execution_ledger here (DB-03/DB-04 text names five tables; D-03 limits 0001 to two).
     private static readonly (string Table, string Role, string[] Granted)[] Expected =
     [
-        ("proposal", "olive_app", ["SELECT", "INSERT"]),
+        ("proposal", "olive_app", ["SELECT"]),
         ("proposal", "olive_reader", ["SELECT"]),
         ("proposal_event", "olive_app", ["SELECT", "INSERT"]),
         ("proposal_event", "olive_reader", ["SELECT"]),
@@ -127,6 +128,64 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
         var sql = "insert into proposal (tenant_id, proposal_id, agent_id, key_id, on_behalf_of, purpose, key_expires_at, run_id) " +
                   $"values ('{TestPaths.TenantAlpha}', gen_random_uuid(), 'a', 'k', 'u', 'p', now(), 'r')";
         Assert.Equal("42501", await SqlStateAsync(db.ReaderConnectionString, sql));
+    }
+
+    private static readonly string[] InsertableColumns =
+        ["tenant_id", "proposal_id", "agent_id", "key_id", "on_behalf_of", "purpose", "key_expires_at", "nono_session_id", "run_id", "action_type", "party_ref", "parameters", "justification", "trace_ref"];
+
+    private static string InsertSql(string extraCol, string extraVal) =>
+        $"insert into proposal (tenant_id, proposal_id, agent_id, key_id, on_behalf_of, purpose, key_expires_at, run_id{extraCol}) " +
+        $"values ('{TestPaths.TenantAlpha}', gen_random_uuid(), 'a', 'k', 'u', 'p', now(), 'r-ins'{extraVal})";
+
+    [Fact]
+    public async Task DB_04_app_cannot_insert_non_default_state()
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        Assert.Equal("42501", await SqlStateAsync(db.AppConnectionString, InsertSql(", state", ", 'approved'")));
+    }
+
+    [Fact]
+    public async Task DB_04_app_cannot_insert_created_at()
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        Assert.Equal("42501", await SqlStateAsync(db.AppConnectionString, InsertSql(", created_at", ", '2020-01-01'")));
+    }
+
+    [Fact]
+    public async Task DB_04_app_insert_is_limited_to_application_columns()
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        await using var conn = new NpgsqlConnection(db.ReaderConnectionString);
+        await conn.OpenAsync();
+        var cols = new List<string>();
+        await using (var q = new NpgsqlCommand("select attname from pg_attribute where attrelid = 'public.proposal'::regclass and attnum > 0 and not attisdropped", conn))
+        await using (var r = await q.ExecuteReaderAsync())
+            while (await r.ReadAsync()) cols.Add(r.GetString(0));
+        Assert.Contains("state", cols);
+        Assert.Contains("created_at", cols);
+        foreach (var col in cols)
+        {
+            await using var cmd = new NpgsqlCommand("select has_column_privilege('olive_app', 'public.proposal', @c, 'INSERT')", conn);
+            cmd.Parameters.AddWithValue("c", col);
+            Assert.Equal(InsertableColumns.Contains(col), (bool)(await cmd.ExecuteScalarAsync())!);
+        }
+    }
+
+    [Fact]
+    public async Task DB_04_app_can_insert_proposal_with_default_state()
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        await db.SeedProposalAsync(TestPaths.TenantAlpha, "agent-1", "run-1");
+        await using var conn = new NpgsqlConnection(db.AppConnectionString);
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+        await using (var set = new NpgsqlCommand("select set_config('olive.tenant_id', @t, true)", conn, tx))
+        {
+            set.Parameters.AddWithValue("t", TestPaths.TenantAlpha.ToString());
+            await set.ExecuteNonQueryAsync();
+        }
+        await using var sel = new NpgsqlCommand("select state from proposal", conn, tx);
+        Assert.Equal("proposed", (string)(await sel.ExecuteScalarAsync())!);
     }
 
     [Fact]

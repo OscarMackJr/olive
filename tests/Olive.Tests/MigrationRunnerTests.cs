@@ -24,7 +24,7 @@ public class MigrationRunnerTests(PostgresFixture fx)
         await using var db = await fx.CreateUnmigratedDatabaseAsync();
         var cs = fx.MigratorConnectionString(db.Name);
         var applied = await new MigrationRunner().RunAsync(cs, Real, CancellationToken.None);
-        Assert.Equal(["0001", "0002"], applied);
+        Assert.Equal(["0001", "0002", "0003"], applied);
         Assert.Equal("olive_owner", await Scalar<string>(cs, "select relowner::regrole::text from pg_class where relname = 'proposal'"));
         var expected = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(TestPaths.Root, "sql", "migrations", "0001_init.sql"))));
         Assert.Equal(expected, await Scalar<string>(cs, "select sha256 from schema_migrations where version = '0001'"));
@@ -32,6 +32,9 @@ public class MigrationRunnerTests(PostgresFixture fx)
         var expected2 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(TestPaths.Root, "sql", "migrations", "0002_proposal_column_grants.sql"))));
         Assert.Equal(expected2, await Scalar<string>(cs, "select sha256 from schema_migrations where version = '0002'"));
         Assert.Equal("0002_proposal_column_grants.sql", await Scalar<string>(cs, "select filename from schema_migrations where version = '0002'"));
+        var expected3 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(TestPaths.Root, "sql", "migrations", "0003_proposal_insert_columns.sql"))));
+        Assert.Equal(expected3, await Scalar<string>(cs, "select sha256 from schema_migrations where version = '0003'"));
+        Assert.Equal("0003_proposal_insert_columns.sql", await Scalar<string>(cs, "select filename from schema_migrations where version = '0003'"));
     }
 
     [Fact]
