@@ -12,6 +12,13 @@ public sealed class InMemoryLogCapture : ILoggerProvider
         get { lock (_entries) { return string.Join("\n", _entries); } }
     }
 
+    private bool _errorOrAbove;
+
+    public bool HasErrorOrAbove
+    {
+        get { lock (_entries) { return _errorOrAbove; } }
+    }
+
     public ILogger CreateLogger(string categoryName) => new CaptureLogger(this);
 
     public void Dispose() { }
@@ -26,6 +33,7 @@ public sealed class InMemoryLogCapture : ILoggerProvider
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
+            if (logLevel >= LogLevel.Error) { lock (owner._entries) { owner._errorOrAbove = true; } }
             owner.Add(formatter(state, exception));
             if (exception is not null)
             {

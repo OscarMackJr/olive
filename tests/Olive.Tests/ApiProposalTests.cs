@@ -126,6 +126,30 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         Assert.DoesNotContain("insert", factory.Events);
     }
 
+    public static TheoryData<string> LoneSurrogateBodies() => new()
+    {
+        "{\"run_id\":\"\\ud800\"}",
+        "{\"run_id\":\"r\",\"justification\":\"\\udc00\"}",
+        "{\"run_id\":\"r\",\"parameters\":{\"x\":\"\\ud800\"}}",
+        "{\"run_id\":\"r\",\"parameters\":{\"\\ud800\":\"x\"}}",
+        "{\"run_id\":\"r\",\"parameters\":{\"a\":[{\"\\ud800\":1}]}}",
+        "{\"run_id\":\"r\",\"parameters\":{\"\\u0000\":1}}",
+    };
+
+    [Theory]
+    [MemberData(nameof(LoneSurrogateBodies))]
+    public async Task API_01_lone_surrogate_and_nul_escapes_give_400_and_store_nothing(string body)
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", Json(body), TestContext.Current.CancellationToken);
+        await AssertProblemAsync(r, HttpStatusCode.BadRequest, ProblemReasons.InvalidRequest);
+        Assert.Equal(0, await CountRowsAsync(db, Alpha));
+        Assert.DoesNotContain("insert", factory.Events);
+        Assert.False(factory.Logs.HasErrorOrAbove);
+    }
+
     [Fact]
     public async Task API_01_non_json_content_type_gives_400()
     {
