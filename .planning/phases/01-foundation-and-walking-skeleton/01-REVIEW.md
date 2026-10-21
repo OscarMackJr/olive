@@ -1,8 +1,8 @@
 ---
 phase: 01-foundation-and-walking-skeleton
-reviewed: 2026-10-21T00:00:00Z
+reviewed: 2026-10-21T22:57:54Z
 depth: standard
-files_reviewed: 50
+files_reviewed: 56
 files_reviewed_list:
   - .gitattributes
   - .github/workflows/ci.yml
@@ -14,6 +14,7 @@ files_reviewed_list:
   - sql/bootstrap/001_roles.sql
   - sql/bootstrap/002_database.sql
   - sql/migrations/0001_init.sql
+  - sql/migrations/0002_proposal_column_grants.sql
   - src/Olive.Application/AgentKeyHeader.cs
   - src/Olive.Application/IAgentAllowlist.cs
   - src/Olive.Application/IKeyIntrospector.cs
@@ -54,22 +55,57 @@ files_reviewed_list:
   - src/Olive.Persistence/PostgresUrl.cs
   - src/Olive.Persistence/ProposalSql.cs
   - src/Olive.Persistence/TenantUnitOfWork.cs
+  - tests/Olive.Tests/ApiProposalTests.cs
+  - tests/Olive.Tests/CiAndDevConfigTests.cs
+  - tests/Olive.Tests/InMemoryLogCapture.cs
+  - tests/Olive.Tests/MigrationRunnerTests.cs
+  - tests/Olive.Tests/PrivilegeMatrixTests.cs
 findings:
   critical: 1
   warning: 7
-  info: 10
-  total: 18
+  info: 11
+  total: 19
 status: issues_found
 ---
 
 # Phase 1: Code Review Report
 
-**Reviewed:** 2026-10-21T00:00:00Z
+**Reviewed:** 2026-10-21T22:57:54Z (re-review after gap closure 01-08, 01-09, 01-10; first pass 2026-10-21T00:00:00Z)
 **Depth:** standard
-**Files Reviewed:** 50
+**Files Reviewed:** 56
 **Status:** issues_found
 
 ## Narrative Findings (AI reviewer)
+
+## Re-review (gap closure wave 1)
+
+Scope: `git diff 013978f..HEAD` on the endpoint, migration 0002, the CI workflow and the six test files. Findings outside this scope (WR-01, WR-03, WR-04, WR-06, WR-07, IN-01..IN-10) are carried forward unchanged.
+
+| ID | Status | Fixed by |
+|----|--------|----------|
+| CR-01 | **Resolved** | plan 01-08, `5fde023` (tests `91ceca1`, `901a804`) |
+| WR-02 | **Resolved** (an INSERT-side residual is now WR-09) | plan 01-09, `13fde20` (tests `99fc28d`) |
+| WR-05 | **Resolved** (the new count check is tautological; see WR-08) | plan 01-10, `ffe54fd` (tests `3fb9ea9`) |
+| CR-02 | **New, open** | another client-triggerable 500 path, through `parameters` numbers |
+| WR-08 | **New, open** | CI count check cannot fire |
+| WR-09 | **New, open** | `olive_app` INSERT can forge `state` and `created_at` |
+| IN-11 | **New, open** | CR-01 test coverage gaps |
+
+How I verified this, using scratch probes (since deleted) on .NET 10.0.11 and `postgres:17-alpine`:
+- `JsonElement.GetString()` and `JsonProperty.Name` throw `InvalidOperationException` for `\ud800`, `\udc00` and `a\ud800b`.
+- Raw invalid UTF-8 bytes (`ED A0 80`, `FF`) pass `JsonDocument.Parse`, and then `GetString` and `Name` throw `InvalidOperationException`. The new catch blocks therefore cover this case too.
+- An escaped valid pair (`\ud83d\ude00`) decodes to `d83d,de00` and is accepted by jsonb.
+- `\u0000` decodes to U+0000, which `IsWellFormed` rejects.
+- PostgreSQL rejects `\ud800` with 22P02 and `\u0000` with 22P05.
+- PostgreSQL also rejects `{"x":1e131072}`, `1e-16384` and `-1e999999` with **22003 "value overflows numeric format"**. `System.Text.Json` accepts all three. This is CR-02.
+- On this repo, `dotnet list package --vulnerable --include-transitive` prints one "The given project `X` has no vulnerable packages given the current sources." line per project. That is 12 lines, and every one of them matches both count greps (WR-08).
+
+**CR-01 regression power (01-08 never confirmed RED):** I traced each new `LoneSurrogateBodies` case against the pre-fix endpoint (`013978f`):
+- Cases 1–2 (`run_id`, `justification`): `GetString` threw with no catch, so the response was 500. The new test would have failed on the old code (RED).
+- Cases 3–5 (`parameters` value, key, and key inside an array): the old `\\u0000` substring screen did not match, so `GetRawText` reached `::jsonb`. PostgreSQL returned 22P02, and the response was 500 (RED).
+- Case 6 (`\u0000` key): the old substring screen already returned 400, so this case passes on both old and new code and cannot detect a regression.
+
+The new `Assert.False(factory.Logs.HasErrorOrAbove)` also catches a regression that maps the fault to 400 but still logs at Error level. Overall the tests would catch a regression of the walk, the property-name check or the try/catch. The remaining gaps are listed in IN-11.
 
 ## Summary
 
@@ -86,12 +122,12 @@ The core security spine holds up under tracing:
 - Migration checksums are taken over LF-pinned embedded bytes.
 
 Problems found:
-- **One client-triggerable contract violation.** Invalid UTF-16 in the body produces a 500 instead of a 400.
+- **One client-triggerable contract violation (CR-01, now resolved).** Invalid UTF-16 in the body produced a 500 instead of a 400. **A second path of the same class remains (CR-02):** out-of-range numbers in `parameters`.
 - **Gaps in the controls that are meant to be backstops:**
   - The FND-05 guard can be bypassed through decorators, factory registrations and keyed registrations.
   - The REQ-ACT-04 banned-API list is incomplete.
-  - The CI vulnerable-package gate fails open.
-  - The proposal row is fully UPDATE-able by `olive_app`.
+  - The CI vulnerable-package gate failed open (WR-05, now resolved).
+  - The proposal row was fully UPDATE-able by `olive_app` (WR-02, now resolved). INSERT can still set any `state` (WR-09).
 - **Unrestricted GET.** `GET /v1/proposals/{id}` is open to any active principal in the tenant, including application (service) credentials.
 
 I verified the JSON behaviours with a scratch .NET 10 probe:
@@ -102,7 +138,16 @@ I verified the JSON behaviours with a scratch .NET 10 probe:
 
 ## Critical Issues
 
-### CR-01: Invalid Unicode in the request body returns 500 internal_error instead of 400, and logs an ERROR
+### CR-01: Invalid Unicode in the request body returns 500 internal_error instead of 400, and logs an ERROR — RESOLVED
+
+**Resolution (re-review 2026-10-21T22:57:54Z):** Fixed in plan 01-08, commit `5fde023`.
+- **Fields:** `TryRunId` and `TryOptionalString` now go through `TryGetCleanString`, which catches `InvalidOperationException` and runs `IsWellFormed` (NUL and unpaired-surrogate scan).
+- **`parameters`:** `TryParameters` walks the whole subtree with `AllStringsValid`. The walk covers object property names (`TryGetPropertyName` catches the throw from `JsonProperty.Name`), nested objects, arrays (including arrays of objects and arrays of strings) and string values. Numbers, booleans and null are not strings and cannot carry escapes.
+- **Body depth:** `MaxDepth = 64` bounds the recursion.
+- **Unvalidated root fields:** root-level property names and unknown root fields are never decoded or stored. `TryGetProperty("run_id")` still succeeds when a sibling key is a lone surrogate (probed), so they cannot cause a 500.
+- **Other string paths:** every string that reaches SQL is now validated. These are `run_id`, `action_type`, `party_ref`, `justification`, `trace_ref`, `nono_session_id` and `parameters`. The other inserted values come from the introspected key.
+- **Tests:** `API_01_lone_surrogate_and_nul_escapes_give_400_and_store_nothing` covers five of the six original paths. Coverage gaps are in IN-11.
+- **Not covered:** the same class of failure through numbers is still open as CR-02.
 
 **File:** `src/Olive.Host/Endpoints/ProposalEndpoints.cs:127,150,167-174` (with `src/Olive.Host/Problems/ProblemExceptionHandler.cs:12-15`)
 
@@ -135,6 +180,39 @@ private static bool AllStringsValid(JsonElement e) => e.ValueKind switch
 ```
 Use these checks in place of the `\\u0000` substring test. Add a test that posts `"\ud800"` in `run_id`, in an optional field, in a `parameters` value and in a `parameters` key, and asserts 400 `invalid_request`.
 
+### CR-02: Out-of-range numbers in `parameters` still return 500 internal_error with an ERROR log; near-limit numbers amplify the stored data on GET (NEW)
+
+**File:** `src/Olive.Host/Endpoints/ProposalEndpoints.cs:238-239,262` (with `src/Olive.Persistence/ProposalSql.cs:8`, `src/Olive.Host/Problems/ProblemExceptionHandler.cs:12-15`)
+
+**Issue:**
+- **The gap:** `AllStringsValid` returns `true` for every `JsonValueKind.Number` (`default: return true;`). `System.Text.Json` validates only the number grammar, so the token reaches `@parameters::jsonb` unchanged through `GetRawText()`. PostgreSQL's numeric type limits the exponent range, and rejects values outside it.
+- **Probe results (PG 17):**
+  - `{"x":1e131072}`, `{"x":1e200000}`, `{"x":1e-16384}` and `{"x":-1e999999}` all fail with `22003 value overflows numeric format`.
+  - `System.Text.Json` parses every one of them without error.
+- **Who can trigger it:** `{"run_id":"r","parameters":{"x":1e131072}}` from any allowlisted agent produces a `PostgresException`. `ProblemExceptionHandler` maps it to 500 and calls `LogError`. This is the same D-07 contract break and alert-flood vector as CR-01, in a branch the CR-01 walk did not cover.
+- **Amplification:** values just inside the limit are accepted and expand when read back.
+  - `{"a":1e131071,"b":1e131071}` is 31 bytes on the wire and 50 bytes in jsonb, but `parameters::text` in `ProposalSql.Get` is 262,158 characters.
+  - A 1 MiB body holding about 60k such keys would render to several GB of text on `GET /v1/proposals/{id}`.
+  - That exceeds PostgreSQL's 1 GB text limit, or else exhausts host memory in Npgsql and `JsonDocument.Parse` at line 278. The proposal becomes permanently unreadable (GET returns 500), and any tenant agent can store such a row.
+
+**Fix:** Bound numbers in the walk, and add a store-level backstop:
+```csharp
+case JsonValueKind.Number:
+    return IsBoundedNumber(e);
+
+private const int MaxNumberLength = 64;
+private static bool IsBoundedNumber(JsonElement e)
+{
+    var raw = e.GetRawText();
+    if (raw.Length > MaxNumberLength) return false;
+    var i = raw.IndexOfAny(['e', 'E']);
+    if (i < 0) return true;
+    return int.TryParse(raw.AsSpan(i + 1), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var exp)
+        && exp is >= -308 and <= 308;   // same as IEEE double; well inside numeric's range
+}
+```
+Defence in depth: in `PostgresProposalStore.InsertAsync`, catch `PostgresException` with a class-22 `SqlState` (data exception) and surface it as a client fault that the endpoint maps to 400 `invalid_request`, rather than letting it reach the 500 handler. Add `1e131072`, `1e-16384` and an over-length mantissa to `LoneSurrogateBodies` (or `InvalidBodies`), and assert `!factory.Logs.HasErrorOrAbove`.
+
 ## Warnings
 
 ### WR-01: `GET /v1/proposals/{id}` accepts any active principal, including application (service) credentials and non-allowlisted agents
@@ -156,7 +234,18 @@ if (key.PrincipalType == PrincipalTypes.Agent && (key.AgentId is null || !allowl
 ```
 Then update the identity test to match whichever ruling is made.
 
-### WR-02: `olive_app` can rewrite every column of a submitted proposal, not just `state`
+### WR-02: `olive_app` can rewrite every column of a submitted proposal, not just `state` — RESOLVED
+
+**Resolution (re-review 2026-10-21T22:57:54Z):** Fixed in plan 01-09, commit `13fde20`.
+- **Migration:** `sql/migrations/0002_proposal_column_grants.sql` runs `revoke update on proposal from olive_app` and then `grant update (state) on proposal to olive_app`. 0001 stays checksum-pinned. 0002 is LF and has no BOM.
+- **Remaining `olive_app` privileges on `proposal`:** table-level SELECT and INSERT, plus column-level UPDATE(state). There is no DELETE, TRUNCATE, REFERENCES or TRIGGER, because 0001 revokes all from PUBLIC and grants nothing else. `olive_app` is not a member of `olive_owner`; only `olive_migrator` is.
+- **Store:** `ProposalSql.UpdateState` writes only `state` (its WHERE columns need SELECT, which is granted), and `Insert` uses `do nothing`, so neither path loses functionality.
+- **Tests:**
+  - `DB_04_app_update_is_limited_to_state_column` checks `has_column_privilege` for every live column. It is robust to columns added later.
+  - `DB_04_app_cannot_update_immutable_proposal_columns` asserts 42501 for sample columns.
+  - `DB_04_app_can_still_update_proposal_state` shows the transition path still works.
+  - `MigrationRunnerTests` now expects both migrations.
+- **Residual (not covered by the UPDATE fix):** INSERT is still table-wide. See WR-09.
 
 **File:** `sql/migrations/0001_init.sql:53`
 
@@ -210,7 +299,13 @@ T:System.Net.Sockets.Socket;REQ-ACT-04: no raw outbound sockets
 T:System.Net.Sockets.UdpClient;REQ-ACT-04: no raw outbound sockets
 ```
 
-### WR-05: The CI vulnerable-package gate fails open when `dotnet list` itself fails
+### WR-05: The CI vulnerable-package gate fails open when `dotnet list` itself fails — RESOLVED
+
+**Resolution (re-review 2026-10-21T22:57:54Z):** Fixed in plan 01-10, commit `ffe54fd`.
+- **Shell:** the step now declares `shell: bash` (GitHub runs it as `bash --noprofile --norc -eo pipefail`) and also runs `set -euo pipefail`.
+- **Exit status:** a non-zero exit from `dotnet list` now fails the step even through `| tee`. The two `grep -c ... || true` substitutions are safe under `-e`, and `grep -q` inside `if` does not trip `-e`.
+- **Empty or unrecognized output:** when there are zero recognized project lines, for example because a localized runner prints different text, the step fails closed.
+- **Residual:** the "projects == clean" comparison that was added cannot detect a partial report. See WR-08.
 
 **File:** `.github/workflows/ci.yml:39-45`
 
@@ -273,6 +368,49 @@ Consider also refusing any value weaker than `verify-full` when `OLIVE_ENVIRONME
 // optionally: versions must be contiguous from 0001.
 ```
 Add an architecture test that every `sql/migrations/*.sql` file matches the pattern.
+
+### WR-08: The new "report incomplete" count check in the vulnerable gate is tautological and cannot detect a partial report (NEW)
+
+**File:** `.github/workflows/ci.yml:48-53` (locked in by `tests/Olive.Tests/CiAndDevConfigTests.cs:53-84`)
+
+**Issue:**
+- **Same lines counted twice:** `projects` counts lines containing "The given project", and `clean` counts lines containing "has no vulnerable packages". In real output (verified on this repo, 12 projects), both phrases appear on the same line: "The given project `X` has no vulnerable packages given the current sources." A project that has vulnerabilities is reported as "Project `X` has the following vulnerable packages", which does not contain "The given project", and the earlier grep has already exited for it. So `projects != clean` is never true, and the only working check is `projects == 0`.
+- **Dead condition:** `[ -z "$projects" ]` can never be true, because `grep -c` always prints a number.
+- **Undetected cases:** the gate never compares against the expected set of projects. It still passes in these cases:
+  - A project is dropped from the report while `dotnet list` exits 0, for example a project that is missing from `Olive.sln`, or a NuGet version that skips a project with a warning.
+  - The vulnerability resource is unavailable but NuGet still prints the "no vulnerable packages given the current sources" wording with exit 0. I did not verify this; the wording itself hedges on "the current sources".
+- **Text-only test:** `FND_07_vulnerable_gate_fails_closed` asserts the literal script text, including the tautological comparison. It never runs the script against sample outputs, so it confirms the implementation exists rather than that the gate fails closed.
+
+**Fix:** Compare against the solution's project count, or switch to the JSON report:
+```bash
+set -euo pipefail
+expected=$(dotnet sln Olive.sln list | grep -c '\.csproj$')
+dotnet list package --vulnerable --include-transitive --format json > vulnerable.json
+jq -e --argjson n "$expected" '
+  (.problems // [] | length) == 0
+  and (.projects | length) == $n
+  and all(.projects[]; ((.frameworks // []) | all(.[]; ((.topLevelPackages // []) + (.transitivePackages // [])) | length == 0)))' vulnerable.json
+```
+Move the script to `build/vulnerable-gate.sh` and test it against canned outputs: all clean, one vulnerable, empty, a missing project, and a non-zero exit. Do not pattern-match the YAML.
+
+### WR-09: `olive_app` can still INSERT a proposal in any state (e.g. `approved`) with a forged `created_at`, bypassing the state machine and event pairing (NEW)
+
+**File:** `sql/migrations/0002_proposal_column_grants.sql:3-4` (table-level INSERT from `sql/migrations/0001_init.sql:53`), `src/Olive.Persistence/ProposalSql.cs:6-9`
+
+**Issue:**
+- **What remains open:** 0002 restricts UPDATE to `state`, but INSERT is still granted on every column. A buggy code path or a compromised `olive_app` session can run `insert into proposal (..., state, created_at, ...) values (..., 'approved', '2020-01-01', ...)`, which creates an already-approved (or `executed`) proposal. The only constraint on `state` is the vocabulary CHECK, and no `proposal_event` is required.
+- **Why it matters:** this is the same Decision §13 and Core Value hole that WR-02 described ("approved by a named reviewer ... provable from the execution record"), reached through INSERT instead of UPDATE. The WR-02 fix closes only half of it. The new `DB_04_*` tests do not cover INSERT.
+- **Transitions:** UPDATE(state) also permits any jump, for example `proposed` to `executed`, without a paired event. That is more of a later-phase concern, but it is worth noting now while the migration is fresh.
+
+**Fix:** Restrict INSERT to the columns the application legitimately supplies, so `state` and `created_at` always take their defaults, and drop `state` from `ProposalSql.Insert`:
+```sql
+-- 0003_proposal_insert_columns.sql
+revoke insert on proposal from olive_app;
+grant insert (tenant_id, proposal_id, agent_id, key_id, on_behalf_of, purpose, key_expires_at,
+              nono_session_id, run_id, action_type, party_ref, parameters, justification, trace_ref)
+    on proposal to olive_app;
+```
+Add `DB_04_app_cannot_insert_non_default_state` (expects 42501 for `insert ... (state) values ('approved')`), and add a `has_column_privilege(..., 'INSERT')` loop like the UPDATE one. Optionally, add a `BEFORE UPDATE OF state` trigger that enforces the allowed transition graph.
 
 ## Info
 
@@ -356,8 +494,24 @@ Add an architecture test that every `sql/migrations/*.sql` file matches the patt
 
 **Fix:** Wrap the unlock in `try { ... } catch (NpgsqlException) { }`. The session-level lock is released when the connection closes anyway.
 
+### IN-11: CR-01 test set has blind spots: one case is not a regression detector, there is no over-rejection guard, and NUL is not tested outside `parameters` (NEW)
+
+**File:** `tests/Olive.Tests/ApiProposalTests.cs:129-151` (and `InvalidBodies` at 98-113)
+
+**Issue:**
+- **Case 6 cannot fail:** the `"{\"run_id\":\"r\",\"parameters\":{\"\\u0000\":1}}"` case already returned 400 before the fix, through the old substring screen, so it adds no regression power.
+- **No positive tests:** nothing checks that the stricter walk still accepts legitimate input.
+  - An escaped valid pair such as `"\ud83d\ude00"` in `parameters` and in `justification` should give 201.
+  - A literal backslash-u text such as `"\\\\u0000"` should give 201. The old code wrongly rejected it, and the new code correctly accepts it.
+  - Without these tests, an over-eager change to `IsWellFormed` (for example rejecting every surrogate) would pass the suite.
+- **NUL coverage is thin:** NUL is covered only inside `parameters`. `run_id`, the five optional strings and an array element (`{"a":["\u0000"]}`) have no NUL case. `IsWellFormed` is the only guard on those paths, because `GetString` does not throw for `\u0000` (probed).
+- **Unreachable branches:** the surrogate branches of `IsWellFormed` (lines 179-190) cannot be reached for parser-sourced strings, because `GetString` and `Name` throw first (probed). They are harmless defence, but the comment at line 168 suggests they are the active guard.
+- **Test bodies:** the bodies are C# regular strings containing `\\u...`. That is correct, but it is easy to break: the `901a804` fix-up shows the same mistake was made once. Consider raw string literals (`"""{"run_id":"\ud800"}"""`) so the JSON escape is unambiguous.
+
+**Fix:** Drop case 6 or move it to `InvalidBodies`. Add the NUL and positive cases above. Add a comment on `IsWellFormed` noting that the surrogate checks are a backstop for non-parser callers.
+
 ---
 
-_Reviewed: 2026-10-21T00:00:00Z_
+_Reviewed: 2026-10-21T22:57:54Z (re-review); first pass 2026-10-21T00:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
