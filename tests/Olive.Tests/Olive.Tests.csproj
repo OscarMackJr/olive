@@ -25,5 +25,7 @@
     <ProjectReference Include="..\..\src\Olive.Integrations.Hometown\Olive.Integrations.Hometown.csproj" />
     <ProjectReference Include="..\..\src\Olive.Integrations.Entra\Olive.Integrations.Entra.csproj" />
     <ProjectReference Include="..\..\src\Olive.Host\Olive.Host.csproj" />
+    <!-- Build-order only: REQ_ACT_04 reads the Migrator dll from its bin folder. -->
+    <ProjectReference Include="..\..\src\Olive.Migrator\Olive.Migrator.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>
