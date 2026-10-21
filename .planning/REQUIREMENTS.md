@@ -202,16 +202,102 @@ Deferred. Tracked but not in the current roadmap.
 
 ## Traceability
 
-Filled in during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| FND-01 | Phase 1 | Pending |
+| FND-02 | Phase 1 | Pending |
+| FND-03 | Phase 1 | Pending |
+| FND-04 | Phase 1 | Pending |
+| FND-05 | Phase 1 | Pending |
+| FND-06 | Phase 1 | Pending |
+| FND-07 | Phase 1 | Pending |
+| DB-01 | Phase 1 | Pending |
+| DB-02 | Phase 1 | Pending |
+| DB-03 | Phase 1 | Pending |
+| DB-04 | Phase 1 | Pending |
+| DB-05 | Phase 1 | Pending |
+| DB-06 | Phase 1 | Pending |
+| DB-07 | Phase 1 | Pending |
+| API-01 | Phase 1 | Pending |
+| API-02 | Phase 1 | Pending |
+| API-03 | Phase 2 | Pending |
+| API-04 | Phase 2 | Pending |
+| API-05 | Phase 2 | Pending |
+| API-06 | Phase 2 | Pending |
+| API-07 | Phase 2 | Pending |
+| API-08 | Phase 4 | Pending |
+| API-09 | Phase 2 | Pending |
+| API-10 | Phase 2 | Pending |
+| IDN-01 | Phase 1 | Pending |
+| IDN-02 | Phase 1 | Pending |
+| IDN-03 | Phase 8 | Pending |
+| IDN-04 | Phase 1 | Pending |
+| IDN-05 | Phase 3 | Pending |
+| IDN-06 | Phase 3 | Pending |
+| IDN-07 | Phase 3 | Pending |
+| IDN-08 | Phase 3 | Pending |
+| TRC-01 | Phase 3 | Pending |
+| TRC-02 | Phase 3 | Pending |
+| TRC-03 | Phase 3 | Pending |
+| TRC-04 | Phase 3 | Pending |
+| TRC-05 | Phase 3 | Pending |
+| TRC-06 | Phase 3 | Pending |
+| TRC-07 | Phase 3 | Pending |
+| TRC-08 | Phase 3 | Pending |
+| TRC-09 | Phase 3 | Pending |
+| POL-01 | Phase 4 | Pending |
+| POL-02 | Phase 4 | Pending |
+| POL-03 | Phase 4 | Pending |
+| POL-04 | Phase 4 | Pending |
+| POL-05 | Phase 4 | Pending |
+| POL-06 | Phase 4 | Pending |
+| POL-07 | Phase 4 | Pending |
+| POL-08 | Phase 5 | Pending |
+| QUE-01 | Phase 5 | Pending |
+| QUE-02 | Phase 5 | Pending |
+| QUE-03 | Phase 5 | Pending |
+| QUE-04 | Phase 5 | Pending |
+| QUE-05 | Phase 5 | Pending |
+| QUE-06 | Phase 5 | Pending |
+| QUE-07 | Phase 5 | Pending |
+| QUE-08 | Phase 5 | Pending |
+| QUE-09 | Phase 5 | Pending |
+| QUE-10 | Phase 5 | Pending |
+| APR-01 | Phase 5 | Pending |
+| APR-02 | Phase 5 | Pending |
+| APR-03 | Phase 7 | Pending |
+| APR-04 | Phase 5 | Pending |
+| APR-05 | Phase 5 | Pending |
+| EXE-01 | Phase 6 | Pending |
+| EXE-02 | Phase 6 | Pending |
+| EXE-03 | Phase 6 | Pending |
+| EXE-04 | Phase 6 | Pending |
+| EXE-05 | Phase 6 | Pending |
+| EXE-06 | Phase 6 | Pending |
+| UI-01 | Phase 7 | Pending |
+| UI-02 | Phase 7 | Pending |
+| UI-03 | Phase 7 | Pending |
+| UI-04 | Phase 7 | Pending |
+| UI-05 | Phase 7 | Pending |
+| UI-06 | Phase 7 | Pending |
+| UI-07 | Phase 7 | Pending |
+| IRQ-01 | Phase 8 | Pending |
+| IRQ-02 | Phase 8 | Pending |
+| IRQ-03 | Phase 8 | Pending |
+| IRQ-04 | Phase 8 | Pending |
+| EVD-01 | Phase 9 | Pending |
+| EVD-02 | Phase 6 | Pending |
+| EVD-03 | Phase 5 | Pending |
+| EVD-04 | Phase 9 | Pending |
+| EVD-05 | Phase 9 | Pending |
+| EVD-06 | Phase 9 | Pending |
+| EVD-07 | Phase 9 | Pending |
 
 **Coverage:**
 - v1 requirements: 88 total
-- Mapped to phases: 0
-- Unmapped: 88 ⚠️
+- Mapped to phases: 88
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-10-21*
-*Last updated: 2026-10-21 after initialization*
+*Last updated: 2026-10-21 after roadmap creation*
