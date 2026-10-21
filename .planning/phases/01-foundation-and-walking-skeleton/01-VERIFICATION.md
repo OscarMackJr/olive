@@ -1,20 +1,30 @@
 ---
 phase: 01-foundation-and-walking-skeleton
-verified: 2026-10-21T00:00:00Z
+verified: 2026-10-21T23:30:00Z
 status: gaps_found
-score: 5/5 roadmap success criteria verified; 1 plan-level truth partially failed (CR-01)
+score: 5/5 roadmap success criteria verified; 1 plan-level truth (D-07) still partially failed (CR-02, new)
 overrides_applied: 0
+re_verification:
+  previous_status: gaps_found
+  previous_score: 5/5 roadmap criteria; D-07 partial (CR-01)
+  gaps_closed:
+    - "CR-01: lone-surrogate / NUL escapes in run_id, optional strings, parameters values and keys now give 400 invalid_request (plan 01-08)"
+  gaps_remaining:
+    - "D-07 via out-of-range JSON numbers in parameters (CR-02)"
+  regressions: []
 gaps:
-  - truth: "Plan 01-05 / D-07: anything other than a valid object with a string run_id (and well-typed optional fields) is 400 invalid_request and is not stored"
+  - truth: "Plan 01-05 / D-07: anything other than a valid object with a string run_id (and well-typed optional fields and well-formed parameters) is 400 invalid_request and is not stored"
     status: partial
-    reason: "A lone-surrogate JSON escape (e.g. run_id or an optional string field of \"\\ud800\") passes JsonDocument.Parse, then JsonElement.GetString() throws InvalidOperationException, which ProblemExceptionHandler maps to 500 internal_error with an ERROR log. A lone surrogate inside parameters passes the \\u0000 screen and Postgres rejects it, also giving 500. Nothing is stored, but the contract (400) is violated and no test covers it (grep for ud800 in tests finds nothing)."
+    reason: "CR-02. AllStringsValid returns true for every JsonValueKind.Number (verified in ProposalEndpoints.cs, default branch). Numbers such as 1e131072, 1e-16384, -1e999999 parse in System.Text.Json, reach @parameters::jsonb, and PostgreSQL raises 22003; PostgresException maps to 500 internal_error with an ERROR log. Same D-07 contract break and alert-flood vector as CR-01, in a branch the CR-01 walk does not cover. Near-limit exponents (1e131071) are accepted and expand to ~262k chars each in parameters::text on GET, so a stored row can become unreadable or exhaust memory. Nothing invalid is stored on the 22003 path, but the contract is violated and no test covers it."
     artifacts:
       - path: "src/Olive.Host/Endpoints/ProposalEndpoints.cs"
-        issue: "lines ~122-174: GetString() not guarded; parameters raw text only screened for \\u0000"
+        issue: "AllStringsValid (lines ~212-240) accepts all numbers unbounded"
+      - path: "src/Olive.Persistence/PostgresProposalStore.cs"
+        issue: "no class-22 PostgresException to client-fault mapping as a backstop"
     missing:
-      - "Guard GetString() with try/catch InvalidOperationException -> 400 invalid_request"
-      - "Walk parameters subtree (names and string values) rejecting unpaired surrogates and NUL"
-      - "Test posting \"\\ud800\" in run_id, an optional field, a parameters value and a parameters key, asserting 400 invalid_request"
+      - "Bound numbers in the parameters walk (raw length cap and exponent range, e.g. +/-308)"
+      - "Backstop: map class-22 PostgresException on insert to 400 invalid_request"
+      - "Tests posting 1e131072, 1e-16384 and an over-length mantissa, asserting 400 and no ERROR log; consider a cap on expanded size for near-limit exponents"
 human_verification:
   - test: "Push the branch and confirm the GitHub Actions workflow (.github/workflows/ci.yml) is green on ubuntu-latest"
     expected: "Locked restore, Release build, unit + architecture + Testcontainers tests pass; vendored hash step and vulnerable-package gate pass"
@@ -25,81 +35,81 @@ human_verification:
 
 **Phase Goal:** An identified agent can submit a proposal and read it back through a real ASP.NET Core host on Postgres, with tenant isolation enforced by both layers. Every silent-pass trap (superuser tests, pooled tenant settings, leaking secrets, stubs in production) is closed off before any feature work.
 **Mode:** mvp (goal is not in User Story format, so verified against the roadmap success criteria as written)
-**Re-verification:** No, initial verification
-**Status:** gaps_found (one narrow plan-level truth, CR-01) plus one human item (FND-07 CI run)
+**Re-verification:** Yes, after gap closure plans 01-08, 01-09, 01-10
+**Status:** gaps_found (one narrow plan-level truth, now CR-02) plus one human item (FND-07 CI run)
+
+## Re-verification of Previously Reported Gaps
+
+| Gap | Status | Evidence checked in code |
+|-----|--------|--------------------------|
+| CR-01 lone surrogate gives 500 | CLOSED | `ProposalEndpoints.cs`: `TryGetCleanString` (line ~153) catches `InvalidOperationException` and runs the well-formedness check; used for `run_id` (127) and optional strings (149); `AllStringsValid` (212) walks property names (`TryGetPropertyName`), nested objects, arrays and string values; `MaxDepth = 64` on `JsonDocument.Parse`. Test `API_01_lone_surrogate_and_nul_escapes_give_400_and_store_nothing` (6 cases) asserts 400, zero rows, no insert event, and no Error log. The reviewer traced 5 of 6 cases as RED against the old code. |
+| WR-02 (recommended) olive_app UPDATE on all proposal columns | CLOSED (UPDATE side) | `sql/migrations/0002_proposal_column_grants.sql` revokes UPDATE and grants `update (state)` only; 0001 untouched. DB_04 column-privilege tests added. INSERT side remains as WR-09. |
+| WR-05 (recommended) CI vulnerable gate fails open | CLOSED in part | `ci.yml` has `shell: bash`, `set -euo pipefail`, and a zero-projects check. The added `projects != clean` comparison is tautological (WR-08), so only the "empty/unrecognized output" and "dotnet list failed" cases are really fixed. |
 
 ## Behavioral Evidence
 
-`dotnet test Olive.sln -c Release` was run by the verifier: **226 passed, 0 failed, 0 skipped** (Testcontainers Postgres, real host via OliveApiFactory). The only build output was xUnit1051 analyzer warnings.
+Orchestrator reports `dotnet build -c Release` clean and `dotnet test` 236/236 passed on rerun, with one intermittent `ObjectDisposedException` in `StartupGuardTests.FND_04_invalid_environment_refuses_start_without_echoing_value` (passed 3/3 isolated reruns). I did not rerun the suite; this is the orchestrator's claim, consistent with the earlier verifier-run 226/226 plus ten new tests from 01-08/01-09. The intermittent failure is a test-host lifecycle flake, not a product behaviour failure, but should be tracked (see Anti-Patterns).
 
 ## Roadmap Success Criteria
 
 | # | Success criterion | Status | Evidence |
 |---|-------------------|--------|----------|
-| 1 | Allowlisted liam key POSTs and gets proposal_id and state; row records key_id, on_behalf_of, purpose, tenant_id, expires_at, advisory nono_session_id; user/application get 403 principal_not_permitted; inactive key gets 401 first | VERIFIED | `ProposalSql.cs` insert writes all columns. Tests `API_01_post_then_get_roundtrip_through_real_postgres`, `IDN_04_stored_row_records_key_identity_and_advisory_session_id`, `IDN_04_body_tenant_is_ignored`, `IDN_02_non_agent_or_non_allowlisted_post_gives_403_and_stores_nothing`, `IDN_01_inactive_key_with_invalid_body_is_401_not_400`, `IDN_02_principal_check_precedes_body_validation`, `IDN_01_exactly_one_introspect_precedes_insert`. |
-| 2 | GET returns within tenant, 404 cross-tenant; ablation tests as olive_app with two tenants, Max Pool Size=1; predicate removed then RLS removed, other layer still blocks; unset tenant errors | VERIFIED | `API_02_cross_tenant_and_missing_ids_give_identical_404`; `TenantIsolationAblationTests` (pool size 1 via `WithMaxPoolSize`): `DB_06_predicate_removed_rls_blocks_cross_tenant_read/write`, `DB_06_rls_disabled_ablation_is_real_and_predicate_blocks_cross_tenant_read/write`, `DB_06_unset_tenant_raises_on_fresh_connection` and `..._on_reused_pooled_connection`, `DB_06_test_roles_are_neither_superuser_nor_bypassrls`. `TenantUnitOfWork` uses transaction-local set_config; `DB_05_sql_constants_carry_tenant_predicate` lint test. |
-| 3 | Migrator applies 0001 as olive_owner, records in schema_migrations, fails on changed applied file; proposal_event INSERT-only for olive_app | VERIFIED | `MigrationRunnerTests` (`DB_02_applies_0001_as_owner_and_records_checksum`, `DB_02_changed_bytes_fail_with_checksum_exception`, concurrent-run and rollback tests); `PrivilegeMatrixTests` (`DB_04_privilege_matrix_equals_expected`, app cannot UPDATE/DELETE proposal_event). |
-| 4 | Service refuses to start: OLIVE_ENVIRONMENT unset; production + INonProductionOnly; superuser/BYPASSRLS/owner role; migration mismatch; vocabulary hash mismatch | VERIFIED | `StartupGuardTests` (`FND_04_invalid_environment_refuses_start...`, `FND_05_production_with_default_stub/instance/factory/type...refuses`, `FND_03_tampered_vocabulary_copy_is_refused`); `DatabaseSafetyTests` (`DB_07_superuser/owner_member/bypassrls/owns_public_objects`, behind/ahead/checksum, and host-level refusal tests). `StartupGuards.cs` read and consistent. |
-| 5 | CI builds restructured solution with locked packages and runs unit, architecture and Testcontainers tests; Domain/Application/Executor HTTP-client or off-allowlist package fails build; secret types redact | VERIFIED locally, CI run UNCERTAIN | Workflow and static tests exist (`CiAndDevConfigTests`); `ArchitectureTests`, `BannedSymbols.txt` (RS0030 error), `SecretTypeTests`, `SecretLeakageTests`; lockfiles present for every project. Green Ubuntu run not yet observed (see human verification). |
+| 1 | Allowlisted liam key POSTs and gets proposal_id and state; row records identity columns; user/application get 403; inactive key 401 first | VERIFIED | Unchanged from initial verification (API_01, IDN_01/02/04 tests). Endpoint changes in 01-08 only add stricter body validation after the auth and principal checks. |
+| 2 | GET within tenant, 404 cross-tenant; ablation tests with two tenants, pool size 1 | VERIFIED | Unchanged; `TenantIsolationAblationTests`, `API_02_*`. |
+| 3 | Migrator applies migrations as owner, checksum pinned; proposal_event INSERT-only for olive_app | VERIFIED | `MigrationRunnerTests` now expects 0001 and 0002; `PrivilegeMatrixTests`. 0002 strengthens, does not weaken. |
+| 4 | Startup refuses on unset/invalid environment, stubs in production, unsafe DB role, migration or vocabulary mismatch | VERIFIED | Unchanged; `StartupGuardTests`, `DatabaseSafetyTests`. |
+| 5 | CI builds with locked packages and runs unit, architecture and Testcontainers tests; banned APIs fail build; secrets redact | VERIFIED locally, CI run UNCERTAIN | Workflow present and statically tested; vulnerable gate is partly vacuous (WR-08). No green Ubuntu run observed. |
 
-**Score:** 5/5 criteria satisfied in the codebase; criterion 5's CI-execution clause awaits a real run.
+## Assessment of the new review findings
 
-## Plan-Level Truths
-
-All plan must_haves sampled against code and tests were verified (role bootstrap, checksum-pinned migrator, redacting sealed secret types, Bearer-header single class, YamlDotNet confined to Catalog, no introspection cache, `.env` loader, static problem texts). One exception:
-
-| Truth | Status | Evidence |
-|-------|--------|----------|
-| D-07: malformed bodies, including invalid content, give 400 and are never stored | PARTIAL (CR-01) | Lone-surrogate escapes give 500. See gaps. |
+| Finding | Classification | Reasoning |
+|---------|----------------|-----------|
+| CR-02 out-of-range numbers give 500 | BLOCKER at plan level (gap) | Same class as CR-01, which this verification already treated as a gap against D-07/API-01 ("anything else is 400, not stored"). Treating it differently would be inconsistent. No ROADMAP success criterion is defeated and nothing invalid is persisted, but any authenticated agent can force 500s with ERROR logs, and near-limit numbers can make a stored proposal unreadable via GET (availability harm to API-02 read-back). Code confirms the unbounded `Number` branch. Small fix plus test. |
+| WR-08 CI count check vacuous | WARNING | Weakens the FND-07 / SC5 vulnerable-package gate but does not defeat it: the grep for vulnerable packages, `pipefail`, and the zero-projects check work. FND-07 already requires a human-observed Ubuntu run. Fix before relying on the gate (script out of YAML, test with canned outputs). |
+| WR-09 olive_app INSERT can set `state` / `created_at` | WARNING | DB-04 as scoped (proposal_event INSERT-only) is satisfied, and the roadmap SC3 is met. Phase 1 has no approval path, so no approved/executed state is reachable by product code. It is a Core Value hardening hole (Decision 13) that should be closed by a 0003 column-level INSERT grant before Phase 2/5 add real transitions. |
+| IN-11 CR-01 test blind spots | INFO | One non-discriminating case, no positive over-rejection tests. Add with the CR-02 fix. |
 
 ## Requirements Coverage
 
-Every ID in the phase requirement list appears in a PLAN `requirements:` field (01: FND-01/02/03/07; 02: DB-01..04; 03: FND-06, IDN-01, IDN-02; 04: DB-05, DB-06; 05: API-01, API-02, IDN-01, IDN-02, IDN-04; 06: FND-03..06, DB-07; 07: FND-07). No orphans: REQUIREMENTS.md maps no other IDs to Phase 1 (API-03..09 are Phase 2/4, IDN-03 is Phase 8, IDN-05+ are Phase 3).
+Every ID in the phase requirement list appears in a PLAN `requirements:` field (01: FND-01/02/03/07; 02: DB-01..04; 03: FND-06, IDN-01, IDN-02; 04: DB-05, DB-06; 05: API-01, API-02, IDN-01, IDN-02, IDN-04; 06: FND-03..06, DB-07; 07: FND-07; gap-closure plans 08-10 reference API-01/D-07, DB-04 and FND-07). No orphans: REQUIREMENTS.md maps no other IDs to Phase 1.
 
 | Requirement | Status | Evidence |
 |-------------|--------|----------|
-| FND-01 | SATISFIED | 11 src projects, `ArchitectureTests` literal reference graph |
-| FND-02 | SATISFIED | BannedSymbols.txt plus architecture tests (see WR-04 for the breadth caveat) |
-| FND-03 | SATISFIED | `.gitattributes`, `VendoredContracts`, startup guard tests |
-| FND-04 | SATISFIED | `OliveEnvironment`, `FND_04_*` tests |
-| FND-05 | SATISFIED for current registrations | `FND_05_*` tests (see WR-03 for future-decorator hole) |
-| FND-06 | SATISFIED | `SecretTypeTests`, `SecretLeakageTests` (sentinel across responses, Trace logs, exceptions) |
-| FND-07 | NEEDS HUMAN | Workflow exists and is statically tested; no green Ubuntu run yet |
-| DB-01 | SATISFIED | `DB_01_*` tests |
-| DB-02 | SATISFIED | `DB_02_*` tests |
-| DB-03 | PARTIAL, expected (D-03) | proposal and proposal_event have tenant_id, ENABLE+FORCE RLS, no missing_ok. Table-driven tests (`RlsPatternTests`) so Phases 5/6 only append names. Not a gap. |
-| DB-04 | PARTIAL, expected (D-03) | proposal_event INSERT-only proven by `PrivilegeMatrixTests`; queue_item_event and execution_ledger arrive in Phases 5/6. Not a gap. |
-| DB-05 | SATISFIED | `TenantUnitOfWork`, `DB_05_*` tests incl. only-allowed-files-open-connections lint |
-| DB-06 | SATISFIED | `TenantIsolationAblationTests` |
-| DB-07 | SATISFIED | `DatabaseSafetyTests` |
-| API-01 | SATISFIED | `API_01_*` tests |
-| API-02 | SATISFIED | `API_02_*` tests |
-| IDN-01 | SATISFIED | `IDN_01_*` tests; fixture-driven stub marked INonProductionOnly |
-| IDN-02 | SATISFIED | `IDN_02_*` tests |
-| IDN-04 | SATISFIED | `IDN_04_*` tests |
-
-## Code Review Impact (01-REVIEW.md)
-
-- **CR-01 (blocker): does not defeat any ROADMAP success criterion**, but it does violate the plan-level D-07 truth ("anything else is 400, not stored"). Nothing is persisted on the failing path, so no integrity or isolation property is lost; the harm is a 500 plus Error-level log that any authenticated agent can trigger. Treated as a real gap (small fix plus test) rather than waived. It is not covered by an existing test.
-- WR-01 (GET open to any active principal, including application keys): deliberate and tested (`IDN_02_get_works_for_any_active_key_within_its_tenant`, research Q4). SC2 and API-02 are met. IDN-03 is Phase 8. It needs an explicit recorded decision or restriction. Not a Phase 1 blocker.
-- WR-02 (olive_app can UPDATE every proposal column): does not defeat SC3 (which concerns proposal_event), but weakens the Core Value immutability story. Cheap to fix now (column-level grant), expensive later. Recommend fixing before Phase 2 adds idempotency hashes.
-- WR-03 (FND-05 guard misses decorators, keyed or non-Olive service types): SC4 holds for all present registrations, including instance, type, and factory forms (tested). It becomes a real hole when the D-14 introspection cache decorator arrives in Phase 3. Must be addressed before then.
-- WR-04 (banned-API list incomplete; architecture test limited to Domain/Application/Executor): SC5 text is met as written (those three projects). The wider REQ-ACT-04 intent is only partly enforced for Integrations.*.
-- WR-05 (CI vulnerable-package gate fails open), WR-06 (PostgresUrl sslmode spellings), WR-07 (migration filename validation): none defeats a success criterion. WR-05 weakens the SC5/FND-07 gate and should be fixed before relying on CI. WR-06 matters before any non-local deployment.
+| FND-01 | SATISFIED | Architecture reference-graph tests |
+| FND-02 | SATISFIED | BannedSymbols.txt plus architecture tests (WR-04 breadth caveat) |
+| FND-03 | SATISFIED | Vendored hash and startup guard tests |
+| FND-04 | SATISFIED | `OliveEnvironment`, `FND_04_*` (one intermittent flake noted) |
+| FND-05 | SATISFIED for current registrations | `FND_05_*` (WR-03 future-decorator hole, fix before Phase 3) |
+| FND-06 | SATISFIED | Secret type and leakage tests |
+| FND-07 | NEEDS HUMAN | Workflow exists, vulnerable gate partly vacuous (WR-08), no green Ubuntu run yet |
+| DB-01, DB-02 | SATISFIED | `DB_01_*`, `DB_02_*` (now two migrations) |
+| DB-03 | PARTIAL, expected (D-03) | proposal and proposal_event covered; later tables arrive in Phases 5/6 |
+| DB-04 | PARTIAL, expected (D-03), strengthened | proposal_event INSERT-only; proposal UPDATE now limited to `state`; INSERT residual is WR-09 |
+| DB-05, DB-06, DB-07 | SATISFIED | `DB_05_*`, `TenantIsolationAblationTests`, `DatabaseSafetyTests` |
+| API-01 | SATISFIED for the roadmap criterion; D-07 invalid-content contract partial (CR-02) | `API_01_*` tests |
+| API-02 | SATISFIED | `API_02_*` |
+| IDN-01, IDN-02, IDN-04 | SATISFIED | `IDN_*` tests |
 
 ## Anti-Patterns
 
-No TBD/FIXME/XXX debt markers were checked beyond reliance on the review's file list; the review reported none. No stubs found in production paths. `StubKeyIntrospector` is intentional, marked INonProductionOnly, and guarded in production.
+| File | Pattern | Severity | Impact |
+|------|---------|----------|--------|
+| `ProposalEndpoints.cs` AllStringsValid | unbounded Number branch | Blocker (CR-02) | 500 plus ERROR log on client input |
+| `.github/workflows/ci.yml` | tautological count comparison | Warning (WR-08) | Gate cannot detect a partial report |
+| `0002_proposal_column_grants.sql` / INSERT grant | table-wide INSERT | Warning (WR-09) | Can forge state / created_at |
+| `StartupGuardTests.FND_04_invalid_environment_*` | intermittent ObjectDisposedException in host start | Warning | Flaky CI risk; investigate disposal ordering |
+
+No TBD/FIXME/XXX debt markers were reported by the review; no stubs in production paths.
 
 ## Human Verification Required
 
-1. **Green Ubuntu CI run (FND-07).** Push the branch and confirm `.github/workflows/ci.yml` passes on ubuntu-latest (locked restore, Release build, unit, architecture and Testcontainers tests, vocabulary hash, vulnerable gate). Not verifiable locally. Also confirm lockfile and line-ending behavior is identical on Linux, since local results come from Windows.
+1. **Green Ubuntu CI run (FND-07).** Push the branch and confirm `.github/workflows/ci.yml` passes on ubuntu-latest (locked restore, Release build, unit, architecture and Testcontainers tests, vocabulary hash, vulnerable gate). Also confirm lockfile and line-ending behaviour on Linux, and watch for the FND_04 flake.
 
 ## Gaps Summary
 
-The phase delivers its goal: all five roadmap success criteria are met by real code and a passing 226-test suite, and DB-03/DB-04 are partial exactly as planned. One narrow gap remains: CR-01 (invalid Unicode gives 500 instead of 400), which violates a plan-level truth and has no test. Recommended closure: fix CR-01 with a test, also apply WR-02 and WR-05 (cheap), and schedule WR-03 before Phase 3. FND-07 stays open until a green Ubuntu run is observed.
+The phase goal and all five roadmap success criteria are met by real code and a passing suite. Gap closure plans 01-08 and 01-09 are verified in code (CR-01 closed; proposal UPDATE restricted to `state`), and 01-10 is closed in part. One narrow plan-level gap remains: CR-02, where out-of-range JSON numbers in `parameters` return 500 instead of 400. Recommended closure plan: bound numbers in the walk, add a class-22 backstop mapping to 400, add tests (including IN-11 positive cases). In the same pass, fix WR-08 (script plus canned-output tests) and WR-09 (0003 column-level INSERT grant). Schedule WR-03 before Phase 3. FND-07 stays open until a green Ubuntu run is observed.
 
 ---
 
-_Verified: 2026-10-21_
+_Verified: 2026-10-21T23:30:00Z_
 _Verifier: Claude (gsd-verifier)_
