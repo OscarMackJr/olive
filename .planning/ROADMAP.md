@@ -19,7 +19,7 @@ Olive Phase 1 goes from a single-file in-memory scaffold to a governed action br
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation and Walking Skeleton** - Restructured solution, guards, both tenant-isolation layers, migrator, and an agent can submit and read a proposal through the introspection stub
+- [x] **Phase 1: Foundation and Walking Skeleton** - Restructured solution, guards, both tenant-isolation layers, migrator, and an agent can submit and read a proposal through the introspection stub (completed 2026-10-21)
 - [ ] **Phase 2: Contract Integrity and Idempotent Submission** - Strict raw-byte validation, v1 schemas, in-house JCS, YamlDotNet catalog endpoint, and race-safe idempotency on (agent_id, run_id)
 - [ ] **Phase 3: Trace Verification** - Fixture-backed trace resolver with ordered checks 1-5, fail-closed 503s, popeye token stub and cache, and session-key capture
 - [ ] **Phase 4: Policy, Expiry and Refusal** - Purpose, entitlement and rate-limit policy before any queueing, guarded lifecycle transitions, absolute expiry, and the asserted pipeline order
@@ -69,7 +69,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 01-07-PLAN.md — GitHub Actions CI, .env.example, README dev flow, open coordination items
+- [x] 01-07-PLAN.md — GitHub Actions CI, .env.example, README dev flow, open coordination items
 
 **Notes**: D§4 stop rule: confirm POPEYE_v0.4.2 is present before shaping the introspection stub (and the Q4 entitlement claim shape). Reconcile `db/migrations/` to `sql/migrations/` before a second migration exists. Add `.gitattributes` before any hashed fixture is committed. Spike: Postgres major version of `deploy-postgres-1` (15+ required), Npgsql URI connection strings. Requirements DB-03 and DB-04 name all five tables. This phase establishes the RLS/grant pattern and its tests, and Phases 5 and 6 must apply the same pattern to their migrations.
 
@@ -228,7 +228,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Walking Skeleton | 6/7 | In Progress|  |
+| 1. Foundation and Walking Skeleton | 7/7 | Complete   | 2026-10-21 |
 | 2. Contract Integrity and Idempotent Submission | 0/TBD | Not started | - |
 | 3. Trace Verification | 0/TBD | Not started | - |
 | 4. Policy, Expiry and Refusal | 0/TBD | Not started | - |
