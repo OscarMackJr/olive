@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using Olive.Application;
 using Olive.Contracts;
 
 namespace Olive.Tests;
@@ -110,6 +112,7 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         "{\"run_id\":\"r\",\"nono_session_id\":{}}",
         "{\"run_id\":\"r\",\"party_ref\":null}",
         "{\"run_id\":\"r\",\"parameters\":{\"a\":\"\\u0000\"}}",
+        """{"run_id":"r","parameters":{"\u0000":1}}""",
         "{\"run_id\":\"r\",\"parameters\":{\"d\":" + new string('[', 70) + new string(']', 70) + "}}",
     };
 
@@ -133,7 +136,6 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         "{\"run_id\":\"r\",\"parameters\":{\"x\":\"\\ud800\"}}",
         "{\"run_id\":\"r\",\"parameters\":{\"\\ud800\":\"x\"}}",
         "{\"run_id\":\"r\",\"parameters\":{\"a\":[{\"\\ud800\":1}]}}",
-        "{\"run_id\":\"r\",\"parameters\":{\"\\u0000\":1}}",
     };
 
     [Theory]
@@ -148,6 +150,117 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         Assert.Equal(0, await CountRowsAsync(db, Alpha));
         Assert.DoesNotContain("insert", factory.Events);
         Assert.False(factory.Logs.HasErrorOrAbove);
+    }
+
+    private static string NumBody(string parametersJson) => "{\"run_id\":\"r\",\"parameters\":" + parametersJson + "}";
+
+    public static TheoryData<string> NumberRangeBodies() => new()
+    {
+        NumBody("""{"x":1e131072}"""),
+        NumBody("""{"x":1e-16384}"""),
+        NumBody("""{"x":-1e999999}"""),
+        NumBody("""{"x":[1,[1e131072]]}"""),
+        NumBody("{\"x\":" + new string('9', 400) + "}"),
+        NumBody("""{"x":1e131071}"""),
+        NumBody("{\"x\":[" + string.Concat(Enumerable.Repeat("1e308,", 20000)) + "1]}"),
+    };
+
+    [Theory]
+    [MemberData(nameof(NumberRangeBodies))]
+    public async Task API_01_out_of_range_numbers_give_400_and_store_nothing(string body)
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", Json(body), TestContext.Current.CancellationToken);
+        await AssertProblemAsync(r, HttpStatusCode.BadRequest, ProblemReasons.InvalidRequest);
+        Assert.Equal(0, await CountRowsAsync(db, Alpha));
+        Assert.DoesNotContain("insert", factory.Events);
+        Assert.False(factory.Logs.HasErrorOrAbove);
+    }
+
+    public static TheoryData<string> ValidNumberAndStringBodies() => new()
+    {
+        NumBody("""{"x":0}"""),
+        NumBody("""{"x":-1}"""),
+        NumBody("""{"x":3.14}"""),
+        NumBody("""{"x":1e10}"""),
+        NumBody("""{"x":1.5e-7}"""),
+        NumBody("""{"x":12345678901234567890}"""),
+        NumBody("""{"x":1e300}"""),
+        NumBody("""{"x":1e-300}"""),
+        NumBody("{\"x\":[" + string.Join(",", Enumerable.Repeat("1e308", 100)) + "]}"),
+        NumBody("""{"x":"😀"}"""),
+        """{"run_id":"r","justification":"😀"}""",
+        NumBody("""{"x":"\\u0000"}"""),
+    };
+
+    [Theory]
+    [MemberData(nameof(ValidNumberAndStringBodies))]
+    public async Task API_01_valid_numbers_and_strings_still_accepted(string body)
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", Json(body), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+        Assert.Equal(1, await CountRowsAsync(db, Alpha));
+    }
+
+    public static TheoryData<string> NulOutsideParametersBodies() => new()
+    {
+        """{"run_id":"a\u0000b"}""",
+        """{"run_id":"r","action_type":"a\u0000b"}""",
+        """{"run_id":"r","party_ref":"a\u0000b"}""",
+        """{"run_id":"r","justification":"a\u0000b"}""",
+        """{"run_id":"r","trace_ref":"a\u0000b"}""",
+        """{"run_id":"r","nono_session_id":"a\u0000b"}""",
+        NumBody("""{"x":["ok","a\u0000b"]}"""),
+    };
+
+    [Theory]
+    [MemberData(nameof(NulOutsideParametersBodies))]
+    public async Task API_01_nul_outside_parameters_gives_400_and_store_nothing(string body)
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", Json(body), TestContext.Current.CancellationToken);
+        await AssertProblemAsync(r, HttpStatusCode.BadRequest, ProblemReasons.InvalidRequest);
+        Assert.Equal(0, await CountRowsAsync(db, Alpha));
+        Assert.DoesNotContain("insert", factory.Events);
+        Assert.False(factory.Logs.HasErrorOrAbove);
+    }
+
+    private sealed class ThrowingStore(string sqlState) : IProposalStore
+    {
+        public Task<Guid?> InsertAsync(Guid tenantId, NewProposal proposal, CancellationToken ct) =>
+            throw new PostgresException("secret-parameter-value", "ERROR", "ERROR", sqlState);
+
+        public Task<ProposalRecord?> GetAsync(Guid tenantId, Guid proposalId, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task API_01_class_22_database_error_maps_to_400()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, configureServices: s => s.AddScoped<IProposalStore>(_ => new ThrowingStore("22003")));
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken);
+        await AssertProblemAsync(r, HttpStatusCode.BadRequest, ProblemReasons.InvalidRequest, "secret-parameter-value");
+        Assert.False(factory.Logs.HasErrorOrAbove);
+    }
+
+    [Fact]
+    public async Task API_01_non_class_22_database_error_still_gives_500()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, configureServices: s => s.AddScoped<IProposalStore>(_ => new ThrowingStore("23505")));
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.InternalServerError, r.StatusCode);
     }
 
     [Fact]
