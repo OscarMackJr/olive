@@ -73,9 +73,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Gap closure, Wave 1** *(from 01-VERIFICATION.md and 01-REVIEW.md; independent)*
 
-- [ ] 01-08-PLAN.md — CR-01: lone-surrogate/NUL escapes give 400 invalid_request, not 500 (API-01, D-07)
-- [ ] 01-09-PLAN.md — WR-02: migration 0002 limits olive_app UPDATE on proposal to the state column (DB-04)
-- [ ] 01-10-PLAN.md — WR-05: CI vulnerable-package gate fails closed (FND-07)
+- [x] 01-08-PLAN.md — CR-01: lone-surrogate/NUL escapes give 400 invalid_request, not 500 (API-01, D-07)
+- [x] 01-09-PLAN.md — WR-02: migration 0002 limits olive_app UPDATE on proposal to the state column (DB-04)
+- [x] 01-10-PLAN.md — WR-05: CI vulnerable-package gate fails closed (FND-07)
 
 **Notes**: D§4 stop rule: confirm POPEYE_v0.4.2 is present before shaping the introspection stub (and the Q4 entitlement claim shape). Reconcile `db/migrations/` to `sql/migrations/` before a second migration exists. Add `.gitattributes` before any hashed fixture is committed. Spike: Postgres major version of `deploy-postgres-1` (15+ required), Npgsql URI connection strings. Requirements DB-03 and DB-04 name all five tables. This phase establishes the RLS/grant pattern and its tests, and Phases 5 and 6 must apply the same pattern to their migrations.
 
@@ -234,7 +234,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Walking Skeleton | 7/7 | Complete   | 2026-10-21 |
+| 1. Foundation and Walking Skeleton | 10/10 | Complete   | 2026-10-21 |
 | 2. Contract Integrity and Idempotent Submission | 0/TBD | Not started | - |
 | 3. Trace Verification | 0/TBD | Not started | - |
 | 4. Policy, Expiry and Refusal | 0/TBD | Not started | - |
