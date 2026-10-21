@@ -1,11 +1,12 @@
 ---
 phase: 01-foundation-and-walking-skeleton
-reviewed: 2026-10-21T22:57:54Z
+reviewed: 2026-10-21T23:32:28Z
 depth: standard
-files_reviewed: 56
+files_reviewed: 59
 files_reviewed_list:
   - .gitattributes
   - .github/workflows/ci.yml
+  - build/vulnerable-gate.sh
   - BannedSymbols.txt
   - Directory.Build.props
   - Directory.Build.targets
@@ -15,6 +16,7 @@ files_reviewed_list:
   - sql/bootstrap/002_database.sql
   - sql/migrations/0001_init.sql
   - sql/migrations/0002_proposal_column_grants.sql
+  - sql/migrations/0003_proposal_insert_columns.sql
   - src/Olive.Application/AgentKeyHeader.cs
   - src/Olive.Application/IAgentAllowlist.cs
   - src/Olive.Application/IKeyIntrospector.cs
@@ -60,22 +62,49 @@ files_reviewed_list:
   - tests/Olive.Tests/InMemoryLogCapture.cs
   - tests/Olive.Tests/MigrationRunnerTests.cs
   - tests/Olive.Tests/PrivilegeMatrixTests.cs
+  - tests/Olive.Tests/VulnerableGateScriptTests.cs
 findings:
-  critical: 1
+  critical: 0
   warning: 7
-  info: 11
-  total: 19
+  info: 13
+  total: 20
 status: issues_found
 ---
 
 # Phase 1: Code Review Report
 
-**Reviewed:** 2026-10-21T22:57:54Z (re-review after gap closure 01-08, 01-09, 01-10; first pass 2026-10-21T00:00:00Z)
+**Reviewed:** 2026-10-21T23:32:28Z (second re-review, after gap closure 01-11, 01-12, 01-13; first re-review 2026-10-21T22:57:54Z after 01-08..01-10; first pass 2026-10-21T00:00:00Z)
 **Depth:** standard
-**Files Reviewed:** 56
+**Files Reviewed:** 59
 **Status:** issues_found
 
 ## Narrative Findings (AI reviewer)
+
+## Re-review (gap closure wave 2)
+
+Scope: `git diff 7223f94..HEAD` on `ProposalEndpoints.cs`, `ProposalSql.cs`, migration 0003, `build/vulnerable-gate.sh`, the CI workflow and the five test files (`ApiProposalTests`, `MigrationRunnerTests`, `PrivilegeMatrixTests`, `CiAndDevConfigTests`, `VulnerableGateScriptTests`). Findings outside this scope (WR-01, WR-03, WR-04, WR-06, WR-07, IN-01..IN-10) are carried forward unchanged.
+
+| ID | Status | Fixed by |
+|----|--------|----------|
+| CR-02 | **Resolved** (an over-rejection side effect is now WR-10; a logging gap in the backstop is WR-11) | plan 01-11, `c9bdca5` (tests `6fe5ad6`) |
+| WR-08 | **Resolved** (test-discrimination and scope residuals in IN-13) | plan 01-13, `42e142b` (tests `27df6c0`) |
+| WR-09 | **Resolved** (`proposal_event` residual in IN-12) | plan 01-12, `2e3f553` (tests `e3c6b74`) |
+| IN-11 | **Resolved** (escaped-pair positive case still missing; see IN-14) | plan 01-11, `6fe5ad6` |
+| WR-10 | **New, open** | the numeric expansion budget charges digits that cannot expand, so valid bodies get 400 |
+| WR-11 | **New, open** | the class-22 backstop swallows server-side data faults without logging anything |
+| IN-12 | **New, open** | `olive_app` can still forge `proposal_event.created_at` and arbitrary events |
+| IN-13 | **New, open** | gate tests do not tell failure reasons apart; the expected count comes from the same solution |
+| IN-14 | **New, open** | the "escaped valid pair" positive case uses a literal emoji, not a JSON escape |
+
+How I verified this:
+- **CR-02:** I traced `IsNumberInRange` for every JSON number shape. With raw length <= 64 and |exponent| <= 308, the largest value is about 10^372 and the smallest about 10^-372. Both are far inside PostgreSQL numeric's range (131072 digits before the point, 16383 after), so no number that passes can raise 22003. `int.TryParse` with `AllowLeadingSign` handles `e+308`, `E-0` and leading-zero exponents (`1e000308`), and seven or more exponent digits are rejected before parsing. Worst-case `parameters::text` expansion is the 65,536 budget plus a few characters of `0.` and sign overhead per number, which bounds the GET amplification. The host builds its data source with `NpgsqlDataSource.Create` and no logger factory (`Program.cs:28`), so Npgsql itself does not log the backstop path at Error. A failed insert disposes `TenantUnitOfWork`'s transaction uncommitted, so it rolls back and leaves no partial row.
+- **WR-09:**
+  - 0003 is LF with no BOM (`git ls-files --eol`: `i/lf w/lf`). Its grant list matches every column in 0001 except `state` and `created_at`, which have defaults (`'proposed'`, `now()`).
+  - `ProposalSql.Insert` no longer names `state`.
+  - `on conflict ... do nothing returning proposal_id` needs only INSERT on the listed columns plus SELECT on `proposal_id`, and table-level SELECT is still granted.
+  - `DB_04_app_cannot_insert_non_default_state` was RED before the fix, but not with 42501: the pre-0003 insert ran without a tenant GUC, so it would have failed in the RLS check with 42704. It is green now only because the privilege check runs before RLS. `DB_04_app_insert_is_limited_to_application_columns` walks the live `pg_attribute` list, so a column added later without a grant fails it loudly.
+  - `SeedProposalAsync` inserts as `olive_app`, so the "can insert" test does exercise the column grant.
+- **WR-08:** I ran the real pipeline on this repo (SDK 10.0.204). `dotnet sln Olive.sln list | grep -c '\.csproj$'` returns 12, `dotnet list package --vulnerable --include-transitive` exits 0 with 12 "has no vulnerable packages" lines, and `build/vulnerable-gate.sh` exits 0. With `set +e`, `${PIPESTATUS[0]}` gives `dotnet list`'s own status, not `tee`'s. If `dotnet sln list` fails, `grep -c` prints `0` and the script refuses the count as non-positive (fails closed). A CRLF-terminated report still matches, because grep matches a substring.
 
 ## Re-review (gap closure wave 1)
 
@@ -122,12 +151,12 @@ The core security spine holds up under tracing:
 - Migration checksums are taken over LF-pinned embedded bytes.
 
 Problems found:
-- **One client-triggerable contract violation (CR-01, now resolved).** Invalid UTF-16 in the body produced a 500 instead of a 400. **A second path of the same class remains (CR-02):** out-of-range numbers in `parameters`.
+- **One client-triggerable contract violation (CR-01, now resolved).** Invalid UTF-16 in the body produced a 500 instead of a 400. A second path of the same class, out-of-range numbers in `parameters` (CR-02), is now resolved too. Its fix rejects some valid bodies (WR-10) and makes server-side data faults invisible (WR-11).
 - **Gaps in the controls that are meant to be backstops:**
   - The FND-05 guard can be bypassed through decorators, factory registrations and keyed registrations.
   - The REQ-ACT-04 banned-API list is incomplete.
-  - The CI vulnerable-package gate failed open (WR-05, now resolved).
-  - The proposal row was fully UPDATE-able by `olive_app` (WR-02, now resolved). INSERT can still set any `state` (WR-09).
+  - The CI vulnerable-package gate failed open (WR-05, resolved), and then its count check was tautological (WR-08, resolved).
+  - The proposal row was fully UPDATE-able by `olive_app` (WR-02, resolved), and INSERT could set any `state` (WR-09, resolved). `proposal_event` still accepts a forged `created_at` (IN-12).
 - **Unrestricted GET.** `GET /v1/proposals/{id}` is open to any active principal in the tenant, including application (service) credentials.
 
 I verified the JSON behaviours with a scratch .NET 10 probe:
@@ -180,7 +209,20 @@ private static bool AllStringsValid(JsonElement e) => e.ValueKind switch
 ```
 Use these checks in place of the `\\u0000` substring test. Add a test that posts `"\ud800"` in `run_id`, in an optional field, in a `parameters` value and in a `parameters` key, and asserts 400 `invalid_request`.
 
-### CR-02: Out-of-range numbers in `parameters` still return 500 internal_error with an ERROR log; near-limit numbers amplify the stored data on GET (NEW)
+### CR-02: Out-of-range numbers in `parameters` still return 500 internal_error with an ERROR log; near-limit numbers amplify the stored data on GET — RESOLVED
+
+**Resolution (re-review 2026-10-21T23:32:28Z):** Fixed in plan 01-11, commit `c9bdca5`.
+- **Walk:** `AllStringsValid` now has a `JsonValueKind.Number` case that calls `IsNumberInRange` (`ProposalEndpoints.cs:231-266`). It rejects:
+  - raw text over 64 characters;
+  - exponents with zero or more than 6 digits, or outside -308..308;
+  - any body whose running expansion budget (mantissa digits + |exponent|) exceeds 65,536.
+- **No 22003 path remains:** every number that passes is far inside numeric's range (see "How I verified this" above). Amplification on GET is bounded by the budget.
+- **Backstop:** `PostAsync` catches a `PostgresException` whose `SqlState` starts with `22` around `InsertAsync` and returns 400 `invalid_request` (`ProposalEndpoints.cs:77-86`). It never echoes the message, and other SQL states still reach the 500 handler.
+- **Tests:**
+  - `API_01_out_of_range_numbers_give_400_and_store_nothing` covers 1e131072, 1e-16384, -1e999999, a nested array, a 400-digit mantissa, 1e131071 and an over-budget array of 20,000 values of 1e308. It asserts no row, no insert event and no Error log.
+  - `API_01_valid_numbers_and_strings_still_accepted` covers the guard against over-rejection.
+  - `API_01_class_22_database_error_maps_to_400` and `API_01_non_class_22_database_error_still_gives_500` pin the backstop, using a throwing store double whose message must not leak.
+- **Residuals:** the budget over-rejects valid input (WR-10). The backstop logs nothing at all (WR-11).
 
 **File:** `src/Olive.Host/Endpoints/ProposalEndpoints.cs:238-239,262` (with `src/Olive.Persistence/ProposalSql.cs:8`, `src/Olive.Host/Problems/ProblemExceptionHandler.cs:12-15`)
 
@@ -369,7 +411,21 @@ Consider also refusing any value weaker than `verify-full` when `OLIVE_ENVIRONME
 ```
 Add an architecture test that every `sql/migrations/*.sql` file matches the pattern.
 
-### WR-08: The new "report incomplete" count check in the vulnerable gate is tautological and cannot detect a partial report (NEW)
+### WR-08: The new "report incomplete" count check in the vulnerable gate is tautological and cannot detect a partial report — RESOLVED
+
+**Resolution (re-review 2026-10-21T23:32:28Z):** Fixed in plan 01-13, commit `42e142b`.
+- **Script:** the gate logic now lives in `build/vulnerable-gate.sh` (LF, `set -euo pipefail`). It takes `<report> <expected-count> [dotnet-exit-code]` and fails closed in each of these cases:
+  - a bad argument count;
+  - an expected count that is not a positive integer;
+  - a non-zero or non-numeric dotnet exit code;
+  - a missing or empty report;
+  - any "has the following vulnerable packages" line;
+  - a "has no vulnerable packages" count that differs from the expected count.
+- **Workflow:** `ci.yml` takes the expected count from `dotnet sln Olive.sln list`, and passes it to the script along with `${PIPESTATUS[0]}` captured under `set +e`.
+- **Removed:** the tautological `projects`/`clean` comparison and the dead `-z` test are gone.
+- **Tests:** `VulnerableGateScriptTests` runs the real script against canned reports: all clean, one vulnerable, empty, a missing project, an extra project, a non-zero dotnet exit, a non-numeric count, a zero count and a missing file.
+- **Live check:** verified against the live repo (12 of 12, exit 0).
+- **Residuals:** the failure tests do not tell reasons apart, and the expected count shares a source with the report. See IN-13. The question of whether NuGet prints the "clean" wording when the vulnerability resource is unreachable remains unverified, as before.
 
 **File:** `.github/workflows/ci.yml:48-53` (locked in by `tests/Olive.Tests/CiAndDevConfigTests.cs:53-84`)
 
@@ -393,7 +449,20 @@ jq -e --argjson n "$expected" '
 ```
 Move the script to `build/vulnerable-gate.sh` and test it against canned outputs: all clean, one vulnerable, empty, a missing project, and a non-zero exit. Do not pattern-match the YAML.
 
-### WR-09: `olive_app` can still INSERT a proposal in any state (e.g. `approved`) with a forged `created_at`, bypassing the state machine and event pairing (NEW)
+### WR-09: `olive_app` can still INSERT a proposal in any state (e.g. `approved`) with a forged `created_at`, bypassing the state machine and event pairing — RESOLVED
+
+**Resolution (re-review 2026-10-21T23:32:28Z):** Fixed in plan 01-12, commit `2e3f553`.
+- **Migration:** `sql/migrations/0003_proposal_insert_columns.sql` runs `revoke insert on proposal from olive_app` and then grants INSERT on exactly the 14 application-supplied columns. `state` and `created_at` are excluded, so they always take their defaults (`'proposed'`, `now()`). 0001 and 0002 are untouched.
+- **Store:** `ProposalSql.Insert` no longer names `state`.
+- **Tests:**
+  - `DB_04_app_cannot_insert_non_default_state` and `DB_04_app_cannot_insert_created_at` expect 42501.
+  - `DB_04_app_insert_is_limited_to_application_columns` checks `has_column_privilege(..., 'INSERT')` against every live column.
+  - `DB_04_app_can_insert_proposal_with_default_state` seeds the row as `olive_app` and reads back `proposed`.
+  - The table-level matrix now expects only SELECT for `olive_app` on `proposal`.
+  - `MigrationRunnerTests` pins the 0003 checksum and file name.
+- **Residuals:**
+  - `UPDATE (state)` still permits any jump between states with no paired event. This is a later-phase concern, as noted at first report.
+  - `proposal_event` INSERT is still table-wide. See IN-12.
 
 **File:** `sql/migrations/0002_proposal_column_grants.sql:3-4` (table-level INSERT from `sql/migrations/0001_init.sql:53`), `src/Olive.Persistence/ProposalSql.cs:6-9`
 
@@ -411,6 +480,52 @@ grant insert (tenant_id, proposal_id, agent_id, key_id, on_behalf_of, purpose, k
     on proposal to olive_app;
 ```
 Add `DB_04_app_cannot_insert_non_default_state` (expects 42501 for `insert ... (state) values ('approved')`), and add a `has_column_privilege(..., 'INSERT')` loop like the UPDATE one. Optionally, add a `BEFORE UPDATE OF state` trigger that enforces the allowed transition graph.
+
+### WR-10: The numeric expansion budget charges digits that cannot expand, so valid `parameters` bodies are rejected with 400 (NEW)
+
+**File:** `src/Olive.Host/Endpoints/ProposalEndpoints.cs:225-228,255-265`
+
+**Issue:**
+- **What is charged:** every number in `parameters` adds `mantissaDigits + |exponent|` to the budget, including plain integers and decimals that have no exponent. Those numbers cannot expand: their jsonb text form is no longer than their wire form. Only an exponent can make the stored text longer than what was received.
+- **Valid bodies rejected:**
+  - A well-formed object holding about 65,537 single-digit numbers (`{"v":[1,1,1,...]}`, roughly 131 KB, well under the 1 MiB body limit) is rejected with 400 `invalid_request`.
+  - So is 6,554 ten-digit IDs, or any mix of numbers totalling more than 65,536 digits.
+- **Other hard limits:**
+  - A plain decimal longer than 64 characters (a high-precision amount, or a 70-digit identifier sent as a number) is refused.
+  - So is any exponent outside +/-308, for example a subnormal such as `4.9e-324`.
+- **Why it matters:** D-07 says Phase 1 "stores it as received" and that "checks are minimal". These limits are not in D-07, the API contract or the problem `detail`, and the client cannot tell them apart from a malformed body. No test pins this behaviour either way: the positive set tops out at 100 x `1e308`.
+
+**Fix:** Charge only the expansion beyond the wire size, so non-exponent numbers are free and amplification stays bounded. Then record the remaining limits in the contract or decision log:
+```csharp
+// cost = digits the jsonb text can add beyond the raw token
+var expanded = mantissaDigits + Math.Abs(exponent);
+budget += Math.Max(0, expanded - raw.Length);
+return budget <= MaxNumberExpansionBudget;
+```
+Add a positive test with, for example, 70,000 small integers (expect 201) next to the existing over-budget `1e308` body (expect 400).
+
+### WR-11: The class-22 backstop swallows server-originated data faults silently and blames the client (NEW)
+
+**File:** `src/Olive.Host/Endpoints/ProposalEndpoints.cs:82-86`
+
+**Issue:**
+- **What it catches:** the filter matches any `PostgresException` in class 22 thrown anywhere inside `InsertAsync`. That covers the `set_config` call, the proposal insert and the `proposal_event` insert. It is not limited to faults caused by body content.
+- **Values the client never sent:** several inserted values come from the introspected key, not the body: `agent_id`, `key_id`, `on_behalf_of`, `purpose` and `key_expires_at`. A live popeye resolver that returns, for example, a NUL in `on_behalf_of` makes PostgreSQL raise 22021 ("invalid byte sequence for encoding UTF8: 0x00"). The agent then gets 400 `invalid_request` for a body that was valid. Later columns with `varchar(n)` (22001) or date limits (22008) behave the same way.
+- **Nothing is logged:** the handler logs nothing at any level, not even the SQL state. Operators get no signal that a resolver or schema defect is rejecting traffic.
+- **Missing test:** the test only asserts that no Error log is written, so a "log nothing at all" regression could not be distinguished from the intended behaviour.
+
+**Fix:** Keep the 400, but log the SQL state at Warning (never the message, which can echo values), and narrow the filter to the codes the body can cause:
+```csharp
+catch (PostgresException e) when (e.SqlState is PostgresErrorCodes.NumericValueOutOfRange      // 22003
+                                     or PostgresErrorCodes.InvalidTextRepresentation          // 22P02
+                                     or PostgresErrorCodes.UntranslatableCharacter            // 22P05
+                                     or PostgresErrorCodes.CharacterNotInRepertoire)          // 22021
+{
+    logger.LogWarning("Proposal insert refused by database data check {SqlState}", e.SqlState);
+    return Invalid();
+}
+```
+Alternatively, map the fault in `PostgresProposalStore.InsertAsync` (the store-level option in the CR-02 fix) and validate key-derived strings with `IsWellFormed` at the auth boundary.
 
 ## Info
 
@@ -494,7 +609,14 @@ Add `DB_04_app_cannot_insert_non_default_state` (expects 42501 for `insert ... (
 
 **Fix:** Wrap the unlock in `try { ... } catch (NpgsqlException) { }`. The session-level lock is released when the connection closes anyway.
 
-### IN-11: CR-01 test set has blind spots: one case is not a regression detector, there is no over-rejection guard, and NUL is not tested outside `parameters` (NEW)
+### IN-11: CR-01 test set has blind spots: one case is not a regression detector, there is no over-rejection guard, and NUL is not tested outside `parameters` — RESOLVED
+
+**Resolution (re-review 2026-10-21T23:32:28Z):** Fixed in plan 01-11, commit `6fe5ad6`.
+- **Case 6:** the `\u0000`-key case moved to `InvalidBodies`.
+- **Positive cases:** `API_01_valid_numbers_and_strings_still_accepted` covers emoji in `parameters` and in `justification`, plus a literal backslash-u text.
+- **NUL coverage:** `API_01_nul_outside_parameters_gives_400_and_store_nothing` covers `run_id`, all five optional strings and an array element.
+- **Test bodies:** the new bodies use raw string literals.
+- **Still open, minor:** the "escaped pair" case is a literal UTF-8 emoji rather than a JSON escape (IN-14). The `IsWellFormed` comment (line 179) still does not say that its surrogate branches are a backstop for callers other than the parser.
 
 **File:** `tests/Olive.Tests/ApiProposalTests.cs:129-151` (and `InvalidBodies` at 98-113)
 
@@ -510,8 +632,45 @@ Add `DB_04_app_cannot_insert_non_default_state` (expects 42501 for `insert ... (
 
 **Fix:** Drop case 6 or move it to `InvalidBodies`. Add the NUL and positive cases above. Add a comment on `IsWellFormed` noting that the surrogate checks are a backstop for non-parser callers.
 
+### IN-12: `olive_app` can still forge `proposal_event.created_at` and insert arbitrary events (NEW, residual of WR-09)
+
+**File:** `sql/migrations/0001_init.sql:54` (`grant select, insert on proposal_event to olive_app`)
+
+**Issue:**
+- **What is still open:** after 0003, `proposal.created_at` is server-set, but `proposal_event` INSERT is still table-wide.
+- **What a buggy path or compromised `olive_app` session can do:** write events with any `created_at`, `event_type`, `from_state`, `to_state` and `actor`. IN-09 notes that these columns have no CHECK constraints. One example is a back-dated `transition` to `approved` for a proposal that is still `proposed`.
+- **Why it matters:** the history table is append-only and can never be corrected, and Decision §13 relies on it as the provable record.
+
+**Fix:** In a 0004 migration, run `revoke insert on proposal_event from olive_app; grant insert (tenant_id, event_id, proposal_id, event_type, from_state, to_state, actor, detail) on proposal_event to olive_app;`. Add the IN-09 CHECKs and a `has_column_privilege` test that mirrors the proposal one.
+
+### IN-13: Gate-script failure tests do not tell reasons apart, and the expected count comes from the same solution the report reads (NEW, residual of WR-08)
+
+**File:** `tests/Olive.Tests/VulnerableGateScriptTests.cs:131-155`, `.github/workflows/ci.yml:43`
+
+**Issue:**
+- **Failure reasons not distinguished:** every failure test asserts only exit code 1, and stderr is discarded (`RunBash`, lines 80-81).
+  - `FND_07_gate_script_one_vulnerable_exits_1` passes 2 clean lines with an expected count of 3. Deleting the `has the following vulnerable packages` check would still exit 1 through the count mismatch, so the vulnerable branch is never tested on its own.
+  - Any unrelated exit-1 failure inside the script, such as a `set -u` error, would also satisfy every failure test.
+- **Shared source:** `expected` counts the `.csproj` entries in `Olive.sln`, and `dotnet list package` enumerates the same solution. A project that is never added to the solution is invisible to both counts and is never scanned.
+- **Workflow glue untested:** the `PIPESTATUS`/`set +e` lines are still only text-asserted (`CiAndDevConfigTests.cs:66-68`).
+
+**Fix:**
+- Make the one-vulnerable case report three clean lines plus one vulnerable line, so the count matches and only the vulnerable check can fail it.
+- Assert a distinct stderr message for each case, or give each failure reason its own exit code.
+- Optionally, compare `expected` against `git ls-files '*.csproj' | wc -l` so the scan covers every project in the repo.
+
+### IN-14: The "escaped valid surrogate pair" positive case sends a literal emoji, not a JSON escape (NEW)
+
+**File:** `tests/Olive.Tests/ApiProposalTests.cs:193-194`
+
+**Issue:**
+- **What the case sends:** the `parameters` case (line 193) and the `justification` case (line 194) contain the raw UTF-8 bytes `F0 9F 98 80` (U+1F600, checked with `od`). Plan 01-11 (and IN-11) asked for the JSON escape `\ud83d\ude00`.
+- **What it misses:** the literal form never goes through `System.Text.Json`'s unescape path. A future raw-text screen, such as rejecting `\ud8` substrings the way the old `\u0000` screen did, would wrongly refuse the escaped pair and still pass the suite.
+
+**Fix:** Add cases whose JSON text contains the escape `\ud83d\ude00` in a `parameters` value and in `justification` (inside raw string literals, so the backslashes reach the parser), and keep the literal cases as well. Optionally, read the stored value back and assert that it equals U+1F600.
+
 ---
 
-_Reviewed: 2026-10-21T22:57:54Z (re-review); first pass 2026-10-21T00:00:00Z_
+_Reviewed: 2026-10-21T23:32:28Z (second re-review); first re-review 2026-10-21T22:57:54Z; first pass 2026-10-21T00:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
