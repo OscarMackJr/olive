@@ -1,0 +1,11 @@
+{
+  "active": true,
+  "key_id": "0a1b2c3d-0000-4000-8000-000000000005",
+  "principal_type": "agent",
+  "agent_id": "mallory",
+  "on_behalf_of": "analyst.alpha@example.test",
+  "purpose": "servicing",
+  "tenant_id": "5325ffe9-5727-4d88-9832-aebabb8d0538",
+  "data_class_ceiling": "confidential-personal",
+  "expires_at": "2099-01-01T00:00:00Z"
+}

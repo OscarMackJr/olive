@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olive.example.test/olive/introspection/v1/introspection-response.schema.json",
+  "title": "popeye key introspection response (POPEYE_v0.4.2 section 2.1)",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["active"],
+      "additionalProperties": false,
+      "properties": {
+        "active": { "const": false }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["active", "key_id", "principal_type", "purpose", "tenant_id", "data_class_ceiling", "expires_at"],
+      "additionalProperties": false,
+      "properties": {
+        "active": { "const": true },
+        "key_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "principal_type": { "enum": ["user", "application", "agent"] },
+        "agent_id": { "type": "string", "pattern": "^.+$" },
+        "on_behalf_of": { "type": "string", "pattern": "^.+$" },
+        "purpose": { "enum": ["servicing", "origination", "collections", "analytics", "marketing", "compliance-review", "internal-support"] },
+        "tenant_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+        "data_class_ceiling": { "enum": ["public", "internal", "confidential-personal", "regulated-financial", "regulated-identifier"] },
+        "expires_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  ]
+}
