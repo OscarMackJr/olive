@@ -2,4 +2,7 @@
   <PropertyGroup>
     <UseAppHost Condition="'$(UseAppHost)' != 'true'">false</UseAppHost>
   </PropertyGroup>
+  <ItemGroup Condition="'$(IsTestProject)' != 'true'">
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" />
+  </ItemGroup>
 </Project>

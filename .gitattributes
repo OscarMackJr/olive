@@ -1,0 +1,16 @@
+* text=auto
+*.sql text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.cs text eol=lf
+*.csproj text eol=lf
+*.props text eol=lf
+*.targets text eol=lf
+*.txt text eol=lf
+*.sh text eol=lf
+contracts/** text eol=lf
+sql/** text eol=lf
+config/** text eol=lf
+contracts/vendored/** -text

@@ -1,0 +1,9 @@
+T:System.Net.Http.HttpClient;REQ-ACT-04: Olive has no outbound HTTP in Phase 1
+T:System.Net.Http.HttpClientHandler;REQ-ACT-04: Olive has no outbound HTTP in Phase 1
+T:System.Net.Http.SocketsHttpHandler;REQ-ACT-04: Olive has no outbound HTTP in Phase 1
+T:System.Net.Http.IHttpClientFactory;REQ-ACT-04: Olive has no outbound HTTP in Phase 1
+T:System.Net.WebRequest;REQ-ACT-04: Olive has no outbound HTTP in Phase 1
+P:System.DateTime.UtcNow;Inject TimeProvider
+P:System.DateTime.Now;Inject TimeProvider
+P:System.DateTimeOffset.UtcNow;Inject TimeProvider
+P:System.DateTimeOffset.Now;Inject TimeProvider
