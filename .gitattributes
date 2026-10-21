@@ -3,6 +3,7 @@
 *.yaml text eol=lf
 *.yml text eol=lf
 *.json text eol=lf
+packages.lock.json text eol=lf
 *.md text eol=lf
 *.cs text eol=lf
 *.csproj text eol=lf
