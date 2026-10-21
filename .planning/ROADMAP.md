@@ -234,7 +234,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Walking Skeleton | 10/10 | Complete   | 2026-10-21 |
+| 1. Foundation and Walking Skeleton | 13/13 | Complete   | 2026-10-21 |
 | 2. Contract Integrity and Idempotent Submission | 0/TBD | Not started | - |
 | 3. Trace Verification | 0/TBD | Not started | - |
 | 4. Policy, Expiry and Refusal | 0/TBD | Not started | - |
