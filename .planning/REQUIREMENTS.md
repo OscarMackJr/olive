@@ -213,8 +213,8 @@ Deferred. Tracked but not in the current roadmap.
 | FND-07 | Phase 1 | Pending |
 | DB-01 | Phase 1 | Pending |
 | DB-02 | Phase 1 | Pending |
-| DB-03 | Phase 1 | Pending |
-| DB-04 | Phase 1 | Pending |
+| DB-03 | Phase 1 | Partial (pattern established in Phase 1; tables completed in Phases 5/6) |
+| DB-04 | Phase 1 | Partial (pattern established in Phase 1; tables completed in Phases 5/6) |
 | DB-05 | Phase 1 | Pending |
 | DB-06 | Phase 1 | Pending |
 | DB-07 | Phase 1 | Pending |

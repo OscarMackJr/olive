@@ -76,6 +76,16 @@ None yet.
 - External: the `role:case_supervisor` Entra group is unnamed, so live approvals stay blocked. This does not block Phase 7 completion.
 - Research flags: `--research-phase` is recommended for Phases 3, 5, 6 and 7.
 
+#### Open coordination items
+
+- Agent-key header (D-12): confirm the header name with the nono owner; currently assumed `Authorization: Bearer`, isolated in `AgentKeyHeader`.
+- Q14 conflict: NONO_v0.4.3 section 5 says on_behalf_of is a UPN, while the Q14 working default maps by Entra oid+tid and never UPN. Needs a ruling before Phase 5 and before Phase 7. Fixtures use UPN-style placeholders.
+- Q4 narrowed: POPEYE_v0.4.2 section 2.5 says introspection returns no entitlements and Olive resolves on_behalf_of to directory groups without a write-capable credential (REQ-ACT-04). Decide in Phase 4.
+- PHASE 3 RESEARCH: POPEYE section 2.1 returns active:false for non-agent keys, while D§7 requires 403 principal_not_permitted for user/application. Phase 1 stub fixtures return active:true with those principal types.
+- Introspection cache constraint (D-14, POPEYE section 2.2): positives cached at most 60 s and never past expires_at; negatives never cached. No cache in Phase 1.
+- DB-03/DB-04 name five tables but migration 0001 creates two (D-03). Phases 5 and 6 must append table names to the table-driven RLS and privilege tests.
+- Migration numbering: migrations are numbered sequentially in order of arrival; the 0002/0003 labels in CONTEXT are nominal (Q3 resolved).
+
 ## Deferred Items
 
 | Category | Item | Status | Deferred At |
