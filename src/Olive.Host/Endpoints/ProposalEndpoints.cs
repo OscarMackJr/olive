@@ -227,7 +227,7 @@ public static class ProposalEndpoints
     private const int MaxExponent = 308;
     private const int MaxNumberExpansionBudget = 65536;
 
-    // Adds the number's worst-case expanded digit count to budget; false when out of range or over budget.
+    // Adds the number's worst-case growth over its wire size to budget; false when out of range or over budget.
     private static bool IsNumberInRange(JsonElement e, ref int budget)
     {
         var raw = e.GetRawText();
@@ -261,7 +261,8 @@ public static class ProposalEndpoints
             }
         }
 
-        budget += mantissaDigits + Math.Abs(exponent);
+        // Charge only what the stored text can add beyond the raw token, so numbers without an exponent are free (WR-10).
+        budget += Math.Max(0, mantissaDigits + Math.Abs(exponent) - raw.Length);
         return budget <= MaxNumberExpansionBudget;
     }
 

@@ -190,6 +190,9 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         NumBody("""{"x":1e300}"""),
         NumBody("""{"x":1e-300}"""),
         NumBody("{\"x\":[" + string.Join(",", Enumerable.Repeat("1e308", 100)) + "]}"),
+        // WR-10: numbers without an exponent cannot expand, so they do not draw on the expansion budget.
+        NumBody("{\"x\":[" + string.Join(",", Enumerable.Repeat("1", 70000)) + "]}"),
+        NumBody("{\"x\":[" + string.Join(",", Enumerable.Repeat("1234567890", 7000)) + "]}"),
         NumBody("""{"x":"😀"}"""),
         """{"run_id":"r","justification":"😀"}""",
         NumBody("""{"x":"\\u0000"}"""),
