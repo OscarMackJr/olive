@@ -124,8 +124,7 @@ public static class ProposalEndpoints
             return false;
         }
 
-        var s = v.GetString();
-        if (string.IsNullOrEmpty(s) || s.Length > MaxRunIdLength || s.Contains('\0'))
+        if (!TryGetCleanString(v, out var s) || string.IsNullOrEmpty(s) || s.Length > MaxRunIdLength)
         {
             return false;
         }
@@ -147,8 +146,98 @@ public static class ProposalEndpoints
             return false;
         }
 
-        value = v.GetString();
-        return value is not null && !value.Contains('\0');
+        return TryGetCleanString(v, out value);
+    }
+
+    // GetString throws InvalidOperationException for a lone-surrogate escape; that is a client fault (D-07, CR-01).
+    private static bool TryGetCleanString(JsonElement v, out string? value)
+    {
+        value = null;
+        try
+        {
+            value = v.GetString();
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+
+        return value is not null && IsWellFormed(value);
+    }
+
+    // jsonb rejects U+0000 and unpaired surrogates.
+    private static bool IsWellFormed(string s)
+    {
+        for (var i = 0; i < s.Length; i++)
+        {
+            var c = s[i];
+            if (c == '\0')
+            {
+                return false;
+            }
+
+            if (char.IsHighSurrogate(c))
+            {
+                if (i + 1 >= s.Length || !char.IsLowSurrogate(s[i + 1]))
+                {
+                    return false;
+                }
+
+                i++;
+            }
+            else if (char.IsLowSurrogate(c))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TryGetPropertyName(JsonProperty p, out string name)
+    {
+        name = "";
+        try
+        {
+            name = p.Name;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+
+        return IsWellFormed(name);
+    }
+
+    private static bool AllStringsValid(JsonElement e)
+    {
+        switch (e.ValueKind)
+        {
+            case JsonValueKind.Object:
+                foreach (var p in e.EnumerateObject())
+                {
+                    if (!TryGetPropertyName(p, out _) || !AllStringsValid(p.Value))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            case JsonValueKind.Array:
+                foreach (var item in e.EnumerateArray())
+                {
+                    if (!AllStringsValid(item))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            case JsonValueKind.String:
+                return TryGetCleanString(e, out _);
+            default:
+                return true;
+        }
     }
 
     private static bool TryParameters(JsonElement root, out string? json)
@@ -164,14 +253,13 @@ public static class ProposalEndpoints
             return false;
         }
 
-        var raw = v.GetRawText();
-        // jsonb cannot store U+0000; refuse it as a client error rather than a database error.
-        if (raw.Contains("\\u0000", StringComparison.OrdinalIgnoreCase))
+        // jsonb cannot store U+0000 or lone surrogates; refuse them as a client error rather than a database error.
+        if (!AllStringsValid(v))
         {
             return false;
         }
 
-        json = raw;
+        json = v.GetRawText();
         return true;
     }
 
