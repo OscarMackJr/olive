@@ -40,14 +40,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          expected=$(dotnet sln Olive.sln list | grep -c '\.csproj$' || true)
+          set +e
           dotnet list package --vulnerable --include-transitive 2>&1 | tee vulnerable.txt
-          if grep -q "has the following vulnerable packages" vulnerable.txt; then
-            echo "Vulnerable packages found" >&2
-            exit 1
-          fi
-          projects=$(grep -c "The given project" vulnerable.txt || true)
-          clean=$(grep -c "has no vulnerable packages" vulnerable.txt || true)
-          if [ "$projects" = "0" ] || [ -z "$projects" ] || [ "$projects" != "$clean" ]; then
-            echo "Vulnerability report incomplete or unrecognized" >&2
-            exit 1
-          fi
+          code=${PIPESTATUS[0]}
+          set -e
+          bash build/vulnerable-gate.sh vulnerable.txt "$expected" "$code"

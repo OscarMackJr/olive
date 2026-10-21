@@ -46,8 +46,9 @@ public sealed class CiAndDevConfigTests
     {
         var w = Workflow;
         Assert.Contains("dotnet list package --vulnerable --include-transitive", w);
-        Assert.Contains("has the following vulnerable packages", w);
-        Assert.Contains("exit 1", w);
+        var script = File.ReadAllText(Path.Combine(TestPaths.Root, "build", "vulnerable-gate.sh"));
+        Assert.Contains("has the following vulnerable packages", script);
+        Assert.Contains("exit 1", script);
     }
 
     [Fact]
@@ -62,20 +63,20 @@ public sealed class CiAndDevConfigTests
         Assert.Contains("shell: bash", step);
         Assert.Contains("set -euo pipefail", step);
         Assert.Contains("dotnet list package --vulnerable --include-transitive", step);
-        Assert.Contains("has the following vulnerable packages", step);
-        Assert.Contains("has no vulnerable packages", step);
-        Assert.True(step.Split("exit 1").Length - 1 >= 2);
-        Assert.Contains("The given project", step);
-        Assert.Contains("projects=$(grep -c \"The given project\" vulnerable.txt || true)", step);
-        Assert.Contains("clean=$(grep -c \"has no vulnerable packages\" vulnerable.txt || true)", step);
-        foreach (var line in step.Split('\n').Where(l => l.Contains("grep -c", StringComparison.Ordinal)))
+        Assert.Contains("build/vulnerable-gate.sh", step);
+        Assert.Contains("PIPESTATUS", step);
+        Assert.Contains("dotnet sln", step);
+        Assert.DoesNotContain("The given project", step);
+        Assert.DoesNotContain("$projects", step);
+        Assert.DoesNotContain("$clean", step);
+        var script = File.ReadAllText(Path.Combine(TestPaths.Root, "build", "vulnerable-gate.sh"));
+        Assert.Contains("set -euo pipefail", script);
+        Assert.True(script.Split("exit 1").Length - 1 >= 2);
+        foreach (var line in script.Split('\n').Where(l => l.Contains("grep -c", StringComparison.Ordinal)))
         {
             Assert.Contains("|| true", line);
         }
 
-        Assert.Contains("[ \"$projects\" = \"0\" ]", step);
-        Assert.Contains("[ -z \"$projects\" ]", step);
-        Assert.Contains("[ \"$projects\" != \"$clean\" ]", step);
         Assert.DoesNotContain("|| echo 0", step);
         foreach (var line in step.Split('\n').Where(l => l.Contains("dotnet list package", StringComparison.Ordinal)))
         {
