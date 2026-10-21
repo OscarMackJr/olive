@@ -164,4 +164,54 @@ public sealed class ArchitectureTests
         Assert.Contains("BannedSymbols.txt", targets);
         Assert.Contains("AdditionalFiles", targets);
     }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void DB_02_migration_files_on_disk_have_valid_names_and_contiguous_versions()
+    {
+        var names = Directory.GetFiles(Path.Combine(TestPaths.Root, "sql", "migrations"))
+            .Select(f => Path.GetFileName(f)!)
+            .ToList();
+        Assert.NotEmpty(names);
+        Olive.Persistence.MigrationCatalog.ValidateFileNames(names);
+    }
+
+    [Theory]
+    [Trait("Category", "Architecture")]
+    [InlineData("0001.sql")]
+    [InlineData("1_init.sql")]
+    [InlineData("0001_Init.sql")]
+    [InlineData("0001_init.SQL")]
+    [InlineData("0001-init.sql")]
+    public void DB_02_migration_file_name_shape_is_enforced(string bad)
+    {
+        var e = Assert.Throws<InvalidOperationException>(() => Olive.Persistence.MigrationCatalog.ValidateFileNames(["0001_init.sql", bad]));
+        Assert.Equal("Invalid migration file name.", e.Message);
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void DB_02_duplicate_migration_versions_are_refused()
+    {
+        var e = Assert.Throws<InvalidOperationException>(() => Olive.Persistence.MigrationCatalog.ValidateFileNames(["0001_init.sql", "0002_a.sql", "0002_b.sql"]));
+        Assert.Equal("Duplicate migration version.", e.Message);
+    }
+
+    [Theory]
+    [Trait("Category", "Architecture")]
+    [InlineData("0002_init.sql")]
+    [InlineData("0001_init.sql", "0003_gap.sql")]
+    public void DB_02_non_contiguous_migration_versions_are_refused(params string[] names)
+    {
+        var e = Assert.Throws<InvalidOperationException>(() => Olive.Persistence.MigrationCatalog.ValidateFileNames(names));
+        Assert.Contains("contiguous", e.Message);
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void DB_02_migration_file_without_underscore_has_no_version()
+    {
+        var file = new Olive.Persistence.MigrationFile("0002.sql", []);
+        Assert.Throws<InvalidOperationException>(() => file.Version);
+    }
 }

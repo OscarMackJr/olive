@@ -5,7 +5,7 @@ namespace Olive.Persistence;
 
 public sealed record MigrationFile(string FileName, byte[] Bytes)
 {
-    public string Version => FileName[..FileName.IndexOf('_')];
+    public string Version => FileName.IndexOf('_') is > 0 and var i ? FileName[..i] : throw new InvalidOperationException("Invalid migration file name.");
 
     public string Sha256 => Convert.ToHexStringLower(SHA256.HashData(Bytes));
 
