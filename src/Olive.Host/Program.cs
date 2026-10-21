@@ -10,6 +10,7 @@ using Olive.Persistence;
 
 // Forced to Production so the developer exception page is never enabled.
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args, EnvironmentName = Environments.Production });
+builder.Configuration.AddDotEnvBelowEnvironment(Path.Combine(builder.Environment.ContentRootPath, ".env"));
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = ProposalEndpoints.MaxBodyBytes);
 
 builder.Logging.AddFilter("Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware", LogLevel.None);
