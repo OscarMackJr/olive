@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Olive.Application\Olive.Application.csproj" />
+    <ProjectReference Include="..\Olive.Domain\Olive.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\contracts\introspection\*.json" LogicalName="introspection/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

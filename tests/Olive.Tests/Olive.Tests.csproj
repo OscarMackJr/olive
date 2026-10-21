@@ -1,9 +1,29 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><IsPackable>false</IsPackable><UseAppHost>true</UseAppHost></PropertyGroup>
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UseAppHost>true</UseAppHost>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Olive/Olive.csproj" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.0" />
-    <PackageReference Include="xunit.v3" Version="3.2.0" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Dapper" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Olive.Domain\Olive.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Olive.Contracts\Olive.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Olive.Application\Olive.Application.csproj" />
+    <ProjectReference Include="..\..\src\Olive.Persistence\Olive.Persistence.csproj" />
+    <ProjectReference Include="..\..\src\Olive.Catalog\Olive.Catalog.csproj" />
+    <ProjectReference Include="..\..\src\Olive.Executor.Simulated\Olive.Executor.Simulated.csproj" />
+    <ProjectReference Include="..\..\src\Olive.Integrations.Popeye\Olive.Integrations.Popeye.csproj" />
+    <ProjectReference Include="..\..\src\Olive.Integrations.Hometown\Olive.Integrations.Hometown.csproj" />
+    <ProjectReference Include="..\..\src\Olive.Integrations.Entra\Olive.Integrations.Entra.csproj" />
+    <ProjectReference Include="..\..\src\Olive.Host\Olive.Host.csproj" />
   </ItemGroup>
 </Project>

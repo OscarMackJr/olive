@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Olive.Domain\Olive.Domain.csproj" />
+  </ItemGroup>
+</Project>

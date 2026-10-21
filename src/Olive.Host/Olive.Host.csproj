@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\Olive.Application\Olive.Application.csproj" />
+    <ProjectReference Include="..\Olive.Domain\Olive.Domain.csproj" />
+    <ProjectReference Include="..\Olive.Contracts\Olive.Contracts.csproj" />
+    <ProjectReference Include="..\Olive.Persistence\Olive.Persistence.csproj" />
+    <ProjectReference Include="..\Olive.Catalog\Olive.Catalog.csproj" />
+    <ProjectReference Include="..\Olive.Executor.Simulated\Olive.Executor.Simulated.csproj" />
+    <ProjectReference Include="..\Olive.Integrations.Popeye\Olive.Integrations.Popeye.csproj" />
+    <ProjectReference Include="..\Olive.Integrations.Hometown\Olive.Integrations.Hometown.csproj" />
+    <ProjectReference Include="..\Olive.Integrations.Entra\Olive.Integrations.Entra.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="..\..\contracts\vendored\vocabulary.yaml" Link="contracts/vendored/vocabulary.yaml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
