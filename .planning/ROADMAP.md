@@ -65,7 +65,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 01-06-PLAN.md — Startup guards (environment, stubs, vocabulary hash, DB role and migrations), .env loader, secret-leak tests
+- [x] 01-06-PLAN.md — Startup guards (environment, stubs, vocabulary hash, DB role and migrations), .env loader, secret-leak tests
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -228,7 +228,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation and Walking Skeleton | 5/7 | In Progress|  |
+| 1. Foundation and Walking Skeleton | 6/7 | In Progress|  |
 | 2. Contract Integrity and Idempotent Submission | 0/TBD | Not started | - |
 | 3. Trace Verification | 0/TBD | Not started | - |
 | 4. Policy, Expiry and Refusal | 0/TBD | Not started | - |
