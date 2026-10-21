@@ -128,12 +128,12 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
 
     public static TheoryData<string> LoneSurrogateBodies() => new()
     {
-        "{\"run_id\":\"\ud800\"}",
-        "{\"run_id\":\"r\",\"justification\":\"\udc00\"}",
-        "{\"run_id\":\"r\",\"parameters\":{\"x\":\"\ud800\"}}",
-        "{\"run_id\":\"r\",\"parameters\":{\"\ud800\":\"x\"}}",
-        "{\"run_id\":\"r\",\"parameters\":{\"a\":[{\"\ud800\":1}]}}",
-        "{\"run_id\":\"r\",\"parameters\":{\"\u0000\":1}}",
+        "{\"run_id\":\"\\ud800\"}",
+        "{\"run_id\":\"r\",\"justification\":\"\\udc00\"}",
+        "{\"run_id\":\"r\",\"parameters\":{\"x\":\"\\ud800\"}}",
+        "{\"run_id\":\"r\",\"parameters\":{\"\\ud800\":\"x\"}}",
+        "{\"run_id\":\"r\",\"parameters\":{\"a\":[{\"\\ud800\":1}]}}",
+        "{\"run_id\":\"r\",\"parameters\":{\"\\u0000\":1}}",
     };
 
     [Theory]
