@@ -465,16 +465,23 @@ Problem reason codes (stable): `key_inactive` (401), `principal_not_permitted` (
 | A9 | Plain `GRANT olive_owner TO olive_migrator` allows `SET ROLE` on PG 15-17 | Pattern 3 | Fixture test fails immediately; then use `WITH SET TRUE` on 16+ |
 | A10 | PG15+ default leaves `public` CREATE to the db owner only | Pattern 3 | Test with `olive_app` create-table attempt |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **DB-03/DB-04 text names five tables, D-03 and ROADMAP notes limit 0001 to two.**
+   - **Resolution:** Resolved in 01-02 (table-driven RLS and privilege tests) and 01-07 (REQUIREMENTS.md marks DB-03/DB-04 partial: pattern established, tables completed in Phases 5/6).
    - Recommendation: follow D-03. Make the RLS-pattern catalog test and privilege-matrix test **table-driven** (a list of RLS tables and a list of INSERT-only tables) so 0002/0003 only append names. Planner should record in VERIFICATION that DB-03/04 are fully satisfied only after Phases 5-6; Phase 1 satisfies the pattern.
 2. **Nullable columns for un-validated fields (D-07).** Recommendation: `run_id` NOT NULL; `action_type`, `party_ref`, `parameters`, `justification`, `trace_ref` nullable in 0001 with a handler check that, if present, they have the right JSON type (else 400). Phase 2 tightens with a new migration. Planner may instead require all of them (stricter than D-07) — a decision to confirm.
+   - **Resolution:** Resolved in 01-04/01-05 (nullable columns in 0001 plus handler JSON type check, else 400).
 3. **Migration numbering.** CONTEXT labels 0002 = queue (Phase 5), 0003 = ledger (Phase 6), but Phases 2-4 may need columns (`body_sha256`, `proposal_hash`, `trace_verification`, `expires_at`, policy fields). Recommend treating the numbers as nominal (sequential by arrival) and, optionally, adding nullable `body_sha256 text` to 0001 now. Needs a planner call.
+   - **Resolution:** Resolved in 01-07 (migrations numbered sequentially in order of arrival; 0002/0003 labels are nominal).
 4. **GET authorization scope.** Recommendation: any active introspected key may GET proposals in its own tenant (principal checks apply only to POST per D§7). Confirm whether non-agent keys should be allowed.
+   - **Resolution:** Resolved in 01-05 (any active introspected key may GET proposals in its own tenant).
 5. **Non-allowlisted agent response code** (reason string): D§7 names the allowlist but not the code; recommend 403 `agent_not_allowlisted`.
+   - **Resolution:** Resolved in 01-05 (403 agent_not_allowlisted).
 6. **Q4 for the stub shape:** POPEYE_v0.4.2 §2.5 confirms introspection returns no entitlements, so the Phase 1 fixture shape (no entitlement claim) is correct; the Phase 4 resolution mechanism stays open (deferred).
+   - **Resolution:** Resolved in 01-03 (fixture shape carries no entitlement claim; Phase 4 mechanism stays deferred).
 7. **`.env` loader vs `user-secrets`:** recommended tiny loader; trivially swappable.
+   - **Resolution:** Resolved in 01-06 (tiny .env loader).
 
 ## Environment Availability
 
