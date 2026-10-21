@@ -51,6 +51,39 @@ public sealed class CiAndDevConfigTests
     }
 
     [Fact]
+    public void FND_07_vulnerable_gate_fails_closed()
+    {
+        var w = Workflow.ReplaceLineEndings("\n");
+        var start = w.IndexOf("- name: Vulnerable package gate", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var next = w.IndexOf("- name:", start + 1, StringComparison.Ordinal);
+        var step = next < 0 ? w[start..] : w[start..next];
+
+        Assert.Contains("shell: bash", step);
+        Assert.Contains("set -euo pipefail", step);
+        Assert.Contains("dotnet list package --vulnerable --include-transitive", step);
+        Assert.Contains("has the following vulnerable packages", step);
+        Assert.Contains("has no vulnerable packages", step);
+        Assert.True(step.Split("exit 1").Length - 1 >= 2);
+        Assert.Contains("The given project", step);
+        Assert.Contains("projects=$(grep -c \"The given project\" vulnerable.txt || true)", step);
+        Assert.Contains("clean=$(grep -c \"has no vulnerable packages\" vulnerable.txt || true)", step);
+        foreach (var line in step.Split('\n').Where(l => l.Contains("grep -c", StringComparison.Ordinal)))
+        {
+            Assert.Contains("|| true", line);
+        }
+
+        Assert.Contains("[ \"$projects\" = \"0\" ]", step);
+        Assert.Contains("[ -z \"$projects\" ]", step);
+        Assert.Contains("[ \"$projects\" != \"$clean\" ]", step);
+        Assert.DoesNotContain("|| echo 0", step);
+        foreach (var line in step.Split('\n').Where(l => l.Contains("dotnet list package", StringComparison.Ordinal)))
+        {
+            Assert.DoesNotContain("|| true", line);
+        }
+    }
+
+    [Fact]
     public void FND_07_workflow_uses_only_first_party_actions()
     {
         foreach (var line in Workflow.Split('\n').Where(l => l.Contains("uses:", StringComparison.Ordinal)))
