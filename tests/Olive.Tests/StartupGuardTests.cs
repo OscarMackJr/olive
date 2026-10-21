@@ -1,0 +1,216 @@
+using System.Net;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Olive.Application;
+using Olive.Host.Startup;
+using Olive.Integrations.Popeye;
+
+namespace Olive.Tests;
+
+[Trait("Category", "Integration")]
+public sealed class StartupGuardTests(PostgresFixture fixture)
+{
+    internal static StartupGuardException? FindGuard(Exception? e)
+    {
+        for (; e is not null; e = e.InnerException)
+        {
+            if (e is StartupGuardException g) { return g; }
+            if (e is AggregateException agg)
+            {
+                foreach (var inner in agg.InnerExceptions)
+                {
+                    var found = FindGuard(inner);
+                    if (found is not null) { return found; }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // Starts the host and returns the guard exception it refused with (null when it started).
+    internal static async Task<StartupGuardException?> TryStartAsync(OliveApiFactory factory)
+    {
+        try
+        {
+            using var client = factory.CreateClient();
+            await client.GetAsync("/v1/proposals/" + Guid.NewGuid(), TestContext.Current.CancellationToken);
+            return null;
+        }
+        catch (Exception e)
+        {
+            return FindGuard(e) ?? throw new InvalidOperationException("Host failed for a non-guard reason.", e);
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("staging")]
+    [InlineData("Production")]
+    public async Task FND_04_invalid_environment_refuses_start_without_echoing_value(string? value)
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: value);
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-04", guard.Message);
+        if (!string.IsNullOrEmpty(value)) { Assert.DoesNotContain(value, guard.Message); }
+    }
+
+    [Theory]
+    [InlineData("local")]
+    [InlineData("ci")]
+    [InlineData("nonprod")]
+    public async Task FND_04_valid_environment_starts_and_serves_401(string value)
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: value);
+        using var client = factory.CreateClient();
+        var res = await client.GetAsync("/v1/proposals/" + Guid.NewGuid(), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task FND_04_migrator_url_in_configuration_refuses_start_without_echoing_value()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        const string secret = "postgresql://olive_migrator:s3cret@h/db";
+        await using var factory = new OliveApiFactory(db, extraConfig: new Dictionary<string, string?> { ["OLIVE_MIGRATOR_URL"] = secret });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("D-19", guard.Message);
+        Assert.DoesNotContain("s3cret", guard.Message);
+        Assert.DoesNotContain("postgresql", guard.Message);
+    }
+
+    [Fact]
+    public async Task FND_04_empty_migrator_url_still_refuses_start()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, extraConfig: new Dictionary<string, string?> { ["OLIVE_MIGRATOR_URL"] = "" });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Equal("D-19", guard.Rule);
+    }
+
+    [Fact]
+    public async Task FND_05_production_with_default_stub_registration_refuses()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false);
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task FND_05_production_with_stub_instance_registration_refuses()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s => { s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector>(StubKeyIntrospector.CreateDefault(TimeProvider.System)); });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task FND_05_production_with_stub_factory_registration_refuses()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s => { s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector>(_ => StubKeyIntrospector.CreateDefault(TimeProvider.System)); });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task FND_05_production_with_stub_type_registration_refuses()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s => { s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>(); s.AddSingleton<StubKeyIntrospector>(); });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    // The type is not visible in the descriptor of the factory registration below, only the resolved instance is.
+    [Fact]
+    public async Task FND_05_production_hidden_behind_factory_of_olive_service_type_refuses()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s => { s.RemoveAll<IKeyIntrospector>(); s.Add(new ServiceDescriptor(typeof(IKeyIntrospector), _ => new WrappingFactoryStub(), ServiceLifetime.Singleton)); });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task FND_05_production_positive_control_without_stub_starts()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s => { s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>(); });
+        Assert.Null(await TryStartAsync(factory));
+    }
+
+    [Fact]
+    public async Task FND_05_ci_with_stub_starts()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "ci", replaceIntrospector: false);
+        Assert.Null(await TryStartAsync(factory));
+    }
+
+    [Fact]
+    public async Task FND_05_guard_order_environment_before_other_guards()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: null,
+            extraConfig: new Dictionary<string, string?> { ["OLIVE_MIGRATOR_URL"] = "x" });
+        var guard = await TryStartAsync(factory);
+        Assert.Equal("FND-04", guard?.Rule);
+    }
+
+    [Fact]
+    public void FND_03_tampered_vocabulary_copy_is_refused()
+    {
+        var real = Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml");
+        var tmp = Path.Combine(Path.GetTempPath(), "olive-vocab-" + Guid.NewGuid().ToString("N") + ".yaml");
+        try
+        {
+            File.WriteAllBytes(tmp, [.. File.ReadAllBytes(real), (byte)'\n']);
+            var e = Assert.Throws<StartupGuardException>(() => StartupGuards.CheckVendoredVocabulary(tmp));
+            Assert.Contains("FND-03", e.Message);
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+    }
+
+    [Fact]
+    public void FND_03_missing_vocabulary_is_refused()
+    {
+        var e = Assert.Throws<StartupGuardException>(() => StartupGuards.CheckVendoredVocabulary(Path.Combine(Path.GetTempPath(), "does-not-exist-" + Guid.NewGuid().ToString("N"))));
+        Assert.Contains("FND-03", e.Message);
+    }
+
+    [Fact]
+    public void FND_03_real_vocabulary_copy_passes_and_exists_in_output()
+    {
+        var real = Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml");
+        Assert.True(File.Exists(real));
+        StartupGuards.CheckVendoredVocabulary(real);
+    }
+
+    private sealed class WrappingFactoryStub : IKeyIntrospector, INonProductionOnly
+    {
+        public Task<IntrospectionResult> IntrospectAsync(Olive.Domain.SessionKey key, CancellationToken ct) =>
+            throw new NotSupportedException();
+    }
+}

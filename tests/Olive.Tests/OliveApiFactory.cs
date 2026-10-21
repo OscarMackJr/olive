@@ -12,7 +12,7 @@ using Olive.Persistence;
 
 namespace Olive.Tests;
 
-public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null)
+public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null, string? environment = "ci", Action<IServiceCollection>? configureServices = null, bool replaceIntrospector = true)
     : WebApplicationFactory<Program>
 {
     public InMemoryLogCapture Logs { get; } = new();
@@ -27,7 +27,7 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
         builder.UseEnvironment(Environments.Production);
         var url = db.AppUrl;
         NoSharedPostgres.Assert(PostgresUrl.ToNpgsql(url));
-        var config = new Dictionary<string, string?> { ["OLIVE_ENVIRONMENT"] = "ci", ["OLIVE_POSTGRES_URL"] = url };
+        var config = new Dictionary<string, string?> { ["OLIVE_ENVIRONMENT"] = environment, ["OLIVE_POSTGRES_URL"] = url };
         if (extraConfig is not null)
         {
             foreach (var kv in extraConfig) { config[kv.Key] = kv.Value; }
@@ -42,10 +42,15 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
         });
         builder.ConfigureTestServices(services =>
         {
-            Introspector = new RecordingKeyIntrospector(introspector ?? StubKeyIntrospector.CreateDefault(TimeProvider.System), Events);
-            services.AddSingleton<IKeyIntrospector>(Introspector);
+            if (replaceIntrospector)
+            {
+                Introspector = new RecordingKeyIntrospector(introspector ?? StubKeyIntrospector.CreateDefault(TimeProvider.System), Events);
+                services.AddSingleton<IKeyIntrospector>(Introspector);
+            }
+
             services.AddScoped<IProposalStore>(sp =>
                 new RecordingProposalStore(ActivatorUtilities.CreateInstance<PostgresProposalStore>(sp), Events));
+            configureServices?.Invoke(services);
         });
     }
 

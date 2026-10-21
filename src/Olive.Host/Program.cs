@@ -4,6 +4,7 @@ using Olive.Catalog;
 using Olive.Host.Auth;
 using Olive.Host.Endpoints;
 using Olive.Host.Problems;
+using Olive.Host.Startup;
 using Olive.Integrations.Popeye;
 using Olive.Persistence;
 
@@ -11,6 +12,9 @@ using Olive.Persistence;
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args, EnvironmentName = Environments.Production });
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = ProposalEndpoints.MaxBodyBytes);
 
+builder.Logging.AddFilter("Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware", LogLevel.None);
+builder.Services.AddSingleton(new ServiceCollectionAccessor(builder.Services));
+builder.Services.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter, StartupGuardFilter>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton(sp =>
 {
