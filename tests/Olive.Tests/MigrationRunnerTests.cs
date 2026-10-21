@@ -24,11 +24,14 @@ public class MigrationRunnerTests(PostgresFixture fx)
         await using var db = await fx.CreateUnmigratedDatabaseAsync();
         var cs = fx.MigratorConnectionString(db.Name);
         var applied = await new MigrationRunner().RunAsync(cs, Real, CancellationToken.None);
-        Assert.Equal(["0001"], applied);
+        Assert.Equal(["0001", "0002"], applied);
         Assert.Equal("olive_owner", await Scalar<string>(cs, "select relowner::regrole::text from pg_class where relname = 'proposal'"));
         var expected = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(TestPaths.Root, "sql", "migrations", "0001_init.sql"))));
         Assert.Equal(expected, await Scalar<string>(cs, "select sha256 from schema_migrations where version = '0001'"));
         Assert.Equal("0001_init.sql", await Scalar<string>(cs, "select filename from schema_migrations where version = '0001'"));
+        var expected2 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(TestPaths.Root, "sql", "migrations", "0002_proposal_column_grants.sql"))));
+        Assert.Equal(expected2, await Scalar<string>(cs, "select sha256 from schema_migrations where version = '0002'"));
+        Assert.Equal("0002_proposal_column_grants.sql", await Scalar<string>(cs, "select filename from schema_migrations where version = '0002'"));
     }
 
     [Fact]
@@ -39,7 +42,7 @@ public class MigrationRunnerTests(PostgresFixture fx)
         await new MigrationRunner().RunAsync(cs, Real, CancellationToken.None);
         var again = await new MigrationRunner().RunAsync(cs, Real, CancellationToken.None);
         Assert.Empty(again);
-        Assert.Equal(1L, await Scalar<long>(cs, "select count(*) from schema_migrations"));
+        Assert.Equal((long)Real.Count, await Scalar<long>(cs, "select count(*) from schema_migrations"));
     }
 
     [Fact]
@@ -49,7 +52,7 @@ public class MigrationRunnerTests(PostgresFixture fx)
         var cs = fx.MigratorConnectionString(db.Name);
         var files = Real;
         await new MigrationRunner().RunAsync(cs, files, CancellationToken.None);
-        var tampered = new[] { files[0] with { Bytes = [.. files[0].Bytes, .. Encoding.UTF8.GetBytes("\n-- x\n")] } };
+        var tampered = files.Select((f, i) => i == 0 ? f with { Bytes = [.. f.Bytes, .. Encoding.UTF8.GetBytes("\n-- x\n")] } : f).ToArray();
         var ex = await Assert.ThrowsAsync<MigrationChecksumException>(() => new MigrationRunner().RunAsync(cs, tampered, CancellationToken.None));
         Assert.Contains("0001", ex.Message);
         Assert.DoesNotContain("create table", ex.Message);
@@ -85,7 +88,7 @@ public class MigrationRunnerTests(PostgresFixture fx)
         var results = await Task.WhenAll(
             new MigrationRunner().RunAsync(cs, files, CancellationToken.None),
             new MigrationRunner().RunAsync(cs, files, CancellationToken.None));
-        Assert.Equal(1, results.Sum(r => r.Count));
+        Assert.Equal(Real.Count, results.Sum(r => r.Count));
         Assert.Equal(1L, await Scalar<long>(cs, "select count(*) from schema_migrations where version = '0001'"));
     }
 
@@ -93,8 +96,8 @@ public class MigrationRunnerTests(PostgresFixture fx)
     public async Task DB_02_schema_migrations_readable_by_app_and_reader()
     {
         await using var db = await fx.CreateDatabaseAsync();
-        Assert.Equal(1L, await Scalar<long>(db.AppConnectionString, "select count(*) from schema_migrations"));
-        Assert.Equal(1L, await Scalar<long>(db.ReaderConnectionString, "select count(*) from schema_migrations"));
+        Assert.Equal((long)Real.Count, await Scalar<long>(db.AppConnectionString, "select count(*) from schema_migrations"));
+        Assert.Equal((long)Real.Count, await Scalar<long>(db.ReaderConnectionString, "select count(*) from schema_migrations"));
     }
 
     [Fact]
