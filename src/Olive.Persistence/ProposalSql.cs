@@ -4,8 +4,8 @@ namespace Olive.Persistence;
 public static class ProposalSql
 {
     public const string Insert =
-        "insert into proposal (tenant_id, proposal_id, state, agent_id, key_id, on_behalf_of, purpose, key_expires_at, nono_session_id, run_id, action_type, party_ref, parameters, justification, trace_ref) " +
-        "values (@tenant_id, @proposal_id, 'proposed', @agent_id, @key_id, @on_behalf_of, @purpose, @key_expires_at, @nono_session_id, @run_id, @action_type, @party_ref, @parameters::jsonb, @justification, @trace_ref) " +
+        "insert into proposal (tenant_id, proposal_id, agent_id, key_id, on_behalf_of, purpose, key_expires_at, nono_session_id, run_id, action_type, party_ref, parameters, justification, trace_ref) " +
+        "values (@tenant_id, @proposal_id, @agent_id, @key_id, @on_behalf_of, @purpose, @key_expires_at, @nono_session_id, @run_id, @action_type, @party_ref, @parameters::jsonb, @justification, @trace_ref) " +
         "on conflict on constraint proposal_run_unique do nothing returning proposal_id";
 
     public const string InsertEvent =
