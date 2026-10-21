@@ -40,7 +40,15 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. The migrator applies `sql/migrations/0001_*` as `olive_owner`, records it in `schema_migrations`, and fails on a changed applied file. A privilege-matrix test shows `proposal_event` is INSERT-only for `olive_app` (UPDATE and DELETE denied). This is the pattern later migrations extend to `queue_item_event` and `execution_ledger`.
   4. The service refuses to start in each of these cases: `OLIVE_ENVIRONMENT` unset; `production` with any `INonProductionOnly` implementation registered; a superuser, BYPASSRLS or owner database role; a migration version mismatch; a vendored `vocabulary.yaml` SHA-256 mismatch.
   5. Ubuntu CI builds the restructured solution (locked packages) and runs unit, architecture and Testcontainers tests. A Domain/Application/Executor reference to an HTTP client or an off-allowlist package fails the build. Sealed session-key and token types render redacted in `ToString`, logs, exceptions and serialized output.
-**Plans**: TBD
+**Plans**: 7 plans
+Plans:
+- [ ] 01-01-PLAN.md — Scaffold restructure: .gitattributes, CPM and lockfiles, banned APIs, 11 projects, FND-01/02/03 tests
+- [ ] 01-02-PLAN.md — Role bootstrap, migrator, migration 0001 (proposal, proposal_event), Testcontainers fixture, DB-01..04 tests
+- [ ] 01-03-PLAN.md — Redacting secret types, introspection port and fixture stub, agent-key header, agents.yaml allowlist
+- [ ] 01-04-PLAN.md — Tenant unit of work, proposal store, layer-ablation isolation tests (DB-05, DB-06)
+- [ ] 01-05-PLAN.md — Walking skeleton slice: POST/GET /v1/proposals with introspection and principal checks
+- [ ] 01-06-PLAN.md — Startup guards (environment, stubs, vocabulary hash, DB role and migrations), .env loader, secret-leak tests
+- [ ] 01-07-PLAN.md — GitHub Actions CI, .env.example, README dev flow, open coordination items
 **Notes**: D§4 stop rule: confirm POPEYE_v0.4.2 is present before shaping the introspection stub (and the Q4 entitlement claim shape). Reconcile `db/migrations/` to `sql/migrations/` before a second migration exists. Add `.gitattributes` before any hashed fixture is committed. Spike: Postgres major version of `deploy-postgres-1` (15+ required), Npgsql URI connection strings. Requirements DB-03 and DB-04 name all five tables. This phase establishes the RLS/grant pattern and its tests, and Phases 5 and 6 must apply the same pattern to their migrations.
 
 ### Phase 2: Contract Integrity and Idempotent Submission
