@@ -1,0 +1,102 @@
+using Dapper;
+using Olive.Application;
+
+namespace Olive.Persistence;
+
+public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
+{
+    static PostgresProposalStore() => DefaultTypeMap.MatchNamesWithUnderscores = true;
+
+    private sealed class Row
+    {
+        public Guid ProposalId { get; set; }
+        public Guid TenantId { get; set; }
+        public string State { get; set; } = "";
+        public string AgentId { get; set; } = "";
+        public string KeyId { get; set; } = "";
+        public string OnBehalfOf { get; set; } = "";
+        public string Purpose { get; set; } = "";
+        public DateTime KeyExpiresAt { get; set; }
+        public string? NonoSessionId { get; set; }
+        public string RunId { get; set; } = "";
+        public string? ActionType { get; set; }
+        public string? PartyRef { get; set; }
+        public string? ParametersJson { get; set; }
+        public string? Justification { get; set; }
+        public string? TraceRef { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+
+    private static DateTimeOffset Utc(DateTime d) => new(DateTime.SpecifyKind(d, DateTimeKind.Utc));
+
+    public Task<Guid?> InsertAsync(Guid tenantId, NewProposal p, CancellationToken ct) =>
+        uow.ExecuteAsync<Guid?>(tenantId, async (conn, tx) =>
+        {
+            var id = Guid.NewGuid();
+            var inserted = await conn.ExecuteScalarAsync<Guid?>(new CommandDefinition(ProposalSql.Insert, new
+            {
+                tenant_id = tenantId,
+                proposal_id = id,
+                agent_id = p.AgentId,
+                key_id = p.KeyId,
+                on_behalf_of = p.OnBehalfOf,
+                purpose = p.Purpose,
+                key_expires_at = p.KeyExpiresAt.UtcDateTime,
+                nono_session_id = p.NonoSessionId,
+                run_id = p.RunId,
+                action_type = p.ActionType,
+                party_ref = p.PartyRef,
+                parameters = p.ParametersJson,
+                justification = p.Justification,
+                trace_ref = p.TraceRef,
+            }, tx, cancellationToken: ct));
+            if (inserted is null)
+            {
+                return null;
+            }
+
+            await conn.ExecuteAsync(new CommandDefinition(ProposalSql.InsertEvent, new
+            {
+                tenant_id = tenantId,
+                event_id = Guid.NewGuid(),
+                proposal_id = id,
+                event_type = "submitted",
+                from_state = (string?)null,
+                to_state = "proposed",
+                actor = p.AgentId,
+            }, tx, cancellationToken: ct));
+            return id;
+        }, ct);
+
+    public Task<ProposalRecord?> GetAsync(Guid tenantId, Guid proposalId, CancellationToken ct) =>
+        uow.ExecuteAsync<ProposalRecord?>(tenantId, async (conn, tx) =>
+        {
+            var r = await conn.QuerySingleOrDefaultAsync<Row>(new CommandDefinition(ProposalSql.Get,
+                new { tenant_id = tenantId, proposal_id = proposalId }, tx, cancellationToken: ct));
+            return r is null ? null : new ProposalRecord(r.ProposalId, r.TenantId, r.State, r.AgentId, r.KeyId, r.OnBehalfOf, r.Purpose,
+                Utc(r.KeyExpiresAt), r.NonoSessionId, r.RunId, r.ActionType, r.PartyRef, r.ParametersJson, r.Justification, r.TraceRef, Utc(r.CreatedAt));
+        }, ct);
+
+    public Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct) =>
+        uow.ExecuteAsync(tenantId, async (conn, tx) =>
+        {
+            var n = await conn.ExecuteAsync(new CommandDefinition(ProposalSql.UpdateState,
+                new { tenant_id = tenantId, proposal_id = proposalId, from_state = fromState, to_state = toState }, tx, cancellationToken: ct));
+            if (n == 0)
+            {
+                return false;
+            }
+
+            await conn.ExecuteAsync(new CommandDefinition(ProposalSql.InsertEvent, new
+            {
+                tenant_id = tenantId,
+                event_id = Guid.NewGuid(),
+                proposal_id = proposalId,
+                event_type = "transition",
+                from_state = fromState,
+                to_state = toState,
+                actor,
+            }, tx, cancellationToken: ct));
+            return true;
+        }, ct);
+}
