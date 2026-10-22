@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "source": [
+    "RFC 8785 sections 3.2.2-3.2.4 and Appendix B",
+    "cyberphone/json-canonicalization testdata (Apache-2.0)",
+    "Olive Phase 2 cases (D-17, D-18)"
+  ],
+  "cases": [
+    {"name": "cyberphone-arrays", "kind": "body", "input": "cyberphone-arrays.input.json", "canonical": "cyberphone-arrays.canonical.json", "sha256": "099601b171cafed97c333f8878d68e7f8c8f795412adb34b2fdcf0e7c7beac42", "gate": "accept"},
+    {"name": "cyberphone-french", "kind": "body", "input": "cyberphone-french.input.json", "canonical": "cyberphone-french.canonical.json", "sha256": "d99d0ebdcb0033cb858cfa830ae46bc0fb3309413b271f1da828c89901a27ed5", "gate": "accept"},
+    {"name": "cyberphone-structures", "kind": "body", "input": "cyberphone-structures.input.json", "canonical": "cyberphone-structures.canonical.json", "sha256": "605f65004ec2db7692522a0852c22f1c989e036d547e88963d1a3143cf3195d5", "gate": "accept"},
+    {"name": "cyberphone-unicode", "kind": "body", "input": "cyberphone-unicode.input.json", "canonical": "cyberphone-unicode.canonical.json", "sha256": "0d99aad92a125196ff887876643fd3206786a84ddce2cee52ba4ad256d2381d3", "gate": "accept"},
+    {"name": "cyberphone-values", "kind": "body", "input": "cyberphone-values.input.json", "canonical": "cyberphone-values.canonical.json", "sha256": "2d5e01a318d0f0879ab568c4be289c8b1f64ef8921a53c6277d5e069978baacb", "gate": "reject_lossy_number", "reason": "canonicalize verdict: 333333333.33333329 becomes 333333333.3333333; gate verdict: that token is lossy, so Olive refuses it"},
+    {"name": "cyberphone-weird", "kind": "body", "input": "cyberphone-weird.input.json", "canonical": "cyberphone-weird.canonical.json", "sha256": "6af595a9aa80110b964b4de3f82a05fa6ae7423005019bacfa2620dddc4e94d1", "gate": "accept"},
+    {"name": "rfc8785-sorting", "kind": "body", "input": "rfc8785-sorting.input.json", "canonical": "rfc8785-sorting.canonical.json", "sha256": "5e321556d22018a9656991a9e94f77ec175fa193e52a2429d312f8419ec8b08c", "gate": "accept"},
+    {"name": "olive-proposal-hash-basic", "kind": "proposal_hash", "input": "olive-proposal-hash-basic.input.json", "canonical": "olive-proposal-hash-basic.canonical.json", "sha256": "41c47717e78a088f62050c353b7a1ff1520f0c250c2f4fda983c47e5324f5808", "gate": "accept", "reason": "four-key hash; nono_session_id in the input is ignored"},
+    {"name": "olive-body-nono-session", "kind": "body", "input": "olive-body-nono-session.input.json", "canonical": "olive-body-nono-session.canonical.json", "sha256": "410cd442b097f9ebadf56606b90faf02eff4f68478460b951769192d380360c8", "gate": "accept", "reason": "whole-body form includes nono_session_id (D-07)"},
+    {"name": "olive-unicode-escapes", "kind": "body", "input": "olive-unicode-escapes.input.json", "canonical": "olive-unicode-escapes.canonical.json", "sha256": "2b5c89595fc9d8e033cde1f152ca0afce168b6d26ff1f1c05d41a5deed6c657a", "gate": "accept"},
+    {"name": "olive-number-1-0", "kind": "body", "input": "olive-number-1-0.input.json", "canonical": "olive-number-1-0.canonical.json", "sha256": "2bfd14f43d17fc7cea24e0917a8879b4b2f880b8baeec1b9d90fbaad655e71bd", "gate": "accept", "reason": "1.0, 1 and 1e0 hash identically"},
+    {"name": "olive-number-1", "kind": "body", "input": "olive-number-1.input.json", "canonical": "olive-number-1.canonical.json", "sha256": "2bfd14f43d17fc7cea24e0917a8879b4b2f880b8baeec1b9d90fbaad655e71bd", "gate": "accept"},
+    {"name": "olive-number-1e0", "kind": "body", "input": "olive-number-1e0.input.json", "canonical": "olive-number-1e0.canonical.json", "sha256": "2bfd14f43d17fc7cea24e0917a8879b4b2f880b8baeec1b9d90fbaad655e71bd", "gate": "accept"},
+    {"name": "lossy-int-9007199254740993", "kind": "body", "input": "lossy-int-9007199254740993.input.json", "gate": "reject_lossy_number", "expect": "reject", "reason": "lossy_number: integer above 2^53 does not survive a double"},
+    {"name": "lossy-decimal-overlong", "kind": "body", "input": "lossy-decimal-overlong.input.json", "gate": "reject_lossy_number", "expect": "reject", "reason": "lossy_number: decimal digits exceed what a double preserves"},
+    {"name": "duplicate-key", "kind": "body", "input": "duplicate-key.input.json", "gate": "reject_duplicate_key", "expect": "reject", "reason": "duplicate_key: repeated member name at top level"},
+    {"name": "duplicate-key-escaped-equal", "kind": "body", "input": "duplicate-key-escaped-equal.input.json", "gate": "reject_duplicate_key", "expect": "reject", "reason": "duplicate_key: a and the escaped form of a are the same name after unescaping"},
+    {"name": "lone-surrogate-value", "kind": "body", "input": "lone-surrogate-value.input.json", "gate": "reject_lone_surrogate", "expect": "reject", "reason": "lone_surrogate: unpaired high surrogate in a string value"},
+    {"name": "lone-surrogate-name", "kind": "body", "input": "lone-surrogate-name.input.json", "gate": "reject_lone_surrogate", "expect": "reject", "reason": "lone_surrogate: unpaired low surrogate in a member name"}
+  ]
+}
