@@ -29,7 +29,7 @@ public sealed class ArchitectureTests
     private static readonly Dictionary<string, string[]> PackageAllowlist = new()
     {
         ["Olive.Persistence"] = ["Dapper", "Npgsql"],
-        ["Olive.Catalog"] = ["YamlDotNet"],
+        ["Olive.Catalog"] = ["JsonSchema.Net", "YamlDotNet"],
         ["Olive.Host"] = ["Npgsql"],
     };
 
