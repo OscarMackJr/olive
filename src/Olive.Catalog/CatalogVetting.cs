@@ -13,6 +13,9 @@ public static class CatalogVetting
     private static readonly string[] SchemaKeywords = ["items", "contains", "not", "if", "then", "else", "additionalProperties", "unevaluatedProperties", "unevaluatedItems", "propertyNames"];
     private static readonly string[] ArrayKeywords = ["allOf", "anyOf", "oneOf", "prefixItems"];
 
+    // Keywords that move the base URI or resolve dynamically, so a `#/...` fragment could no longer be checked statically.
+    private static readonly string[] ResolutionKeywords = ["$id", "$anchor", "$dynamicAnchor", "$dynamicRef"];
+
     public static void Check(JsonElement parametersSchema)
     {
         if (parametersSchema.ValueKind != JsonValueKind.Object)
@@ -20,15 +23,31 @@ public static class CatalogVetting
             throw new InvalidOperationException(Invalid);
         }
 
-        Vet(parametersSchema, 0);
+        var vetted = new HashSet<string>(StringComparer.Ordinal);
+        var refs = new List<string>();
+        Vet(parametersSchema, 0, "", vetted, refs);
+
+        // CR-02: every local reference must land on a schema node vetted above; a dangling or non-schema target is refused at load,
+        // so it can never surface as a resolution failure on a request.
+        foreach (var r in refs)
+        {
+            if (!vetted.Contains(Uri.UnescapeDataString(r[1..])))
+            {
+                throw new InvalidOperationException(Invalid);
+            }
+        }
     }
 
-    private static void Vet(JsonElement schema, int depth)
+    private static string Child(string pointer, string token) => pointer + "/" + token.Replace("~", "~0", StringComparison.Ordinal).Replace("/", "~1", StringComparison.Ordinal);
+
+    private static void Vet(JsonElement schema, int depth, string pointer, HashSet<string> vetted, List<string> refs)
     {
         if (depth > MaxDepth)
         {
             throw new InvalidOperationException(Invalid);
         }
+
+        vetted.Add(pointer);
 
         // Allowlist (CR-01): `false` admits nothing; `true` (and any untyped node) admits arbitrary values, so it is refused.
         if (schema.ValueKind == JsonValueKind.False)
@@ -52,13 +71,16 @@ public static class CatalogVetting
             {
                 case "default":
                     throw new InvalidOperationException(Invalid);
-                case "$ref" or "$dynamicRef":
-                    if (p.Value.ValueKind != JsonValueKind.String || p.Value.GetString() is not { } r || !r.StartsWith('#'))
+                case "$ref":
+                    if (p.Value.ValueKind != JsonValueKind.String || p.Value.GetString() is not { } r || !(r == "#" || r.StartsWith("#/", StringComparison.Ordinal)))
                     {
                         throw new InvalidOperationException(Invalid);
                     }
 
+                    refs.Add(r);
                     break;
+                case var name when ResolutionKeywords.Contains(name):
+                    throw new InvalidOperationException(Invalid);
                 case "format":
                     if (p.Value.ValueKind != JsonValueKind.String || !Formats.Contains(p.Value.GetString()!))
                     {
@@ -96,7 +118,7 @@ public static class CatalogVetting
 
                 foreach (var sub in map.EnumerateObject())
                 {
-                    Vet(sub.Value, depth + 1);
+                    Vet(sub.Value, depth + 1, Child(Child(pointer, k), sub.Name), vetted, refs);
                 }
             }
         }
@@ -105,7 +127,7 @@ public static class CatalogVetting
         {
             if (schema.TryGetProperty(k, out var sub) && sub.ValueKind is JsonValueKind.Object or JsonValueKind.True or JsonValueKind.False)
             {
-                Vet(sub, depth + 1);
+                Vet(sub, depth + 1, Child(pointer, k), vetted, refs);
             }
         }
 
@@ -118,9 +140,10 @@ public static class CatalogVetting
                     throw new InvalidOperationException(Invalid);
                 }
 
+                var i = 0;
                 foreach (var sub in arr.EnumerateArray())
                 {
-                    Vet(sub, depth + 1);
+                    Vet(sub, depth + 1, Child(pointer, (i++).ToString(System.Globalization.CultureInfo.InvariantCulture)), vetted, refs);
                 }
             }
         }

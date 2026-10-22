@@ -194,6 +194,31 @@ public sealed class CatalogLoaderTests
         Assert.NotNull(schema.Validate(nested.RootElement));
     }
 
+    // CR-02: a reference must resolve, at load time, to a vetted schema node. Otherwise every submission would fail at request time.
+    [Theory]
+    [InlineData("a: { $ref: '#/$defs/missing' }")]
+    [InlineData("a: { $ref: '#/properties' }")]
+    [InlineData("a: { $ref: '#/required' }")]
+    [InlineData("a: { $ref: '#/properties/b' }")]
+    [InlineData("a: { $ref: '#anchor' }")]
+    [InlineData("a: { type: string, $anchor: anchor }")]
+    [InlineData("a: { type: string, $id: 'https://example.invalid/a' }")]
+    [InlineData("a: { type: string, $dynamicRef: '#' }")]
+    public void API_10_d02_vetting_refuses_dangling_or_non_schema_references(string property)
+    {
+        var p = "parameters:\n  type: object\n  additionalProperties: false\n  required: [a]\n  properties:\n    " + property;
+        Assert.Throws<InvalidOperationException>(() => Load(Manifest, Files(WithParameters(p))));
+    }
+
+    [Fact]
+    public void API_10_d02_vetting_accepts_references_to_escaped_and_root_pointers()
+    {
+        var p = "parameters:\n  type: object\n  additionalProperties: false\n  $defs:\n    'x/y~z': { type: string }\n  properties:\n    a: { $ref: '#/$defs/x~1y~0z' }\n    b: { $ref: '#' }\n    c: { $ref: '#/properties/a' }";
+        var schema = Assert.Single(Load(Manifest, Files(WithParameters(p))).Current.Entries).ParametersSchema;
+        using var ok = JsonDocument.Parse("""{"a":"s","b":{"a":"t"},"c":"u"}""");
+        Assert.Null(schema.Validate(ok.RootElement));
+    }
+
     [Fact]
     public void API_10_d02_vetting_accepts_closed_nested_schema_with_local_ref_and_allowed_format()
     {
