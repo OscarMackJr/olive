@@ -22,7 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation and Walking Skeleton** - Restructured solution, guards, both tenant-isolation layers, migrator, and an agent can submit and read a proposal through the introspection stub (completed 2026-10-21)
 - [x] **Phase 2: Contract Integrity and Idempotent Submission** - Strict raw-byte validation, v1 schemas, in-house JCS, YamlDotNet catalog endpoint, and race-safe idempotency on (agent_id, run_id)
  (completed 2026-10-22)
-- [ ] **Phase 3: Trace Verification** - Fixture-backed trace resolver with ordered checks 1-5, fail-closed 503s, popeye token stub and cache, and session-key capture
+- [x] **Phase 3: Trace Verification** - Fixture-backed trace resolver with ordered checks 1-5, fail-closed 503s, popeye token stub and cache, and session-key capture (completed 2026-10-22)
 - [ ] **Phase 4: Policy, Expiry and Refusal** - Purpose, entitlement and rate-limit policy before any queueing, guarded lifecycle transitions, absolute expiry, and the asserted pipeline order
 - [ ] **Phase 5: Generic Review Queue and Action Approval** - IR-1 queue with kind registry, claim/release/decide/audit, approval rules, lazy expiry withdrawal, and the beat 4 demo
 - [ ] **Phase 6: Simulated Execution and Audit Chain** - Exactly-once simulated execution, INSERT-only ledger, chain view, and the beat 2 demo through the API
@@ -148,7 +148,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 03-06-PLAN.md — Slice: session-key containment evidence and coordination items (IDN-08)
+- [x] 03-06-PLAN.md — Slice: session-key containment evidence and coordination items (IDN-08)
 
 **Research flag**: Run `/gsd-plan-phase 3 --research-phase`. Topics: the popeye stub against POPEYE_v0.4.2, and the JCS golden set coordination with hometown.
 **Notes**: D§4 stop rule: POPEYE_v0.4.2 must be present. Q19 default: port-level capture now, wire-level later (LIVE-03).
@@ -277,7 +277,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 |-------|----------------|--------|-----------|
 | 1. Foundation and Walking Skeleton | 13/13 | Complete    | 2026-10-22 |
 | 2. Contract Integrity and Idempotent Submission | 7/7 | Complete    | 2026-10-22 |
-| 3. Trace Verification | 5/6 | In Progress|  |
+| 3. Trace Verification | 6/6 | Complete   | 2026-10-22 |
 | 4. Policy, Expiry and Refusal | 0/TBD | Not started | - |
 | 5. Generic Review Queue and Action Approval | 0/TBD | Not started | - |
 | 6. Simulated Execution and Audit Chain | 0/TBD | Not started | - |
