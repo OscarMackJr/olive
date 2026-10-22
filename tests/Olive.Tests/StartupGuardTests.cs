@@ -220,6 +220,54 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task TRC_09_production_refuses_fixture_trace_resolver()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s => { ProductionSafePorts(s); s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>(); s.RemoveAll<ITraceResolver>(); s.AddSingleton<ITraceResolver>(Olive.Integrations.Hometown.FixtureTraceResolver.CreateDefault()); });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task TRC_09_production_refuses_fixture_resolver_behind_caching_decorator()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s =>
+            {
+                ProductionSafePorts(s);
+                s.RemoveAll<IKeyIntrospector>();
+                s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>();
+                s.RemoveAll<ITraceResolver>();
+                s.AddSingleton<ITraceResolver>(_ => new CachingTraceResolver(Olive.Integrations.Hometown.FixtureTraceResolver.CreateDefault()));
+            });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task IDN_05_production_refuses_stub_token_issuer()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s => { ProductionSafePorts(s); s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>(); s.RemoveAll<ITokenIssuer>(); s.AddSingleton<ITokenIssuer>(_ => StubTokenIssuer.CreateDefault(TimeProvider.System)); });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task TRC_09_non_production_environment_starts_with_fixture_resolver_and_stub_issuer()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "ci", replaceIntrospector: false);
+        Assert.Null(await TryStartAsync(factory));
+    }
+
+    [Fact]
     public async Task FND_05_ci_with_stub_starts()
     {
         await using var db = await fixture.CreateDatabaseAsync();
