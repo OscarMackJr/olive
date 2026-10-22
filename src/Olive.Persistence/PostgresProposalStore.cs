@@ -25,11 +25,20 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
         public string? Justification { get; set; }
         public string? TraceRef { get; set; }
         public DateTime CreatedAt { get; set; }
+        public string? RefusalReason { get; set; }
+        public string? TraceVerification { get; set; }
+        public string? TraceSchemaVersion { get; set; }
     }
 
     private static DateTimeOffset Utc(DateTime d) => new(DateTime.SpecifyKind(d, DateTimeKind.Utc));
 
-    public Task<Guid?> InsertAsync(Guid tenantId, NewProposal p, CancellationToken ct) =>
+    public Task<Guid?> InsertAsync(Guid tenantId, NewProposal p, CancellationToken ct) => InsertCoreAsync(tenantId, p, null, ct);
+
+    // olive_app has no INSERT grant on state (migration 0003), so a refusal is insert then compare-and-set, atomically (D-05).
+    public Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal p, string refusalReason, CancellationToken ct) =>
+        InsertCoreAsync(tenantId, p, refusalReason, ct);
+
+    private Task<Guid?> InsertCoreAsync(Guid tenantId, NewProposal p, string? refusalReason, CancellationToken ct) =>
         uow.ExecuteAsync<Guid?>(tenantId, async (conn, tx) =>
         {
             var id = Guid.NewGuid();
@@ -52,6 +61,8 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
                 canonical_body = p.CanonicalBody,
                 body_sha256 = p.BodySha256,
                 proposal_hash = p.ProposalHash,
+                trace_verification = p.TraceVerification,
+                trace_schema_version = p.TraceSchemaVersion,
             }, tx, cancellationToken: ct));
             if (inserted is null)
             {
@@ -68,6 +79,28 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
                 to_state = "proposed",
                 actor = p.AgentId,
             }, tx, cancellationToken: ct));
+
+            if (refusalReason is not null)
+            {
+                var n = await conn.ExecuteAsync(new CommandDefinition(ProposalSql.RefuseWithReason,
+                    new { tenant_id = tenantId, proposal_id = id, reason = refusalReason }, tx, cancellationToken: ct));
+                if (n != 1)
+                {
+                    throw new InvalidOperationException("Refusal compare-and-set did not affect exactly one row.");
+                }
+
+                await conn.ExecuteAsync(new CommandDefinition(ProposalSql.InsertEvent, new
+                {
+                    tenant_id = tenantId,
+                    event_id = Guid.NewGuid(),
+                    proposal_id = id,
+                    event_type = "trace_refused",
+                    from_state = "proposed",
+                    to_state = "refused_policy",
+                    actor = p.AgentId,
+                }, tx, cancellationToken: ct));
+            }
+
             return id;
         }, ct);
 
@@ -77,7 +110,8 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
             var r = await conn.QuerySingleOrDefaultAsync<Row>(new CommandDefinition(ProposalSql.Get,
                 new { tenant_id = tenantId, proposal_id = proposalId }, tx, cancellationToken: ct));
             return r is null ? null : new ProposalRecord(r.ProposalId, r.TenantId, r.State, r.AgentId, r.KeyId, r.OnBehalfOf, r.Purpose,
-                Utc(r.KeyExpiresAt), r.NonoSessionId, r.RunId, r.ActionType, r.PartyRef, r.ParametersJson, r.Justification, r.TraceRef, Utc(r.CreatedAt));
+                Utc(r.KeyExpiresAt), r.NonoSessionId, r.RunId, r.ActionType, r.PartyRef, r.ParametersJson, r.Justification, r.TraceRef, Utc(r.CreatedAt),
+                r.RefusalReason, r.TraceVerification, r.TraceSchemaVersion);
         }, ct);
 
     private sealed class RunRow
@@ -87,6 +121,7 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
         public string? BodySha256 { get; set; }
         public string OnBehalfOf { get; set; } = "";
         public string Purpose { get; set; } = "";
+        public string? RefusalReason { get; set; }
     }
 
     public Task<ProposalRunRecord?> FindByRunAsync(Guid tenantId, string agentId, string runId, CancellationToken ct) =>
@@ -94,7 +129,7 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
         {
             var r = await conn.QuerySingleOrDefaultAsync<RunRow>(new CommandDefinition(ProposalSql.FindByRun,
                 new { tenant_id = tenantId, agent_id = agentId, run_id = runId }, tx, cancellationToken: ct));
-            return r is null ? null : new ProposalRunRecord(r.ProposalId, r.State, r.BodySha256, r.OnBehalfOf, r.Purpose);
+            return r is null ? null : new ProposalRunRecord(r.ProposalId, r.State, r.BodySha256, r.OnBehalfOf, r.Purpose, r.RefusalReason);
         }, ct);
 
     public Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct) =>

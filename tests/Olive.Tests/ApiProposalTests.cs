@@ -279,6 +279,8 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         public Task<Guid?> InsertAsync(Guid tenantId, NewProposal proposal, CancellationToken ct) =>
             throw new PostgresException("secret-parameter-value", "ERROR", "ERROR", sqlState);
 
+        public Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, CancellationToken ct) => throw new NotSupportedException();
+
         public Task<ProposalRecord?> GetAsync(Guid tenantId, Guid proposalId, CancellationToken ct) => throw new NotSupportedException();
 
         public Task<ProposalRunRecord?> FindByRunAsync(Guid tenantId, string agentId, string runId, CancellationToken ct) => Task.FromResult<ProposalRunRecord?>(null);
