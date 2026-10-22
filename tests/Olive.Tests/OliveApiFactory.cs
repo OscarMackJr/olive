@@ -58,7 +58,7 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
             var inner = introspector ?? StubKeyIntrospector.CreateDefault(TimeProvider.System);
             if (replaceIntrospector)
             {
-                Introspector = new RecordingKeyIntrospector(inner, Events);
+                Introspector = new RecordingKeyIntrospector(inner, Events, OutboundCalls);
                 services.AddSingleton<IKeyIntrospector>(Introspector);
             }
 

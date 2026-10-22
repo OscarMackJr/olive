@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using System.Xml.Linq;
 
@@ -213,5 +214,128 @@ public sealed class ArchitectureTests
     {
         var file = new Olive.Persistence.MigrationFile("0002.sql", []);
         Assert.Throws<InvalidOperationException>(() => file.Version);
+    }
+
+    // ---- IDN-08 port graph (ROADMAP SC5, Q19): which credential types each outbound port may carry. ----
+
+    private static readonly Type[] SessionKeyTypes = [typeof(Olive.Domain.SessionKey)];
+    private static readonly Type[] ServiceTokenTypes = [typeof(Olive.Domain.ServiceToken), typeof(Olive.Application.ServiceTokenGrant)];
+
+    private static IEnumerable<Type> OutboundPorts() =>
+        typeof(Olive.Application.AssemblyMarker).Assembly.GetTypes()
+            .Where(t => t.IsInterface && t.GetCustomAttributes(typeof(Olive.Application.OutboundPortAttribute), false).Length > 0);
+
+    private static IEnumerable<Type> Flatten(Type t)
+    {
+        yield return t;
+        if (t.HasElementType) { foreach (var e in Flatten(t.GetElementType()!)) { yield return e; } }
+        if (t.IsGenericType) { foreach (var a in t.GetGenericArguments().SelectMany(Flatten)) { yield return a; } }
+    }
+
+    // Parameter types and the generic arguments of return types (for example Task<T>), flattened.
+    private static IEnumerable<Type> SignatureTypes(Type port) =>
+        port.GetMethods().SelectMany(m => m.GetParameters().Select(p => p.ParameterType).Append(m.ReturnType)).SelectMany(Flatten);
+
+    private static Olive.Application.OutboundDestination DestinationOf(Type port) =>
+        ((Olive.Application.OutboundPortAttribute)port.GetCustomAttributes(typeof(Olive.Application.OutboundPortAttribute), false)[0]).Destination;
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void IDN_08_only_popeye_ports_accept_a_session_key()
+    {
+        var ports = OutboundPorts().ToArray();
+        Assert.NotEmpty(ports);
+        foreach (var port in ports)
+        {
+            var carriesKey = SignatureTypes(port).Any(t => SessionKeyTypes.Contains(t));
+            if (DestinationOf(port) != Olive.Application.OutboundDestination.Popeye)
+            {
+                Assert.False(carriesKey, $"{port.Name} is not a popeye port but its signature mentions SessionKey");
+            }
+        }
+
+        // Non-vacuous: popeye ports really do take the key.
+        Assert.Contains(ports, p => DestinationOf(p) == Olive.Application.OutboundDestination.Popeye && SignatureTypes(p).Any(t => SessionKeyTypes.Contains(t)));
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void IDN_08_only_hometown_ports_accept_a_service_token_or_grant()
+    {
+        var ports = OutboundPorts().ToArray();
+        foreach (var port in ports)
+        {
+            var parameterTypes = port.GetMethods().SelectMany(m => m.GetParameters().Select(p => p.ParameterType)).SelectMany(Flatten);
+            if (DestinationOf(port) != Olive.Application.OutboundDestination.Hometown)
+            {
+                Assert.False(parameterTypes.Any(t => ServiceTokenTypes.Contains(t)), $"{port.Name} is not a hometown port but accepts a service token or grant");
+            }
+        }
+
+        Assert.Contains(ports, p => DestinationOf(p) == Olive.Application.OutboundDestination.Hometown
+            && p.GetMethods().SelectMany(m => m.GetParameters()).Any(x => ServiceTokenTypes.Contains(x.ParameterType)));
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void IDN_08_every_application_port_implemented_in_an_integration_assembly_is_marked_outbound()
+    {
+        var appAssembly = typeof(Olive.Application.AssemblyMarker).Assembly;
+        // Application interfaces that are not ports: they describe component wiring, not an outbound call.
+        var nonPorts = new Dictionary<string, string>
+        {
+            [nameof(Olive.Application.IComponentDecorator)] = "wiring marker that exposes a wrapped component",
+            [nameof(Olive.Application.INonProductionOnly)] = "wiring marker for the FND-05 production guard",
+        };
+        Assembly[] integrations =
+        [
+            typeof(Olive.Integrations.Popeye.AssemblyMarker).Assembly,
+            typeof(Olive.Integrations.Hometown.AssemblyMarker).Assembly,
+            typeof(Olive.Integrations.Entra.AssemblyMarker).Assembly,
+        ];
+        var implemented = 0;
+        foreach (var asm in integrations)
+        {
+            foreach (var type in asm.GetTypes().Where(t => t.IsClass && !t.IsAbstract))
+            {
+                foreach (var iface in type.GetInterfaces().Where(i => i.Assembly == appAssembly && !nonPorts.ContainsKey(i.Name)))
+                {
+                    implemented++;
+                    Assert.True(iface.GetCustomAttributes(typeof(Olive.Application.OutboundPortAttribute), false).Length > 0,
+                        $"{type.Name} implements {iface.Name}, which is not marked [OutboundPort]");
+                }
+            }
+        }
+
+        Assert.True(implemented > 0, "no integration implementation found");
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void IDN_08_hometown_project_sources_never_reference_session_key()
+    {
+        var files = Directory.GetFiles(Path.Combine(TestPaths.Root, "src", "Olive.Integrations.Hometown"), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar) && !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar))
+            .ToArray();
+        Assert.NotEmpty(files);
+        var hits = files.SelectMany(f => File.ReadAllLines(f)
+                .Select(l => l.TrimStart())
+                .Where(l => !(l.StartsWith("//", StringComparison.Ordinal) || l.StartsWith("/*", StringComparison.Ordinal) || l.StartsWith('*')))
+                .Where(l => l.Contains("SessionKey", StringComparison.Ordinal))
+                .Select(_ => Path.GetFileName(f)))
+            .ToArray();
+        Assert.True(hits.Length == 0, "SessionKey referenced in hometown sources: " + string.Join(",", hits));
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void IDN_08_resolver_port_has_exactly_grant_traceid_and_cancellation_parameters()
+    {
+        var methods = typeof(Olive.Application.ITraceResolver).GetMethods();
+        var m = Assert.Single(methods);
+        Assert.Equal("ResolveAsync", m.Name);
+        Assert.Equal(
+            [(typeof(Olive.Application.ServiceTokenGrant), "grant"), (typeof(string), "traceId"), (typeof(CancellationToken), "ct")],
+            m.GetParameters().Select(p => (p.ParameterType, p.Name!)).ToArray());
     }
 }

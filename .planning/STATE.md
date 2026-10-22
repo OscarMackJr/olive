@@ -86,6 +86,10 @@ None yet.
 - PHASE 3 RESEARCH: POPEYE section 2.1 returns active:false for non-agent keys, while D§7 requires 403 principal_not_permitted for user/application. Phase 1 stub fixtures return active:true with those principal types.
 - Introspection cache constraint (D-14, POPEYE section 2.2): positives cached at most 60 s and never past expires_at; negatives never cached. No cache in Phase 1.
 - DB-03/DB-04 name five tables but migration 0001 creates two (D-03). Phases 5 and 6 must append table names to the table-driven RLS and privilege tests.
+- PHASE 3 popeye issuance review [ASSUMED]: the popeye owner must review the Olive-proposed `ITokenIssuer` shape (IssueAsync(SessionKey) returning token, tenant_id, delegated_agent_id, key_id, expires_at, or a typed refusal) and confirm that Olive presenting the session key to issuance (D17.1) is compatible with POPEYE section 2.2 "no onward use", before LIVE-02.
+- PHASE 3 Liam S-OL-1 status-code mismatch: the Liam stub expects 200 for refusals and 202 for acceptance, while Olive v1 returns 201 for both and 200 for replay, with `state`/`refusal_reason` instead of `status`/`reason`. Record for the Phase 9 COMPATIBILITY.md and section 3 review; no Phase 3 change (D-01, D-02).
+- PHASE 3 hometown fixture pairs: offer the eight `contracts/trace-resolution/*.proposal.json` fixture/proposal pairs to the hometown owner as extra cross-component hash vectors alongside the Q20 golden set.
+- PHASE 3 non-agent key 403 vs POPEYE section 2.1 active:false divergence goes to Phase 9 COMPATIBILITY.md unchanged.
 - Migration numbering: migrations are numbered sequentially in order of arrival; the 0002/0003 labels in CONTEXT are nominal (Q3 resolved).
 
 ## Deferred Items

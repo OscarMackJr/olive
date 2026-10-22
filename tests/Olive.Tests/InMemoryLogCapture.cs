@@ -13,6 +13,12 @@ public sealed class InMemoryLogCapture : ILoggerProvider
     }
 
     private bool _errorOrAbove;
+    private readonly Dictionary<LogLevel, int> _levels = [];
+
+    public int CountAt(LogLevel level)
+    {
+        lock (_entries) { return _levels.GetValueOrDefault(level); }
+    }
 
     public bool HasErrorOrAbove
     {
@@ -33,6 +39,7 @@ public sealed class InMemoryLogCapture : ILoggerProvider
 
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
+            lock (owner._entries) { owner._levels[logLevel] = owner._levels.GetValueOrDefault(logLevel) + 1; }
             if (logLevel >= LogLevel.Error) { lock (owner._entries) { owner._errorOrAbove = true; } }
             owner.Add(formatter(state, exception));
             if (exception is not null)

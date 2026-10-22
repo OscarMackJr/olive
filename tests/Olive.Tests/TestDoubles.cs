@@ -1,10 +1,14 @@
+using System.Reflection;
 using Olive.Application;
 using Olive.Domain;
 
 namespace Olive.Tests;
 
-public sealed class RecordingKeyIntrospector(IKeyIntrospector inner, List<string> events) : IKeyIntrospector
+public sealed class RecordingKeyIntrospector(IKeyIntrospector inner, List<string> events, List<OutboundCall>? calls = null) : IKeyIntrospector
 {
+    private static readonly OutboundDestination Destination =
+        typeof(IKeyIntrospector).GetCustomAttribute<OutboundPortAttribute>()!.Destination;
+
     private int _calls;
 
     public int Calls => Volatile.Read(ref _calls);
@@ -13,6 +17,11 @@ public sealed class RecordingKeyIntrospector(IKeyIntrospector inner, List<string
     {
         Interlocked.Increment(ref _calls);
         lock (events) { events.Add("introspect"); }
+        if (calls is not null)
+        {
+            lock (calls) { calls.Add(new OutboundCall(nameof(IKeyIntrospector), Destination, CarriedSessionKey: key is not null, CarriedServiceToken: false)); }
+        }
+
         return await inner.IntrospectAsync(key, ct);
     }
 }
