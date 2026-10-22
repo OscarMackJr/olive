@@ -86,6 +86,49 @@ public sealed class ServiceTokenProviderTests
 
     [Fact]
     [Trait("Category", "Unit")]
+    public async Task IDN_06_token_cache_cap_clears_without_changing_results()
+    {
+        // T-03-10: 10,000 distinct (tenant, agent, key_id) entries fill the cache; the 10,001st clears it before insert.
+        const int capacity = 10_000;
+        var issuer = new FakeTokenIssuer();
+        var p = new ServiceTokenProvider(issuer, new RecordingAlarm(), new ManualTimeProvider(Start));
+        var ct = TestContext.Current.CancellationToken;
+        for (var i = 0; i < capacity; i++)
+        {
+            var grant = Grant(keyId: $"key-{i}", token: $"tok-{i}");
+            issuer.Enqueue(Issued(grant));
+            var ok = Assert.IsType<TokenOutcome.Ok>(await p.GetAsync(Session, Key($"key-{i}"), ct));
+            Assert.Same(grant, ok.Grant);
+        }
+
+        Assert.Equal(capacity, issuer.Calls);
+
+        // Below the cap nothing was evicted: key-0 is still a cache hit.
+        var cached = Assert.IsType<TokenOutcome.Ok>(await p.GetAsync(Session, Key("key-0"), ct));
+        Assert.Equal("tok-0", cached.Grant.Token.ExposeSecret());
+        Assert.Equal(capacity, issuer.Calls);
+
+        // The insert at capacity clears the cache, then stores the new entry.
+        var overflow = Grant(keyId: $"key-{capacity}", token: "tok-overflow");
+        issuer.Enqueue(Issued(overflow));
+        Assert.Same(overflow, Assert.IsType<TokenOutcome.Ok>(await p.GetAsync(Session, Key($"key-{capacity}"), ct)).Grant);
+        Assert.Equal(capacity + 1, issuer.Calls);
+        Assert.Same(overflow, Assert.IsType<TokenOutcome.Ok>(await p.GetAsync(Session, Key($"key-{capacity}"), ct)).Grant);
+        Assert.Equal(capacity + 1, issuer.Calls);
+
+        // key-0 was cleared, so it is re-issued (one more issuer call) and the fresh grant is returned and then cached.
+        var reissued = Grant(keyId: "key-0", token: "tok-0-reissued");
+        issuer.Enqueue(Issued(reissued));
+        var fresh = Assert.IsType<TokenOutcome.Ok>(await p.GetAsync(Session, Key("key-0"), ct)).Grant;
+        Assert.Same(reissued, fresh);
+        Assert.Equal("tok-0-reissued", fresh.Token.ExposeSecret());
+        Assert.Equal(capacity + 2, issuer.Calls);
+        Assert.Same(reissued, Assert.IsType<TokenOutcome.Ok>(await p.GetAsync(Session, Key("key-0"), ct)).Grant);
+        Assert.Equal(capacity + 2, issuer.Calls);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public async Task IDN_05_issuer_unavailable_fails_without_alarm()
     {
         var (p, _, alarm, _) = Make(new TokenIssueResult.Unavailable());
