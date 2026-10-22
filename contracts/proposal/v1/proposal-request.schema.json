@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olive.invalid/contracts/proposal/v1/proposal-request.schema.json",
+  "title": "Proposal submit request (POST /v1/proposals)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "action_type", "party_ref", "parameters", "justification", "trace_ref"],
+  "properties": {
+    "run_id": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "action_type": { "type": "string", "pattern": "^[a-z0-9_.]+@[0-9]+$" },
+    "party_ref": { "type": "string", "minLength": 1 },
+    "parameters": { "type": "object" },
+    "justification": { "type": "string", "minLength": 1 },
+    "trace_ref": { "type": "string", "minLength": 1 },
+    "nono_session_id": { "type": "string", "minLength": 1 }
+  }
+}

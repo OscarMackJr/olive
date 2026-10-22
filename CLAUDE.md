@@ -24,7 +24,7 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 - C# (.NET 10, `net10.0`, nullable and implicit usings enabled) - all code in `src/Olive/Domain.cs` and `tests/Olive.Tests/RequirementsTests.cs`
 - SQL (PostgreSQL dialect) - `db/migrations/V001__action_broker.sql`
 - YAML - action catalog `catalog/crm.case_note@1.yaml`, vendored vocabulary `contracts/vendored/vocabulary.yaml`
-- JSON / JSON Schema draft 2020-12 - `contracts/schemas/*.schema.json`, `contracts/examples/*.json`
+- JSON / JSON Schema draft 2020-12 - `contracts/<name>/v<N>/<name>.schema.json` with `<name>.valid.json` / `<name>.invalid.json` beside it
 ## Runtime
 - .NET SDK 10.0.204, `rollForward: latestFeature` (`global.json`)
 - `UseAppHost=false` for all projects (`Directory.Build.props`, `Directory.Build.targets`), except the test project (`UseAppHost=true` in `tests/Olive.Tests/Olive.Tests.csproj`)
@@ -63,13 +63,13 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 - Real executors need a signed divisional write agreement and a scoped credential (charter §3.3, `specs/OLIVE_CHARTER_v0.4.md`). Do not add one until both exist.
 - Proposals originate outside Olive. Olive only validates, queues, approves and simulates execution.
 - Never edit `contracts/vendored/vocabulary.yaml` (see `contracts/vendored/VENDORED.md`). Update catalog entries in `catalog/*.yaml` instead.
-- Queue payloads are references (`payload://...`, `proposal://...`), never inline bodies. Queue-item schema is `additionalProperties: false` (`contracts/schemas/queue-item.schema.json`).
+- Queue payloads are references (`payload://...`, `proposal://...`), never inline bodies. Queue-item schema is `additionalProperties: false` (`contracts/queue-item/v0/queue-item.schema.json`).
 - Keep tenant predicates in application queries (`x.TenantId == tenantId`) even though PostgreSQL RLS is also enforced (`db/migrations/V001__action_broker.sql`).
 - Catalog action types are source-controlled (`catalog/`). No runtime registration API; `Catalog.AddAtRuntime` throws `NotSupportedException`.
 ## Naming Patterns
 - C# files are PascalCase. Domain code currently lives in one file, `src/Olive/Domain.cs`. Tests: `tests/Olive.Tests/RequirementsTests.cs`.
 - Catalog files: `catalog/<system>.<name>@<version>.yaml` (e.g. `catalog/crm.case_note@1.yaml`).
-- Contract files: `contracts/schemas/<name>.schema.json`, examples `contracts/examples/<name>.valid.json` / `.invalid.json`.
+- Contract files: `contracts/<name>/v<N>/<name>.schema.json` with `<name>.valid.json` / `<name>.invalid.json` beside it, plus `contracts/jcs/v1/`.
 - DB migrations: `db/migrations/V###__snake_case.sql`.
 - PascalCase for types, methods, properties, record members. `_camelCase` for private fields (`_items`, `_attempts`, `_proposals`).
 - Action IDs: `^[a-z0-9_.]+@[0-9]+$`, e.g. `crm.case_note@1`.
@@ -98,7 +98,7 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 ## Module Design
 ## Requirements Traceability
 - Requirement IDs `REQ-ACT-nn` and `REQ-QUE-nn` tie code, tests and specs together. New behavior should cite a requirement ID in the test name.
-- Contracts: JSON Schemas in `contracts/schemas/` with paired valid/invalid examples in `contracts/examples/`. Add both when adding a schema.
+- Contracts: JSON Schemas in `contracts/<name>/v<N>/` with paired `.valid.json` / `.invalid.json` examples beside them. Add both when adding a schema.
 - Specs live in `specs/`; project status in `docs/STATUS.md`.
 <!-- GSD:conventions-end -->
 
@@ -128,7 +128,7 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 ## Layers
 - Purpose: JSON Schemas + valid/invalid examples, queue-kind contracts, vendored vocabulary
 - Location: `contracts/`
-- Contains: `schemas/`, `examples/`, `queue/identity-review/`, `vendored/` (read-only `vocabulary.yaml`)
+- Contains: `proposal/v1/`, `catalog/v1/`, `queue-item/v0/`, `execution-record/v0/`, `introspection/`, `queue/identity-review/`, `vendored/` (read-only `vocabulary.yaml`)
 - Used by: tests (`RequirementsTests`), external producers/consumers
 - Location: `catalog/` (YAML per action type, named `<action_id>.yaml`)
 - Parsed by line-based reader in `Catalog.Parse` (not a YAML library)

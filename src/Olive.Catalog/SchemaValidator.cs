@@ -30,7 +30,7 @@ public sealed class SchemaValidator
             root["$schema"] = Dialect;
         }
 
-        return new SchemaValidator(JsonSchema.FromText(node.ToJsonString()));
+        return new SchemaValidator(JsonSchema.FromText(node.ToJsonString(), new BuildOptions { SchemaRegistry = new SchemaRegistry() }));
     }
 
     public SchemaViolation? Validate(JsonElement instance)

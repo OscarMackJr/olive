@@ -1,0 +1,1 @@
+{"run_id":"run-1","action_type":"crm.case_note@1","party_ref":"party://p1","parameters":{"case_ref":"payload://c1","note_ref":"payload://n1"},"justification":"j","trace_ref":"trace://t1","nono_session_id":"nono-1"}
