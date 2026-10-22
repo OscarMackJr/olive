@@ -18,7 +18,7 @@ namespace Olive.Tests;
 
 public enum TraceMode { AutoFixture, Explicit }
 
-public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null, string? environment = "ci", Action<IServiceCollection>? configureServices = null, bool replaceIntrospector = true, TraceMode traceMode = TraceMode.AutoFixture)
+public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null, string? environment = "ci", Action<IServiceCollection>? configureServices = null, bool replaceIntrospector = true, TraceMode traceMode = TraceMode.AutoFixture, ITraceResolver? innerResolver = null, ITokenIssuer? innerIssuer = null)
     : WebApplicationFactory<Program>
 {
     public InMemoryLogCapture Logs { get; } = new();
@@ -63,8 +63,8 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
             }
 
             services.AddSingleton<IOperationalAlarm>(Alarms);
-            services.AddSingleton<ITokenIssuer>(new RecordingTokenIssuer(new StubTokenIssuer(inner, TimeProvider.System), Events, OutboundCalls));
-            var recordingResolver = new RecordingTraceResolver(traceMode == TraceMode.Explicit ? FixtureResolver : new AutoFixtureTraceResolver(FixtureResolver), Events, OutboundCalls);
+            services.AddSingleton<ITokenIssuer>(new RecordingTokenIssuer(innerIssuer ?? new StubTokenIssuer(inner, TimeProvider.System), Events, OutboundCalls));
+            var recordingResolver = new RecordingTraceResolver(innerResolver ?? (traceMode == TraceMode.Explicit ? FixtureResolver : new AutoFixtureTraceResolver(FixtureResolver)), Events, OutboundCalls);
             if (traceMode == TraceMode.Explicit)
             {
                 services.AddSingleton<ITraceResolver>(new CachingTraceResolver(recordingResolver));
