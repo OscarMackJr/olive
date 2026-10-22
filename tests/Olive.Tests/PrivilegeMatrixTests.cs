@@ -7,7 +7,7 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
 {
     private static readonly string[] AllPrivileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"];
 
-    // proposal UPDATE is column-level (state only, migration 0002) and proposal INSERT is column-level (migrations 0003 and 0004),
+    // proposal UPDATE is column-level (state from migration 0002, refusal_reason from 0006) and proposal INSERT is column-level (migrations 0003 and 0004),
     // so has_table_privilege reports false for both on olive_app.
     // Phases 5 and 6 append queue_item, queue_item_event, execution_ledger here (DB-03/DB-04 text names five tables; D-03 limits 0001 to two).
     private static readonly (string Table, string Role, string[] Granted)[] Expected =
@@ -55,7 +55,7 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
     }
 
     [Fact]
-    public async Task DB_04_app_update_is_limited_to_state_column()
+    public async Task DB_04_app_update_is_limited_to_state_and_refusal_reason_columns()
     {
         await using var db = await fx.CreateDatabaseAsync();
         await using var conn = new NpgsqlConnection(db.ReaderConnectionString);
@@ -69,7 +69,7 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
         {
             await using var cmd = new NpgsqlCommand("select has_column_privilege('olive_app', 'public.proposal', @c, 'UPDATE')", conn);
             cmd.Parameters.AddWithValue("c", col);
-            Assert.Equal(col == "state", (bool)(await cmd.ExecuteScalarAsync())!);
+            Assert.Equal(col is "state" or "refusal_reason", (bool)(await cmd.ExecuteScalarAsync())!);
         }
     }
 
@@ -131,7 +131,7 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
     }
 
     private static readonly string[] InsertableColumns =
-        ["tenant_id", "proposal_id", "agent_id", "key_id", "on_behalf_of", "purpose", "key_expires_at", "nono_session_id", "run_id", "action_type", "party_ref", "parameters", "justification", "trace_ref", "canonical_body", "body_sha256", "proposal_hash"];
+        ["tenant_id", "proposal_id", "agent_id", "key_id", "on_behalf_of", "purpose", "key_expires_at", "nono_session_id", "run_id", "action_type", "party_ref", "parameters", "justification", "trace_ref", "canonical_body", "body_sha256", "proposal_hash", "trace_verification", "trace_schema_version"];
 
     private static string InsertSql(string extraCol, string extraVal) =>
         $"insert into proposal (tenant_id, proposal_id, agent_id, key_id, on_behalf_of, purpose, key_expires_at, run_id{extraCol}) " +
@@ -211,6 +211,58 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
     {
         await using var db = await fx.CreateDatabaseAsync();
         Assert.Equal("23514", await SqlStateAsync(db.AppConnectionString, InsertSql(cols, vals)));
+    }
+
+    [Fact]
+    public async Task TRC_09_app_cannot_update_trace_verification()
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        await db.SeedProposalAsync(TestPaths.TenantAlpha, "agent-1", "run-1");
+        Assert.Equal("42501", await SqlStateAsync(db.AppConnectionString, "update proposal set trace_verification = 'fixture'"));
+        Assert.Equal("42501", await SqlStateAsync(db.AppConnectionString, "update proposal set trace_schema_version = 'ate/1.0'"));
+    }
+
+    [Fact]
+    public async Task TRC_03_app_cannot_insert_refusal_reason()
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        Assert.Equal("42501", await SqlStateAsync(db.AppConnectionString, InsertSql(", refusal_reason", ", 'trace_not_found'")));
+    }
+
+    [Theory]
+    [InlineData(", trace_verification", ", 'mismatch'")]
+    [InlineData(", trace_schema_version", ", 'ate/1.0'")]
+    [InlineData(", trace_verification, trace_schema_version", ", 'fixture', 'v1'")]
+    public async Task TRC_09_trace_columns_enforce_values_and_format(string cols, string vals)
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        Assert.Equal("23514", await SqlStateAsync(db.AppConnectionString, InsertSql(cols, vals)));
+    }
+
+    [Fact]
+    public async Task TRC_09_app_can_insert_valid_trace_columns()
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        await using var conn = new NpgsqlConnection(db.AppConnectionString);
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+        await using (var set = new NpgsqlCommand("select set_config('olive.tenant_id', @t, true)", conn, tx))
+        {
+            set.Parameters.AddWithValue("t", TestPaths.TenantAlpha.ToString());
+            await set.ExecuteNonQueryAsync();
+        }
+        await using var cmd = new NpgsqlCommand(InsertSql(", trace_verification, trace_schema_version", ", 'fixture', 'ate/1.0'"), conn, tx);
+        Assert.Equal(1, await cmd.ExecuteNonQueryAsync());
+    }
+
+    [Fact]
+    public async Task TRC_09_refusal_state_and_reason_must_agree()
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        await db.SeedProposalAsync(TestPaths.TenantAlpha, "agent-1", "run-1");
+        Assert.Equal("23514", await SqlStateAsync(db.AppConnectionString, "update proposal set state = 'refused_policy'"));
+        Assert.Equal("23514", await SqlStateAsync(db.AppConnectionString, "update proposal set refusal_reason = 'trace_not_found'"));
+        Assert.Equal("23514", await SqlStateAsync(db.AppConnectionString, "update proposal set state = 'refused_policy', refusal_reason = 'Bad Reason'"));
     }
 
     [Fact]
