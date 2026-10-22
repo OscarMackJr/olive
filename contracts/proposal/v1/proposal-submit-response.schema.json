@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olive.invalid/contracts/proposal/v1/proposal-submit-response.schema.json",
+  "title": "Proposal submit reply (201 created / 200 replay)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["proposal_id", "state"],
+  "properties": {
+    "proposal_id": { "type": "string", "format": "uuid" },
+    "state": { "type": "string", "minLength": 1 }
+  }
+}

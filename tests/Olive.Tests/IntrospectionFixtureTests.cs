@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Olive.Catalog;
 
 namespace Olive.Tests;
 
@@ -8,7 +9,8 @@ public sealed class IntrospectionFixtureTests
 
     private static JsonElement Load(string file) => JsonDocument.Parse(File.ReadAllText(Path.Combine(Dir, file))).RootElement.Clone();
 
-    private static JsonElement Schema => Load("introspection-response.schema.json");
+    private static readonly SchemaValidator Validator =
+        SchemaValidator.Compile(File.ReadAllText(Path.Combine(Dir, "introspection-response.schema.json")));
 
     [Fact]
     [Trait("Category", "Unit")]
@@ -18,7 +20,7 @@ public sealed class IntrospectionFixtureTests
         Assert.Equal(6, index.Count);
         foreach (var file in index.Values)
         {
-            Assert.Empty(JsonSchemaLite.Validate(Schema, Load(file)));
+            Assert.Null(Validator.Validate(Load(file)));
         }
     }
 
@@ -36,7 +38,7 @@ public sealed class IntrospectionFixtureTests
     public void IDN_01_inactive_fixture_with_extra_property_is_invalid()
     {
         using var doc = JsonDocument.Parse("""{"active": false, "key_id": "x"}""");
-        Assert.NotEmpty(JsonSchemaLite.Validate(Schema, doc.RootElement));
+        Assert.NotNull(Validator.Validate(doc.RootElement));
     }
 
     [Fact]
@@ -45,7 +47,7 @@ public sealed class IntrospectionFixtureTests
     {
         var json = File.ReadAllText(Path.Combine(Dir, "liam-alpha.json")).Replace("0a1b2c3d-0000-4000-8000-000000000001", "0A1B2C3D-0000-4000-8000-000000000001");
         using var doc = JsonDocument.Parse(json);
-        Assert.NotEmpty(JsonSchemaLite.Validate(Schema, doc.RootElement));
+        Assert.NotNull(Validator.Validate(doc.RootElement));
     }
 
     [Fact]
@@ -54,6 +56,6 @@ public sealed class IntrospectionFixtureTests
     {
         var json = File.ReadAllText(Path.Combine(Dir, "liam-alpha.json")).Replace("\"agent\"", "\"service\"");
         using var doc = JsonDocument.Parse(json);
-        Assert.NotEmpty(JsonSchemaLite.Validate(Schema, doc.RootElement));
+        Assert.NotNull(Validator.Validate(doc.RootElement));
     }
 }

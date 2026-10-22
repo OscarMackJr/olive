@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olive.invalid/contracts/proposal/v1/proposal.schema.json",
+  "title": "Proposal resource (GET /v1/proposals/{id})",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["proposal_id", "state", "tenant_id", "agent_id", "key_id", "on_behalf_of", "purpose", "key_expires_at", "run_id", "created_at"],
+  "properties": {
+    "proposal_id": { "type": "string", "format": "uuid" },
+    "state": { "enum": ["proposed", "refused_policy", "awaiting_approval", "approved", "rejected", "executed", "execution_failed", "expired"] },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "agent_id": { "type": "string", "minLength": 1 },
+    "key_id": { "type": "string", "minLength": 1 },
+    "on_behalf_of": { "type": "string", "minLength": 1 },
+    "purpose": { "type": "string", "minLength": 1 },
+    "key_expires_at": { "type": "string", "format": "date-time" },
+    "nono_session_id": { "type": ["string", "null"] },
+    "run_id": { "type": "string", "minLength": 1 },
+    "action_type": { "type": ["string", "null"] },
+    "party_ref": { "type": ["string", "null"] },
+    "parameters": { "type": ["object", "null"] },
+    "justification": { "type": ["string", "null"] },
+    "trace_ref": { "type": ["string", "null"] },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}
