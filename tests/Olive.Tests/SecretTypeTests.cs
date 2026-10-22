@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
+using Olive.Application;
 using Olive.Domain;
 
 namespace Olive.Tests;
@@ -88,6 +89,33 @@ public sealed class SecretTypeTests
         var s = Sentinel();
         Assert.Equal(s, new SessionKey(s).ExposeSecret());
         Assert.Equal(s, new ServiceToken(s).ExposeSecret());
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void FND_06_service_token_grant_never_renders_token()
+    {
+        var s = Sentinel();
+        var g = new ServiceTokenGrant(new ServiceToken(s), Guid.NewGuid(), "agent", "key", DateTimeOffset.UnixEpoch);
+        var issued = new TokenIssueResult.Issued(g);
+        var renders = new[]
+        {
+            g.ToString(),
+            $"{g}",
+            string.Format("{0}", g),
+            string.Format("{0:G}", g),
+            JsonSerializer.Serialize(new { Grant = g }),
+            issued.ToString(),
+        };
+        foreach (var r in renders)
+        {
+            Assert.DoesNotContain(s, r);
+        }
+
+        Assert.Equal("[REDACTED ServiceTokenGrant]", g.ToString());
+        Assert.Equal("[REDACTED ServiceTokenGrant]", $"{g}");
+        Assert.True(typeof(ServiceTokenGrant).IsSealed);
+        Assert.Equal("[REDACTED]", typeof(ServiceTokenGrant).GetCustomAttribute<DebuggerDisplayAttribute>()!.Value);
     }
 
     [Fact]
