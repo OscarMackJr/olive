@@ -127,7 +127,28 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Service tokens from the popeye stub are cached by `(tenant_id, delegated_agent_id, key_id)` and never outlive the session key. A token whose claims disagree with Olive's introspection is discarded, and the request fails with 503 and an alarm.
   5. Recording decorators on every outbound port show the session key going only to popeye. A sentinel-key search at Trace log level, over JSONL output and stored rows, finds no session key or token.
 
-**Plans**: TBD
+**Plans**: 6 plans
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Migration 0006, InsertRefusedAsync, additive response contract (TRC-03, TRC-09)
+- [ ] 03-02-PLAN.md — Ports, token provider and cache, trace cache, TraceVerifier with unit tests (TRC-02..08, IDN-05..07)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-03-PLAN.md — Slice: fixture-verified proposal accepted (fixtures, resolver, popeye token stub, endpoint, auto-fixture harness) (TRC-01, TRC-06, TRC-09, IDN-05)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-04-PLAN.md — Slice: stored trace refusals with reasons, 201 body, final replay (TRC-03..06)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 03-05-PLAN.md — Slice: fail-closed 422/503, alarms, introspection caller-rejected (TRC-02, TRC-07, TRC-08, IDN-06, IDN-07)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 03-06-PLAN.md — Slice: session-key containment evidence and coordination items (IDN-08)
+
 **Research flag**: Run `/gsd-plan-phase 3 --research-phase`. Topics: the popeye stub against POPEYE_v0.4.2, and the JCS golden set coordination with hometown.
 **Notes**: D§4 stop rule: POPEYE_v0.4.2 must be present. Q19 default: port-level capture now, wire-level later (LIVE-03).
 
