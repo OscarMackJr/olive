@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Npgsql;
 using Olive.Application;
+using Olive.Catalog;
 using Olive.Contracts;
 using Olive.Domain;
 using Olive.Host.Auth;
@@ -21,7 +22,7 @@ public static class ProposalEndpoints
     }
 
     // Order (Decision section 15.2): introspect (auth handler), principal checks, then the body.
-    private static async Task<IResult> PostAsync(HttpContext http, IProposalStore store, IAgentAllowlist allowlist, ILoggerFactory loggerFactory, CancellationToken ct)
+    private static async Task<IResult> PostAsync(HttpContext http, IProposalStore store, IAgentAllowlist allowlist, SubmissionValidator validator, ILoggerFactory loggerFactory, CancellationToken ct)
     {
         var key = http.User.ToActiveKey();
         if (key.PrincipalType != PrincipalTypes.Agent)
@@ -54,15 +55,25 @@ public static class ProposalEndpoints
         using (doc)
         {
             var root = doc!.RootElement;
-            if (!TryOptionalString(root, "action_type", out var actionType)
-                || !TryOptionalString(root, "party_ref", out var partyRef)
-                || !TryOptionalString(root, "justification", out var justification)
-                || !TryOptionalString(root, "trace_ref", out var traceRef)
-                || !TryOptionalString(root, "nono_session_id", out var nonoSessionId)
-                || !TryParameters(root, out var parametersJson))
+
+            // Idempotency slot (plan 07): the run_id lookup and replay/conflict decision go here, before validation.
+
+            // Envelope schema, current-release catalog lookup, then catalog parameter schema (D-13). Nothing is stored on failure.
+            switch (validator.Validate(root))
             {
-                return Invalid();
+                case SubmissionOutcome.Violation v:
+                    return ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.SchemaViolation, v.Detail.Pointer, v.Detail.Keyword);
+                case SubmissionOutcome.NotInCatalog:
+                    return ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.NotInCatalog);
             }
+
+            // The envelope schema has typed every field; the gate has proven the strings clean.
+            var actionType = root.GetProperty("action_type").GetString();
+            var partyRef = root.GetProperty("party_ref").GetString();
+            var justification = root.GetProperty("justification").GetString();
+            var traceRef = root.GetProperty("trace_ref").GetString();
+            var nonoSessionId = root.TryGetProperty("nono_session_id", out var nono) ? nono.GetString() : null;
+            var parametersJson = root.GetProperty("parameters").GetRawText();
 
             // Tenant comes only from the introspected key, never from the body (IDN-04).
             var proposal = new NewProposal(key.AgentId, key.KeyId, key.OnBehalfOf, key.Purpose, key.ExpiresAt,
@@ -123,40 +134,6 @@ public static class ProposalEndpoints
         }
 
         return ms.ToArray();
-    }
-
-    private static bool TryOptionalString(JsonElement root, string name, out string? value)
-    {
-        value = null;
-        if (!root.TryGetProperty(name, out var v))
-        {
-            return true;
-        }
-
-        if (v.ValueKind != JsonValueKind.String)
-        {
-            return false;
-        }
-
-        return JsonGate.TryGetCleanString(v, out value);
-    }
-
-    // The gate has already validated the whole tree; only the type check remains here.
-    private static bool TryParameters(JsonElement root, out string? json)
-    {
-        json = null;
-        if (!root.TryGetProperty("parameters", out var v))
-        {
-            return true;
-        }
-
-        if (v.ValueKind != JsonValueKind.Object)
-        {
-            return false;
-        }
-
-        json = v.GetRawText();
-        return true;
     }
 
     private static async Task<IResult> GetAsync(Guid id, HttpContext http, IProposalStore store, CancellationToken ct)

@@ -17,6 +17,7 @@ builder.Logging.AddFilter("Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMidd
 builder.Services.AddSingleton(new ServiceCollectionAccessor(builder.Services));
 builder.Services.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter, StartupGuardFilter>();
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<SubmissionValidator>();
 builder.Services.AddSingleton(sp =>
 {
     var url = sp.GetRequiredService<IConfiguration>()["OLIVE_POSTGRES_URL"];
