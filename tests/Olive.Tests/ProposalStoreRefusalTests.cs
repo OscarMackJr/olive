@@ -57,6 +57,25 @@ public sealed class ProposalStoreRefusalTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task TRC_03_transition_into_or_out_of_refused_policy_is_rejected_before_the_database()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        var store = Store(db);
+        var accepted = await store.InsertAsync(TestPaths.TenantAlpha, Sample("run-ok"), Ct);
+        var refused = await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample("run-refused"), "trace_not_found", Ct);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => store.TransitionAsync(TestPaths.TenantAlpha, accepted!.Value, "proposed", "refused_policy", "sys", Ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => store.TransitionAsync(TestPaths.TenantAlpha, refused!.Value, "refused_policy", "proposed", "sys", Ct));
+
+        Assert.Equal("proposed", (await store.GetAsync(TestPaths.TenantAlpha, accepted!.Value, Ct))!.State);
+        var still = (await store.GetAsync(TestPaths.TenantAlpha, refused!.Value, Ct))!;
+        Assert.Equal("refused_policy", still.State);
+        Assert.Equal("trace_not_found", still.RefusalReason);
+        Assert.Single(await EventsAsync(db, accepted.Value));
+        Assert.Equal(2, (await EventsAsync(db, refused.Value)).Count);
+    }
+
+    [Fact]
     public async Task TRC_03_duplicate_run_returns_null_and_writes_nothing()
     {
         await using var db = await fixture.CreateDatabaseAsync();

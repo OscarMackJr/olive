@@ -132,8 +132,17 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
             return r is null ? null : new ProposalRunRecord(r.ProposalId, r.State, r.BodySha256, r.OnBehalfOf, r.Purpose, r.RefusalReason);
         }, ct);
 
-    public Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct) =>
-        uow.ExecuteAsync(tenantId, async (conn, tx) =>
+    public Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct)
+    {
+        // WR-07: 0006 requires refused_policy and refusal_reason to agree. A plain state CAS cannot set or clear the reason, so it
+        // would only ever fail with SQLSTATE 23514 (a 500). Refusals are written only by InsertRefusedAsync (D-05), and
+        // refused_policy is terminal; reject both directions here, before any database work.
+        if (string.Equals(toState, "refused_policy", StringComparison.Ordinal) || string.Equals(fromState, "refused_policy", StringComparison.Ordinal))
+        {
+            throw new ArgumentException("REQ TRC-03 / D-05: refused_policy is written only by InsertRefusedAsync and is terminal.", nameof(toState));
+        }
+
+        return uow.ExecuteAsync(tenantId, async (conn, tx) =>
         {
             var n = await conn.ExecuteAsync(new CommandDefinition(ProposalSql.UpdateState,
                 new { tenant_id = tenantId, proposal_id = proposalId, from_state = fromState, to_state = toState }, tx, cancellationToken: ct));
@@ -154,4 +163,5 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
             }, tx, cancellationToken: ct));
             return true;
         }, ct);
+    }
 }
