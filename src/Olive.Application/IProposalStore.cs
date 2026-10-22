@@ -5,6 +5,10 @@ public interface IProposalStore
     // Returns null on a duplicate (tenant, agent, run) instead of throwing (D-10).
     Task<Guid?> InsertAsync(Guid tenantId, NewProposal proposal, CancellationToken ct);
 
+    // The single refusal-writing path, reused by Phase 4 policy refusals (D-05): insert then compare-and-set to refused_policy with
+    // the reason, plus "submitted" and "trace_refused" events, in one tenant transaction. Returns null on a duplicate (tenant, agent, run).
+    Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, CancellationToken ct);
+
     // Cross-tenant lookup is indistinguishable from missing (D-11).
     Task<ProposalRecord?> GetAsync(Guid tenantId, Guid proposalId, CancellationToken ct);
 
@@ -16,8 +20,8 @@ public interface IProposalStore
     Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct);
 }
 
-public sealed record NewProposal(string AgentId, string KeyId, string OnBehalfOf, string Purpose, DateTimeOffset KeyExpiresAt, string? NonoSessionId, string RunId, string? ActionType, string? PartyRef, string? ParametersJson, string? Justification, string? TraceRef, string? CanonicalBody = null, string? BodySha256 = null, string? ProposalHash = null);
+public sealed record NewProposal(string AgentId, string KeyId, string OnBehalfOf, string Purpose, DateTimeOffset KeyExpiresAt, string? NonoSessionId, string RunId, string? ActionType, string? PartyRef, string? ParametersJson, string? Justification, string? TraceRef, string? CanonicalBody = null, string? BodySha256 = null, string? ProposalHash = null, string? TraceVerification = null, string? TraceSchemaVersion = null);
 
-public sealed record ProposalRunRecord(Guid ProposalId, string State, string? BodySha256, string OnBehalfOf, string Purpose);
+public sealed record ProposalRunRecord(Guid ProposalId, string State, string? BodySha256, string OnBehalfOf, string Purpose, string? RefusalReason = null);
 
-public sealed record ProposalRecord(Guid ProposalId, Guid TenantId, string State, string AgentId, string KeyId, string OnBehalfOf, string Purpose, DateTimeOffset KeyExpiresAt, string? NonoSessionId, string RunId, string? ActionType, string? PartyRef, string? ParametersJson, string? Justification, string? TraceRef, DateTimeOffset CreatedAt);
+public sealed record ProposalRecord(Guid ProposalId, Guid TenantId, string State, string AgentId, string KeyId, string OnBehalfOf, string Purpose, DateTimeOffset KeyExpiresAt, string? NonoSessionId, string RunId, string? ActionType, string? PartyRef, string? ParametersJson, string? Justification, string? TraceRef, DateTimeOffset CreatedAt, string? RefusalReason = null, string? TraceVerification = null, string? TraceSchemaVersion = null);

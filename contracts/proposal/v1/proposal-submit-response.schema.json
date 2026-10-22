@@ -7,6 +7,7 @@
   "required": ["proposal_id", "state"],
   "properties": {
     "proposal_id": { "type": "string", "format": "uuid" },
-    "state": { "type": "string", "minLength": 1 }
+    "state": { "type": "string", "minLength": 1 },
+    "refusal_reason": { "type": "string", "pattern": "^[a-z][a-z_]{0,63}$" }
   }
 }

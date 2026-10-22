@@ -31,6 +31,12 @@ public sealed class RecordingProposalStore(IProposalStore inner, List<string> ev
         return inner.InsertAsync(tenantId, proposal, ct);
     }
 
+    public Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, CancellationToken ct)
+    {
+        lock (events) { events.Add("insert_refused"); }
+        return inner.InsertRefusedAsync(tenantId, proposal, refusalReason, ct);
+    }
+
     public Task<ProposalRecord?> GetAsync(Guid tenantId, Guid proposalId, CancellationToken ct)
     {
         lock (events) { events.Add("get"); }

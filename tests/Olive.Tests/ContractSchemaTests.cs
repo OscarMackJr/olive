@@ -43,6 +43,51 @@ public sealed class ContractSchemaTests
         Assert.NotNull(Check(schemaRel, invalid));
     }
 
+    [Theory]
+    [InlineData("contracts/proposal/v1/proposal-submit-response.schema.json", "contracts/proposal/v1/proposal-submit-response.refused.valid.json", true)]
+    [InlineData("contracts/proposal/v1/proposal-submit-response.schema.json", "contracts/proposal/v1/proposal-submit-response.badreason.invalid.json", false)]
+    [InlineData("contracts/proposal/v1/proposal.schema.json", "contracts/proposal/v1/proposal.refused.valid.json", true)]
+    [InlineData("contracts/proposal/v1/proposal.schema.json", "contracts/proposal/v1/proposal.badtrace.invalid.json", false)]
+    [Trait("Category", "Unit")]
+    public void TRC_03_refusal_and_trace_examples_are_additive_and_validated(string schemaRel, string exampleRel, bool shouldPass)
+    {
+        var violation = Check(schemaRel, File.ReadAllText(Path.Combine(TestPaths.Root, exampleRel)));
+        Assert.Equal(shouldPass, violation is null);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void TRC_03_reason_and_trace_fields_are_optional_in_the_schemas()
+    {
+        foreach (var schema in new[] { "proposal-submit-response", "proposal" })
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(TestPaths.Root, $"contracts/proposal/v1/{schema}.schema.json")));
+            var required = doc.RootElement.GetProperty("required").EnumerateArray().Select(e => e.GetString()).ToArray();
+            Assert.DoesNotContain("refusal_reason", required);
+            Assert.DoesNotContain("trace_verification", required);
+            Assert.DoesNotContain("trace_schema_version", required);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void API_01_accepted_create_body_serializes_only_proposal_id_and_state()
+    {
+        var json = JsonSerializer.Serialize(new Olive.Contracts.ProposalCreatedResponse(Guid.NewGuid(), "proposed"));
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal(["proposal_id", "state"], doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray());
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void TRC_03_refused_create_body_adds_refusal_reason_only()
+    {
+        var json = JsonSerializer.Serialize(new Olive.Contracts.ProposalCreatedResponse(Guid.NewGuid(), "refused_policy", "trace_not_found"));
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal(["proposal_id", "state", "refusal_reason"], doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.Null(Check("contracts/proposal/v1/proposal-submit-response.schema.json", json));
+    }
+
     [Fact]
     [Trait("Category", "Unit")]
     public void API_05_proposal_folder_has_the_three_v1_schemas()
