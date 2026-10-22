@@ -8,6 +8,7 @@
     <PackageReference Include="YamlDotNet" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="..\..\catalog\*.yaml" LogicalName="catalog/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\..\config\*.yaml" LogicalName="config/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\..\contracts\proposal\v1\*.schema.json" LogicalName="contracts/proposal/v1/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\..\contracts\catalog\v1\*.schema.json" LogicalName="contracts/catalog/v1/%(Filename)%(Extension)" />
