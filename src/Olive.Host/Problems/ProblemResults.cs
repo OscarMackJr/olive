@@ -54,4 +54,22 @@ public static class ProblemResults
 
     public static IResult Result(int status, string reason) =>
         Results.Json(Create(status, reason), (System.Text.Json.JsonSerializerOptions?)null, "application/problem+json", status);
+
+    // D-06, D-09: the caller may retry. Retry-After (seconds) is set only for 503.
+    public static IResult Retryable(int status, string reason)
+    {
+        var problem = Create(status, reason);
+        problem.Extensions["retryable"] = true;
+        var result = Results.Json(problem, (System.Text.Json.JsonSerializerOptions?)null, "application/problem+json", status);
+        return status == StatusCodes.Status503ServiceUnavailable ? new RetryAfterResult(result, 5) : result;
+    }
+
+    private sealed class RetryAfterResult(IResult inner, int seconds) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
+        {
+            httpContext.Response.Headers["Retry-After"] = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return inner.ExecuteAsync(httpContext);
+        }
+    }
 }

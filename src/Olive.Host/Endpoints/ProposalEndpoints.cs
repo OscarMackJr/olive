@@ -135,8 +135,11 @@ public static class ProposalEndpoints
                     // Static reason codes only: never trace_ref, token or parameters.
                     logger.LogTrace("Trace refused tenant_id={TenantId} agent_id={AgentId} hash={Hash} reason={Reason}", key.TenantId, key.AgentId, Short(proposalHash), refused.Reason);
                     break;
+                case TraceVerdict.NotFound:
+                    // D-09: never cached, never stored; the caller may retry under the same run_id once the trace exists.
+                    return ProblemResults.Retryable(StatusCodes.Status422UnprocessableEntity, ProblemReasons.TraceNotFound);
                 default:
-                    // Fail closed for every other verdict: nothing is stored (plan 03-05 refines this arm).
+                    // Fail closed for every other verdict: nothing is stored. The cause goes only to the Warning log (D-06).
                     if (verdict is TraceVerdict.Unavailable unavailable)
                     {
                         logger.LogWarning("Trace verification unavailable tenant_id={TenantId} agent_id={AgentId} cause={Cause}", key.TenantId, key.AgentId, unavailable.Cause);
@@ -181,7 +184,7 @@ public static class ProposalEndpoints
 
     private static string Short(string? hash) => hash is null ? "none" : hash[..Math.Min(12, hash.Length)];
 
-    private static IResult TraceUnavailable() => ProblemResults.Result(StatusCodes.Status503ServiceUnavailable, ProblemReasons.TraceVerificationUnavailable);
+    private static IResult TraceUnavailable() => ProblemResults.Retryable(StatusCodes.Status503ServiceUnavailable, ProblemReasons.TraceVerificationUnavailable);
 
     private static IResult Invalid() => ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.InvalidRequest);
 

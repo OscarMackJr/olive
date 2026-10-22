@@ -131,13 +131,13 @@ public sealed class TraceVerifiedEndpointTests(PostgresFixture fixture)
     }
 
     [Fact]
-    public async Task TRC_09_unknown_trace_fails_closed_with_503_and_stores_nothing()
+    public async Task TRC_09_unknown_trace_gives_422_and_stores_nothing()
     {
         await using var db = await fixture.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db, traceMode: TraceMode.Explicit);
         using var client = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
         var r = await Post(client, MatchProposal);
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, r.StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, r.StatusCode);
         Assert.Equal(0, await ApiProposalTests.CountRowsAsync(db, TestPaths.TenantAlpha));
         Assert.DoesNotContain("insert", factory.Events);
     }
