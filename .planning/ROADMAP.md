@@ -20,7 +20,7 @@ Olive Phase 1 goes from a single-file in-memory scaffold to a governed action br
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation and Walking Skeleton** - Restructured solution, guards, both tenant-isolation layers, migrator, and an agent can submit and read a proposal through the introspection stub (completed 2026-10-21)
-- [ ] **Phase 2: Contract Integrity and Idempotent Submission** - Strict raw-byte validation, v1 schemas, in-house JCS, YamlDotNet catalog endpoint, and race-safe idempotency on (agent_id, run_id)
+- [x] **Phase 2: Contract Integrity and Idempotent Submission** - Strict raw-byte validation, v1 schemas, in-house JCS, YamlDotNet catalog endpoint, and race-safe idempotency on (agent_id, run_id) (completed 2026-10-22)
 - [ ] **Phase 3: Trace Verification** - Fixture-backed trace resolver with ordered checks 1-5, fail-closed 503s, popeye token stub and cache, and session-key capture
 - [ ] **Phase 4: Policy, Expiry and Refusal** - Purpose, entitlement and rate-limit policy before any queueing, guarded lifecycle transitions, absolute expiry, and the asserted pipeline order
 - [ ] **Phase 5: Generic Review Queue and Action Approval** - IR-1 queue with kind registry, claim/release/decide/audit, approval rules, lazy expiry withdrawal, and the beat 4 demo
@@ -110,7 +110,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 02-07-PLAN.md — Idempotent submission: replay 200, conflict 409, race-safe, stored hashes (API-06, API-07)
+- [x] 02-07-PLAN.md — Idempotent submission: replay 200, conflict 409, race-safe, stored hashes (API-06, API-07)
 
 **Notes**: Working defaults Q1 and Q2 apply (envelope, then catalog lookup, then parameter schema). The `not_in_catalog` stored refusal is delivered in Phase 4 with the refusal machinery. Spikes: `JsonDocumentOptions.AllowDuplicateProperties`, lone surrogates, the privileges `ON CONFLICT DO NOTHING` needs.
 
@@ -254,7 +254,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation and Walking Skeleton | 13/13 | Complete    | 2026-10-22 |
-| 2. Contract Integrity and Idempotent Submission | 6/7 | In Progress|  |
+| 2. Contract Integrity and Idempotent Submission | 7/7 | Complete   | 2026-10-22 |
 | 3. Trace Verification | 0/TBD | Not started | - |
 | 4. Policy, Expiry and Refusal | 0/TBD | Not started | - |
 | 5. Generic Review Queue and Action Approval | 0/TBD | Not started | - |
