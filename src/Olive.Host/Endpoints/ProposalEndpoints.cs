@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Npgsql;
 using Olive.Application;
@@ -56,7 +57,36 @@ public static class ProposalEndpoints
         {
             var root = doc!.RootElement;
 
-            // Idempotency slot (plan 07): the run_id lookup and replay/conflict decision go here, before validation.
+            // Idempotency (D-06/D-07): one canonical form of the whole body, hashed once; replay or conflict is decided before validation.
+            var canonical = Jcs.Canonicalize(root);
+            var bodySha = Jcs.Sha256Hex(canonical);
+            var logger = loggerFactory.CreateLogger(LogCategory);
+
+            async Task<IResult?> DecideExistingAsync()
+            {
+                var existing = await store.FindByRunAsync(key.TenantId, key.AgentId, runId, ct);
+                if (existing is null)
+                {
+                    return null;
+                }
+
+                if (existing.BodySha256 is not null && existing.BodySha256 == bodySha)
+                {
+                    http.Response.Headers.Location = $"/v1/proposals/{existing.ProposalId}";
+                    return Results.Ok(new ProposalCreatedResponse(existing.ProposalId, existing.State));
+                }
+
+                // Ids and truncated hashes only: never the body, parameters, run key or session key.
+                logger.LogWarning("Idempotency conflict tenant_id={TenantId} agent_id={AgentId} proposal_id={ProposalId} stored_hash={StoredHash} received_hash={ReceivedHash}",
+                    key.TenantId, key.AgentId, existing.ProposalId, Short(existing.BodySha256), Short(bodySha));
+                return ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.IdempotencyConflict);
+            }
+
+            var replay = await DecideExistingAsync();
+            if (replay is not null)
+            {
+                return replay;
+            }
 
             // Envelope schema, current-release catalog lookup, then catalog parameter schema (D-13). Nothing is stored on failure.
             switch (validator.Validate(root))
@@ -77,7 +107,8 @@ public static class ProposalEndpoints
 
             // Tenant comes only from the introspected key, never from the body (IDN-04).
             var proposal = new NewProposal(key.AgentId, key.KeyId, key.OnBehalfOf, key.Purpose, key.ExpiresAt,
-                nonoSessionId, runId, actionType, partyRef, parametersJson, justification, traceRef);
+                nonoSessionId, runId, actionType, partyRef, parametersJson, justification, traceRef,
+                Encoding.UTF8.GetString(canonical), bodySha, Jcs.ProposalHash(root));
             Guid? id;
             try
             {
@@ -96,12 +127,15 @@ public static class ProposalEndpoints
 
             if (id is null)
             {
-                return ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.DuplicateRun);
+                // Lost the insert race (API-07): the winner's row decides replay or conflict. Missing means fail closed.
+                return await DecideExistingAsync() ?? ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.IdempotencyConflict);
             }
 
             return Results.Created($"/v1/proposals/{id}", new ProposalCreatedResponse(id.Value, ProposalStates.Proposed));
         }
     }
+
+    private static string Short(string? hash) => hash is null ? "none" : hash[..Math.Min(12, hash.Length)];
 
     private static IResult Invalid() => ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.InvalidRequest);
 
