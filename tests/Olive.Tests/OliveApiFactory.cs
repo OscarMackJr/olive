@@ -46,6 +46,12 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
         }
 
         builder.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(config));
+        // Program.cs reads the trace timeout before Build(), which ConfigureAppConfiguration does not reach.
+        if (config.TryGetValue("OLIVE_TRACE_TIMEOUT_MS", out var traceTimeout))
+        {
+            builder.UseSetting("OLIVE_TRACE_TIMEOUT_MS", traceTimeout);
+        }
+
         builder.ConfigureLogging(l =>
         {
             l.ClearProviders();
