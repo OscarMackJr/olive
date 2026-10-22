@@ -37,6 +37,12 @@ public sealed class RecordingProposalStore(IProposalStore inner, List<string> ev
         return inner.GetAsync(tenantId, proposalId, ct);
     }
 
+    public Task<ProposalRunRecord?> FindByRunAsync(Guid tenantId, string agentId, string runId, CancellationToken ct)
+    {
+        lock (events) { events.Add("FindByRun"); }
+        return inner.FindByRunAsync(tenantId, agentId, runId, ct);
+    }
+
     public Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct)
     {
         lock (events) { events.Add("transition"); }

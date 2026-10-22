@@ -49,6 +49,9 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
                 parameters = p.ParametersJson,
                 justification = p.Justification,
                 trace_ref = p.TraceRef,
+                canonical_body = p.CanonicalBody,
+                body_sha256 = p.BodySha256,
+                proposal_hash = p.ProposalHash,
             }, tx, cancellationToken: ct));
             if (inserted is null)
             {
@@ -75,6 +78,21 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
                 new { tenant_id = tenantId, proposal_id = proposalId }, tx, cancellationToken: ct));
             return r is null ? null : new ProposalRecord(r.ProposalId, r.TenantId, r.State, r.AgentId, r.KeyId, r.OnBehalfOf, r.Purpose,
                 Utc(r.KeyExpiresAt), r.NonoSessionId, r.RunId, r.ActionType, r.PartyRef, r.ParametersJson, r.Justification, r.TraceRef, Utc(r.CreatedAt));
+        }, ct);
+
+    private sealed class RunRow
+    {
+        public Guid ProposalId { get; set; }
+        public string State { get; set; } = "";
+        public string? BodySha256 { get; set; }
+    }
+
+    public Task<ProposalRunRecord?> FindByRunAsync(Guid tenantId, string agentId, string runId, CancellationToken ct) =>
+        uow.ExecuteAsync<ProposalRunRecord?>(tenantId, async (conn, tx) =>
+        {
+            var r = await conn.QuerySingleOrDefaultAsync<RunRow>(new CommandDefinition(ProposalSql.FindByRun,
+                new { tenant_id = tenantId, agent_id = agentId, run_id = runId }, tx, cancellationToken: ct));
+            return r is null ? null : new ProposalRunRecord(r.ProposalId, r.State, r.BodySha256);
         }, ct);
 
     public Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct) =>
