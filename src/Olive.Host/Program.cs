@@ -32,6 +32,7 @@ builder.Services.AddSingleton<IProposalStore, PostgresProposalStore>();
 // Phase 1 has only the stub introspector; the production guard in 01-06 refuses it.
 builder.Services.AddSingleton<IKeyIntrospector>(sp => StubKeyIntrospector.CreateDefault(sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<IAgentAllowlist>(_ => AgentAllowlist.LoadEmbedded());
+builder.Services.AddSingleton(_ => CatalogLoader.LoadEmbedded(Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml")));
 builder.Services.AddAuthentication(AgentKeyAuthenticationHandler.SchemeName)
     .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, AgentKeyAuthenticationHandler>(AgentKeyAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization();
@@ -43,6 +44,7 @@ app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapProposalEndpoints();
+app.MapCatalogEndpoints();
 app.Run();
 
 public partial class Program;

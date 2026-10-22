@@ -24,6 +24,19 @@ public static class StartupGuards
         }
     }
 
+    // API-10: the source-controlled catalog is loaded eagerly so a fault stops the host before it serves traffic.
+    public static void CheckCatalog(IServiceProvider provider)
+    {
+        try
+        {
+            _ = provider.GetRequiredService<Olive.Catalog.CatalogSet>();
+        }
+        catch (InvalidOperationException)
+        {
+            throw new StartupGuardException("API-10", "the source-controlled catalog failed validation");
+        }
+    }
+
     // FND-05: in production no INonProductionOnly implementation may be registered or resolvable.
     public static void CheckNoNonProductionComponents(IServiceCollection services, IServiceProvider provider, OliveEnvironment env)
     {
