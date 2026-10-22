@@ -192,12 +192,21 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
         Assert.Contains("FND-05", guard.Message);
     }
 
+    // The factory wires the recording stubs for the Phase 3 ports; production positive controls swap in non-stub doubles.
+    private static void ProductionSafePorts(IServiceCollection s)
+    {
+        s.RemoveAll<ITokenIssuer>();
+        s.AddSingleton<ITokenIssuer>(new FakeTokenIssuer());
+        s.RemoveAll<ITraceResolver>();
+        s.AddSingleton<ITraceResolver>(new FakeTraceResolver());
+    }
+
     [Fact]
     public async Task FND_05_production_decorator_over_production_component_starts()
     {
         await using var db = await fixture.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
-            configureServices: s => { s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector>(_ => new DecoratingIntrospector(new ThrowingKeyIntrospector())); });
+            configureServices: s => { ProductionSafePorts(s); s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector>(_ => new DecoratingIntrospector(new ThrowingKeyIntrospector())); });
         Assert.Null(await TryStartAsync(factory));
     }
 
@@ -206,7 +215,7 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
     {
         await using var db = await fixture.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
-            configureServices: s => { s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>(); });
+            configureServices: s => { ProductionSafePorts(s); s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>(); });
         Assert.Null(await TryStartAsync(factory));
     }
 
