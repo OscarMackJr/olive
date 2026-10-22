@@ -31,6 +31,8 @@ public static class ProblemResults
         ProblemReasons.NotInCatalog => "The action type is not in the catalog.",
         ProblemReasons.PayloadTooLarge => "The request body is too large.",
         ProblemReasons.IntrospectionUnavailable => "Key introspection is unavailable.",
+        ProblemReasons.TraceNotFound => "The trace was not found.",
+        ProblemReasons.TraceVerificationUnavailable => "Trace verification is unavailable.",
         _ => "An internal error occurred.",
     };
 

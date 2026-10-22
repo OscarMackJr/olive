@@ -5,7 +5,8 @@ namespace Olive.Contracts;
 
 public sealed record ProposalCreatedResponse(
     [property: JsonPropertyName("proposal_id")] Guid ProposalId,
-    [property: JsonPropertyName("state")] string State);
+    [property: JsonPropertyName("state")] string State,
+    [property: JsonPropertyName("refusal_reason"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RefusalReason = null);
 
 public sealed record ProposalResponse(
     [property: JsonPropertyName("proposal_id")] Guid ProposalId,
@@ -23,4 +24,7 @@ public sealed record ProposalResponse(
     [property: JsonPropertyName("parameters")] JsonElement? Parameters,
     [property: JsonPropertyName("justification")] string? Justification,
     [property: JsonPropertyName("trace_ref")] string? TraceRef,
-    [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt);
+    [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt,
+    [property: JsonPropertyName("refusal_reason"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RefusalReason = null,
+    [property: JsonPropertyName("trace_verification"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TraceVerification = null,
+    [property: JsonPropertyName("trace_schema_version"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TraceSchemaVersion = null);
