@@ -1,0 +1,10 @@
+{
+  "trace://fixture/match": "match.json",
+  "trace://fixture/run-null-ate03": "run-null-ate03.json",
+  "trace://fixture/run-differs": "run-differs.json",
+  "trace://fixture/tenant-differs": "tenant-differs.json",
+  "trace://fixture/agent-null": "agent-null.json",
+  "trace://fixture/agent-differs": "agent-differs.json",
+  "trace://fixture/hash-null": "hash-null.json",
+  "trace://fixture/hash-differs": "hash-differs.json"
+}

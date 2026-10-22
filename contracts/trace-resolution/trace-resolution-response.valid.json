@@ -1,0 +1,9 @@
+{
+  "trace_id": "trace://valid/example",
+  "schema_version": "ate/0.4",
+  "run_id": "run-fixture-match",
+  "tenant_id": "5325ffe9-5727-4d88-9832-aebabb8d0538",
+  "agent_id": "liam",
+  "proposal_hash": "a677e257b2128f7c6bb38ed21741f1f66f623b18cdec8e6bfd6fb460d16354bb",
+  "created_at": "2026-01-01T00:00:00Z"
+}

@@ -1,10 +1,12 @@
 using Npgsql;
 using Olive.Application;
 using Olive.Catalog;
+using Olive.Host.Alarms;
 using Olive.Host.Auth;
 using Olive.Host.Endpoints;
 using Olive.Host.Problems;
 using Olive.Host.Startup;
+using Olive.Integrations.Hometown;
 using Olive.Integrations.Popeye;
 using Olive.Persistence;
 
@@ -32,6 +34,26 @@ builder.Services.AddSingleton<TenantUnitOfWork>();
 builder.Services.AddSingleton<IProposalStore, PostgresProposalStore>();
 // Phase 1 has only the stub introspector; the production guard in 01-06 refuses it.
 builder.Services.AddSingleton<IKeyIntrospector>(sp => StubKeyIntrospector.CreateDefault(sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton<IOperationalAlarm, LoggingOperationalAlarm>();
+builder.Services.AddSingleton<ITokenIssuer>(sp => StubTokenIssuer.CreateDefault(sp.GetRequiredService<TimeProvider>()));
+builder.Services.AddSingleton<ITraceResolver>(_ => new CachingTraceResolver(FixtureTraceResolver.CreateDefault()));
+builder.Services.AddSingleton<ServiceTokenProvider>(sp => new ServiceTokenProvider(
+    sp.GetRequiredService<ITokenIssuer>(), sp.GetRequiredService<IOperationalAlarm>(), sp.GetRequiredService<TimeProvider>()));
+// D-12: validated eagerly so a bad value stops startup rather than the first request.
+var traceTimeoutText = builder.Configuration["OLIVE_TRACE_TIMEOUT_MS"];
+var traceOptions = new TraceVerifierOptions();
+if (!string.IsNullOrWhiteSpace(traceTimeoutText))
+{
+    if (!int.TryParse(traceTimeoutText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var traceTimeoutMs) || traceTimeoutMs <= 0)
+    {
+        throw new InvalidOperationException("OLIVE_TRACE_TIMEOUT_MS must be a positive integer.");
+    }
+
+    traceOptions = new TraceVerifierOptions(TimeSpan.FromMilliseconds(traceTimeoutMs));
+}
+
+builder.Services.AddSingleton(traceOptions);
+builder.Services.AddSingleton<TraceVerifier>();
 builder.Services.AddSingleton<IAgentAllowlist>(_ => AgentAllowlist.LoadEmbedded());
 builder.Services.AddSingleton(_ => CatalogLoader.LoadEmbedded(Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml")));
 builder.Services.AddAuthentication(AgentKeyAuthenticationHandler.SchemeName)

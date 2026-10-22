@@ -23,7 +23,7 @@ public static class ProposalEndpoints
     }
 
     // Order (Decision section 15.2): introspect (auth handler), principal checks, then the body.
-    private static async Task<IResult> PostAsync(HttpContext http, IProposalStore store, IAgentAllowlist allowlist, SubmissionValidator validator, ILoggerFactory loggerFactory, CancellationToken ct)
+    private static async Task<IResult> PostAsync(HttpContext http, IProposalStore store, IAgentAllowlist allowlist, SubmissionValidator validator, TraceVerifier verifier, ILoggerFactory loggerFactory, CancellationToken ct)
     {
         var key = http.User.ToActiveKey();
         if (key.PrincipalType != PrincipalTypes.Agent)
@@ -109,10 +109,33 @@ public static class ProposalEndpoints
             var nonoSessionId = root.TryGetProperty("nono_session_id", out var nono) ? nono.GetString() : null;
             var parametersJson = root.GetProperty("parameters").GetRawText();
 
+            // Trace verification (D-11, D15.2): after idempotency and schema/catalog validation, before anything is stored.
+            // The session key goes only to the verifier, which hands it only to the token issuer (D17.1).
+            var sessionKey = AgentKeyHeader.TryRead(http.Request.Headers[AgentKeyHeader.Name].ToString());
+            if (sessionKey is null)
+            {
+                return TraceUnavailable();
+            }
+
+            var proposalHash = Jcs.ProposalHash(root);
+            var verdict = await verifier.VerifyAsync(sessionKey, key, runId, traceRef!, proposalHash, ct);
+            if (verdict is not TraceVerdict.Verified verified)
+            {
+                // Fail closed for every non-Verified verdict: nothing is stored (plans 03-04 and 03-05 refine this arm).
+                if (verdict is TraceVerdict.Unavailable unavailable)
+                {
+                    logger.LogWarning("Trace verification unavailable tenant_id={TenantId} agent_id={AgentId} cause={Cause}", key.TenantId, key.AgentId, unavailable.Cause);
+                }
+
+                return TraceUnavailable();
+            }
+
+            logger.LogTrace("Trace verified tenant_id={TenantId} agent_id={AgentId} hash={Hash} verdict={Verdict}", key.TenantId, key.AgentId, Short(proposalHash), nameof(TraceVerdict.Verified));
+
             // Tenant comes only from the introspected key, never from the body (IDN-04).
             var proposal = new NewProposal(key.AgentId, key.KeyId, key.OnBehalfOf, key.Purpose, key.ExpiresAt,
                 nonoSessionId, runId, actionType, partyRef, parametersJson, justification, traceRef,
-                Encoding.UTF8.GetString(canonical), bodySha, Jcs.ProposalHash(root));
+                Encoding.UTF8.GetString(canonical), bodySha, proposalHash, verified.Source, verified.SchemaVersion);
             Guid? id;
             try
             {
@@ -140,6 +163,8 @@ public static class ProposalEndpoints
     }
 
     private static string Short(string? hash) => hash is null ? "none" : hash[..Math.Min(12, hash.Length)];
+
+    private static IResult TraceUnavailable() => ProblemResults.Result(StatusCodes.Status503ServiceUnavailable, ProblemReasons.TraceVerificationUnavailable);
 
     private static IResult Invalid() => ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.InvalidRequest);
 
@@ -191,6 +216,6 @@ public static class ProposalEndpoints
         }
 
         return Results.Ok(new ProposalResponse(r.ProposalId, r.State, r.TenantId, r.AgentId, r.KeyId, r.OnBehalfOf, r.Purpose,
-            r.KeyExpiresAt, r.NonoSessionId, r.RunId, r.ActionType, r.PartyRef, parameters, r.Justification, r.TraceRef, r.CreatedAt));
+            r.KeyExpiresAt, r.NonoSessionId, r.RunId, r.ActionType, r.PartyRef, parameters, r.Justification, r.TraceRef, r.CreatedAt, r.RefusalReason, r.TraceVerification, r.TraceSchemaVersion));
     }
 }

@@ -71,7 +71,7 @@ public sealed class IdentityEndpointTests(PostgresFixture fixture)
         using var client = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
         var r = await client.PostAsync("/v1/proposals", Json(Body), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        Assert.Equal(["introspect", "FindByRun", "insert"], factory.Events);
+        Assert.Equal(["introspect", "FindByRun", "token", "resolve", "insert"], factory.Events);
         Assert.Equal(1, factory.Introspector.Calls);
     }
 

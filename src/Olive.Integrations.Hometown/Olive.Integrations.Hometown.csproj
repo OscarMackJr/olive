@@ -3,4 +3,7 @@
     <ProjectReference Include="..\Olive.Application\Olive.Application.csproj" />
     <ProjectReference Include="..\Olive.Domain\Olive.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\contracts\trace-resolution\*.json" LogicalName="trace-resolution/%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>

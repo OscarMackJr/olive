@@ -1,0 +1,9 @@
+{
+  "trace_id": "trace://fixture/hash-differs",
+  "schema_version": "ate/0.4",
+  "run_id": "run-fixture-hash-differs",
+  "tenant_id": "5325ffe9-5727-4d88-9832-aebabb8d0538",
+  "agent_id": "liam",
+  "proposal_hash": "0000000000000000000000000000000000000000000000000000000000000001",
+  "created_at": "2026-01-01T00:00:00Z"
+}
