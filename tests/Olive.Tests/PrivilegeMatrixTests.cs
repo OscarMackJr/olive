@@ -7,7 +7,7 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
 {
     private static readonly string[] AllPrivileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"];
 
-    // proposal UPDATE is column-level (state only, migration 0002) and proposal INSERT is column-level (migration 0003),
+    // proposal UPDATE is column-level (state only, migration 0002) and proposal INSERT is column-level (migrations 0003 and 0004),
     // so has_table_privilege reports false for both on olive_app.
     // Phases 5 and 6 append queue_item, queue_item_event, execution_ledger here (DB-03/DB-04 text names five tables; D-03 limits 0001 to two).
     private static readonly (string Table, string Role, string[] Granted)[] Expected =
@@ -131,7 +131,7 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
     }
 
     private static readonly string[] InsertableColumns =
-        ["tenant_id", "proposal_id", "agent_id", "key_id", "on_behalf_of", "purpose", "key_expires_at", "nono_session_id", "run_id", "action_type", "party_ref", "parameters", "justification", "trace_ref"];
+        ["tenant_id", "proposal_id", "agent_id", "key_id", "on_behalf_of", "purpose", "key_expires_at", "nono_session_id", "run_id", "action_type", "party_ref", "parameters", "justification", "trace_ref", "canonical_body", "body_sha256", "proposal_hash"];
 
     private static string InsertSql(string extraCol, string extraVal) =>
         $"insert into proposal (tenant_id, proposal_id, agent_id, key_id, on_behalf_of, purpose, key_expires_at, run_id{extraCol}) " +
@@ -193,5 +193,38 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
     {
         await using var db = await fx.CreateDatabaseAsync();
         Assert.Equal("42501", await SqlStateAsync(db.AppConnectionString, "create table x (a int)"));
+    }
+
+    private static readonly string Hex64 = new('a', 64);
+
+    [Theory]
+    [InlineData(", body_sha256", ", 'zz'")]
+    [InlineData(", proposal_hash", ", 'zz'")]
+    [InlineData(", canonical_body", ", '{}'")]
+    [InlineData(", canonical_body, body_sha256", ", '{}', 'aa'")]
+    public async Task DB_04_hash_columns_enforce_format_and_all_or_none(string cols, string vals)
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        Assert.Equal("23514", await SqlStateAsync(db.AppConnectionString, InsertSql(cols, vals)));
+    }
+
+    [Fact]
+    public async Task DB_04_app_can_insert_all_three_hash_columns_and_cannot_update_them()
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        var ins = InsertSql(", canonical_body, body_sha256, proposal_hash", $", '{{}}', '{Hex64}', '{Hex64}'");
+        await using var conn = new NpgsqlConnection(db.AppConnectionString);
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+        await using (var set = new NpgsqlCommand("select set_config('olive.tenant_id', @t, true)", conn, tx))
+        {
+            set.Parameters.AddWithValue("t", TestPaths.TenantAlpha.ToString());
+            await set.ExecuteNonQueryAsync();
+        }
+        await using (var cmd = new NpgsqlCommand(ins, conn, tx))
+            Assert.Equal(1, await cmd.ExecuteNonQueryAsync());
+        await tx.CommitAsync();
+        foreach (var col in new[] { "canonical_body", "body_sha256", "proposal_hash" })
+            Assert.Equal("42501", await SqlStateAsync(db.AppConnectionString, $"update proposal set {col} = null"));
     }
 }
