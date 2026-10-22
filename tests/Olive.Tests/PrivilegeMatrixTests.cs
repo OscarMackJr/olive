@@ -197,11 +197,16 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
 
     private static readonly string Hex64 = new('a', 64);
 
+    // SHA-256 of the UTF-8 bytes of "{}", the canonical body these inserts store (0005 binds the two).
+    private const string EmptyObjectSha = "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a";
+
     [Theory]
     [InlineData(", body_sha256", ", 'zz'")]
     [InlineData(", proposal_hash", ", 'zz'")]
     [InlineData(", canonical_body", ", '{}'")]
     [InlineData(", canonical_body, body_sha256", ", '{}', 'aa'")]
+    [InlineData(", canonical_body, body_sha256, proposal_hash", ", '{}', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'")]
+    [InlineData(", canonical_body, body_sha256, proposal_hash", ", '{ }', '44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'")]
     public async Task DB_04_hash_columns_enforce_format_and_all_or_none(string cols, string vals)
     {
         await using var db = await fx.CreateDatabaseAsync();
@@ -212,7 +217,7 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
     public async Task DB_04_app_can_insert_all_three_hash_columns_and_cannot_update_them()
     {
         await using var db = await fx.CreateDatabaseAsync();
-        var ins = InsertSql(", canonical_body, body_sha256, proposal_hash", $", '{{}}', '{Hex64}', '{Hex64}'");
+        var ins = InsertSql(", canonical_body, body_sha256, proposal_hash", $", '{{}}', '{EmptyObjectSha}', '{Hex64}'");
         await using var conn = new NpgsqlConnection(db.AppConnectionString);
         await conn.OpenAsync();
         await using var tx = await conn.BeginTransactionAsync();
