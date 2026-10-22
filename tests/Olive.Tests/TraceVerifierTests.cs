@@ -183,6 +183,20 @@ public sealed class TraceVerifierTests
 
     [Fact]
     [Trait("Category", "Unit")]
+    public async Task TRC_07_token_issuer_hang_times_out_to_unavailable_and_resolver_is_never_called()
+    {
+        var alarm = new RecordingAlarm();
+        var provider = new ServiceTokenProvider(new HangingTokenIssuer(), alarm, new ManualTimeProvider(Start));
+        var resolver = new FakeTraceResolver(new TraceLookup.Found(Facts(), "hometown"));
+        var verifier = new TraceVerifier(provider, resolver, alarm, new TraceVerifierOptions(TimeSpan.FromMilliseconds(50)));
+        var v = Assert.IsType<TraceVerdict.Unavailable>(await verifier.VerifyAsync(Session, Key(), "run-1", "trace-1", Hash, TestContext.Current.CancellationToken));
+        Assert.Equal("token_issuer_timeout", v.Cause);
+        Assert.Equal(0, resolver.Calls);
+        Assert.Empty(alarm.Codes);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public async Task TRC_07_client_abort_propagates_instead_of_unavailable()
     {
         using var cts = new CancellationTokenSource();

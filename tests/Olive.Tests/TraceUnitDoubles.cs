@@ -47,6 +47,15 @@ public sealed class HangingTraceResolver : ITraceResolver
     }
 }
 
+public sealed class HangingTokenIssuer : ITokenIssuer
+{
+    public async Task<TokenIssueResult> IssueAsync(SessionKey key, CancellationToken ct)
+    {
+        await Task.Delay(Timeout.Infinite, ct);
+        return new TokenIssueResult.Unavailable();
+    }
+}
+
 public static class TraceBuilders
 {
     public static readonly Guid Tenant = Guid.Parse("11111111-1111-1111-1111-111111111111");

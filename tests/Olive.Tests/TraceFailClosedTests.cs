@@ -93,6 +93,17 @@ public sealed class TraceFailClosedTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task TRC_07_popeye_token_hang_times_out_to_503_without_alarm()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = Factory(db, SeededFixture(), new FaultingTokenIssuer(TokenFault.Hang), config: ShortTimeout);
+        using var client = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
+        await AssertUnavailable(await Post(client, Body), db, factory);
+        Assert.DoesNotContain("resolve", factory.Events);
+        Assert.Empty(factory.Alarms.Codes);
+    }
+
+    [Fact]
     public async Task TRC_07_hometown_401_gives_503_and_alarm_trace_resolver_401()
     {
         await using var db = await fixture.CreateDatabaseAsync();

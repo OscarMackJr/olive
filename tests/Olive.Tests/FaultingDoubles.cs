@@ -28,7 +28,7 @@ public sealed class FaultingTraceResolver(ITraceResolver healthy, ResolverFault 
     }
 }
 
-public enum TokenFault { None, Unavailable, Refused, CallerRejected401, CallerRejected403, WrongTenant, WrongDelegatedAgent, WrongKeyId, ExpiresAfterKey }
+public enum TokenFault { None, Unavailable, Hang, Refused, CallerRejected401, CallerRejected403, WrongTenant, WrongDelegatedAgent, WrongKeyId, ExpiresAfterKey }
 
 public sealed class FaultingTokenIssuer(TokenFault mode = TokenFault.None) : ITokenIssuer
 {
@@ -42,6 +42,9 @@ public sealed class FaultingTokenIssuer(TokenFault mode = TokenFault.None) : ITo
         switch (Mode)
         {
             case TokenFault.Unavailable: return new TokenIssueResult.Unavailable();
+            case TokenFault.Hang:
+                await Task.Delay(Timeout.Infinite, ct);
+                return new TokenIssueResult.Unavailable();
             case TokenFault.Refused: return new TokenIssueResult.Refused();
             case TokenFault.CallerRejected401: return new TokenIssueResult.CallerRejected(401);
             case TokenFault.CallerRejected403: return new TokenIssueResult.CallerRejected(403);

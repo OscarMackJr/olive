@@ -9,8 +9,22 @@ public sealed class TraceVerifier(ServiceTokenProvider tokens, ITraceResolver re
 
     public async Task<TraceVerdict> VerifyAsync(SessionKey sessionKey, ActiveKey key, string runId, string traceRef, string proposalHash, CancellationToken ct)
     {
-        // D-11: the token is obtained before any cache or resolver use.
-        var token = await tokens.GetAsync(sessionKey, key, ct);
+        // D-11: the token is obtained before any cache or resolver use. Issuance gets its own timeout budget (WR-01):
+        // a hung popeye must fail closed, never hold the request open.
+        TokenOutcome token;
+        using (var cts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+        {
+            cts.CancelAfter(options.Timeout);
+            try
+            {
+                token = await tokens.GetAsync(sessionKey, key, cts.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                return new TraceVerdict.Unavailable("token_issuer_timeout");
+            }
+        }
+
         if (token is not TokenOutcome.Ok ok)
         {
             return new TraceVerdict.Unavailable(((TokenOutcome.Failed)token).Cause);
