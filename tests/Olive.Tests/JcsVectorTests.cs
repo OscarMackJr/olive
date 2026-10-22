@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Olive.Catalog;
 using Olive.Domain;
+using Olive.Host.Endpoints;
 
 namespace Olive.Tests;
 
@@ -84,6 +85,36 @@ public sealed class JcsVectorTests
             using var doc = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(Dir, c.GetProperty("input").GetString()!)));
             var anyLossy = NumberTokens(doc.RootElement).Any(t => !JsonNumbers.IsLossless(t));
             Assert.Equal(gate == "reject_lossy_number", anyLossy);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void API_04_gate_verdicts_match_golden_vectors()
+    {
+        foreach (var c in Manifest.GetProperty("cases").EnumerateArray())
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(Dir, c.GetProperty("input").GetString()!));
+            var gate = c.GetProperty("gate").GetString();
+            var name = c.GetProperty("name").GetString();
+            bool admitted;
+            try
+            {
+                using var doc = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 64, AllowDuplicateProperties = false });
+                admitted = JsonGate.Walk(doc.RootElement);
+            }
+            catch (Exception e) when (e is JsonException or InvalidOperationException)
+            {
+                admitted = false;
+            }
+
+            Assert.True((gate == "accept") == admitted, name);
+            if (gate != "accept")
+            {
+                // The full gate agrees on the raw bytes for every reject case, with a run_id spliced in.
+                var spliced = System.Text.Encoding.UTF8.GetBytes("{\"run_id\":\"r\",\"v\":").Concat(bytes).Concat("}"u8.ToArray()).ToArray();
+                Assert.False(JsonGate.TryAdmit(spliced, out _, out _), name);
+            }
         }
     }
 

@@ -186,7 +186,8 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         NumBody("""{"x":3.14}"""),
         NumBody("""{"x":1e10}"""),
         NumBody("""{"x":1.5e-7}"""),
-        NumBody("""{"x":12345678901234567890}"""),
+        // D-05: a token that does not survive a double (12345678901234567890) is now refused; this one is exact.
+        NumBody("""{"x":12345678901234567000}"""),
         NumBody("""{"x":1e300}"""),
         NumBody("""{"x":1e-300}"""),
         NumBody("{\"x\":[" + string.Join(",", Enumerable.Repeat("1e308", 100)) + "]}"),
