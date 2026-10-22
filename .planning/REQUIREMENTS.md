@@ -67,14 +67,14 @@
 
 - [x] **API-01**: An agent can `POST /v1/proposals` with `action_type`, `party_ref`, `parameters`, `justification`, `trace_ref`, `run_id` and an optional `nono_session_id`. It receives a `proposal_id` and the lifecycle state.
 - [x] **API-02**: A caller can `GET /v1/proposals/{proposal_id}` within its own tenant. An id from another tenant returns 404.
-- [ ] **API-03**: A caller can `GET /v1/catalog/{version}` and receives the source-controlled catalog entry, including the parameter JSON Schema.
-- [ ] **API-04**: The request body is read as raw bytes, parsed once with duplicate keys rejected, and never bound to a model. A body is rejected with 400 if it needs type coercion, defaults, key stripping or trimming to validate, or if it contains a null optional field.
-- [ ] **API-05**: The v1 payload JSON Schemas (2020-12) live under `contracts/proposal/v1/` and are validated with format assertion on.
-- [ ] **API-06**: Submission is idempotent on `(agent_id, run_id)`, using a `body_sha256` computed with RFC 8785 JCS. An identical body returns 200 with the original `proposal_id` and its current state. A different body returns `409 idempotency_conflict`, is not stored, and is logged.
-- [ ] **API-07**: Two concurrent first submissions with the same key resolve to one proposal (unique constraint plus re-lookup).
+- [x] **API-03**: A caller can `GET /v1/catalog/{version}` and receives the source-controlled catalog entry, including the parameter JSON Schema.
+- [x] **API-04**: The request body is read as raw bytes, parsed once with duplicate keys rejected, and never bound to a model. A body is rejected with 400 if it needs type coercion, defaults, key stripping or trimming to validate, or if it contains a null optional field.
+- [x] **API-05**: The v1 payload JSON Schemas (2020-12) live under `contracts/proposal/v1/` and are validated with format assertion on.
+- [x] **API-06**: Submission is idempotent on `(agent_id, run_id)`, using a `body_sha256` computed with RFC 8785 JCS. An identical body returns 200 with the original `proposal_id` and its current state. A different body returns `409 idempotency_conflict`, is not stored, and is logged.
+- [x] **API-07**: Two concurrent first submissions with the same key resolve to one proposal (unique constraint plus re-lookup).
 - [ ] **API-08**: The submission steps run in a fixed order: introspect → principal checks → idempotency → schema and catalog → trace resolution → policy → persist and enqueue. A test asserts the order, and the first failure wins.
-- [ ] **API-09**: The in-house JCS implementation passes the RFC 8785 and cyberphone test vectors. Shared golden vectors are committed under `contracts/` for hometown to run.
-- [ ] **API-10**: The catalog is loaded from YAML at startup with YamlDotNet and validated against the action-type schema. The hand-rolled parser is removed, and runtime registration stays impossible. (Charter REQ-ACT-06)
+- [x] **API-09**: The in-house JCS implementation passes the RFC 8785 and cyberphone test vectors. Shared golden vectors are committed under `contracts/` for hometown to run.
+- [x] **API-10**: The catalog is loaded from YAML at startup with YamlDotNet and validated against the action-type schema. The hand-rolled parser is removed, and runtime registration stays impossible. (Charter REQ-ACT-06)
 
 ### Identity and service credentials (IDN)
 
@@ -220,14 +220,14 @@ Deferred. Tracked but not in the current roadmap.
 | DB-07 | Phase 1 | Complete |
 | API-01 | Phase 1 | Complete |
 | API-02 | Phase 1 | Complete |
-| API-03 | Phase 2 | Pending |
-| API-04 | Phase 2 | Pending |
-| API-05 | Phase 2 | Pending |
-| API-06 | Phase 2 | Pending |
-| API-07 | Phase 2 | Pending |
+| API-03 | Phase 2 | Complete |
+| API-04 | Phase 2 | Complete |
+| API-05 | Phase 2 | Complete |
+| API-06 | Phase 2 | Complete |
+| API-07 | Phase 2 | Complete |
 | API-08 | Phase 4 | Pending |
-| API-09 | Phase 2 | Pending |
-| API-10 | Phase 2 | Pending |
+| API-09 | Phase 2 | Complete |
+| API-10 | Phase 2 | Complete |
 | IDN-01 | Phase 1 | Complete |
 | IDN-02 | Phase 1 | Complete |
 | IDN-03 | Phase 8 | Pending |
