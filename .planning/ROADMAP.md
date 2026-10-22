@@ -92,7 +92,26 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. `GET /v1/catalog/{version}` returns the `crm.case_note@1` entry with its parameter JSON Schema, loaded via YamlDotNet and validated at startup. The hand-rolled parser is gone, and no runtime registration path exists.
   4. The in-house JCS passes the RFC 8785 and cyberphone vectors. A shared golden-vector set is committed under `contracts/` for hometown to run (Q20).
 
-**Plans**: TBD
+**Plans**: 7 plans
+**Wave 1**
+
+- [ ] 02-01-PLAN.md — In-house RFC 8785 JCS, lossless-number rule, golden vectors in contracts/jcs/v1 (API-09)
+- [ ] 02-02-PLAN.md — JsonSchema.Net 8.0.5, SchemaValidator, versioned contracts and v1 proposal schemas (API-05)
+- [ ] 02-03-PLAN.md — Migration 0004 (canonical_body, body_sha256, proposal_hash) and tenant-scoped FindByRun (API-06, API-07)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 02-04-PLAN.md — Whole-body I-JSON gate: duplicate keys, lossy numbers, surrogate-name safety (API-04)
+- [ ] 02-05-PLAN.md — YamlStream catalog loader, manifest, D-02 vetting, GET /v1/catalog/{version} (API-03, API-10)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 02-06-PLAN.md — Envelope, catalog and parameter schema validation on POST; Phase 1 fixtures updated (API-04, API-05, API-10)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 02-07-PLAN.md — Idempotent submission: replay 200, conflict 409, race-safe, stored hashes (API-06, API-07)
+
 **Notes**: Working defaults Q1 and Q2 apply (envelope, then catalog lookup, then parameter schema). The `not_in_catalog` stored refusal is delivered in Phase 4 with the refusal machinery. Spikes: `JsonDocumentOptions.AllowDuplicateProperties`, lone surrogates, the privileges `ON CONFLICT DO NOTHING` needs.
 
 ### Phase 3: Trace Verification

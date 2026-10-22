@@ -38,13 +38,13 @@ created: 2026-10-21
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | TBD | API-09 | — | JCS output matches RFC 8785 App. B and cyberphone vectors; golden vectors in `contracts/jcs/v1/` recompute byte-for-byte | unit | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_09"` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | API-04 | — | Duplicate keys, lone surrogates, lossy numbers, null optional, coercion-needed values → 400, nothing stored, no 500 | unit + integration | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_04"` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | API-05 | — | Contract schemas accept valid and reject invalid examples (format assertion on) | unit | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_05"` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | API-06 | — | Same body replay → 200 same id + current state; different body → 409, no new row, log has no body; run_id missing/invalid → 400 first | integration | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_06"` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | API-07 | — | N parallel first submissions → exactly one row | integration | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_07"` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | API-03 | — | GET catalog returns `crm.case_note@1` with parameter schema; 404 unknown; 401 inactive | integration | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_03"` | ❌ W0 | ⬜ pending |
-| TBD | TBD | TBD | API-10 | — | YamlDotNet load; D-02 violations and duplicate YAML keys fail startup; no runtime registration | unit + architecture | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_10"` | ❌ W0 | ⬜ pending |
+| 02-01-T1,T2 | 02-01 | 1 | API-09 | — | JCS output matches RFC 8785 App. B and cyberphone vectors; golden vectors in `contracts/jcs/v1/` recompute byte-for-byte | unit | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_09"` | ❌ W0 | ⬜ pending |
+| 02-04-T1,T2; 02-06-T1,T2 | 02-04, 02-06 | 2, 3 | API-04 | — | Duplicate keys, lone surrogates, lossy numbers, null optional, coercion-needed values → 400, nothing stored, no 500 | unit + integration | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_04"` | ❌ W0 | ⬜ pending |
+| 02-02-T2,T3; 02-06-T1 | 02-02, 02-06 | 1, 3 | API-05 | — | Contract schemas accept valid and reject invalid examples (format assertion on) | unit | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_05"` | ❌ W0 | ⬜ pending |
+| 02-03-T1,T2; 02-07-T1,T2 | 02-03, 02-07 | 1, 4 | API-06 | — | Same body replay → 200 same id + current state; different body → 409, no new row, log has no body; run_id missing/invalid → 400 first | integration | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_06"` | ❌ W0 | ⬜ pending |
+| 02-07-T1,T2 | 02-07 | 4 | API-07 | — | N parallel first submissions → exactly one row | integration | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_07"` | ❌ W0 | ⬜ pending |
+| 02-05-T2 | 02-05 | 2 | API-03 | — | GET catalog returns `crm.case_note@1` with parameter schema; 404 unknown; 401 inactive | integration | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_03"` | ❌ W0 | ⬜ pending |
+| 02-05-T1,T2; 02-06 | 02-05 | 2 | API-10 | — | YamlDotNet load; D-02 violations and duplicate YAML keys fail startup; no runtime registration | unit + architecture | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~API_10"` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
