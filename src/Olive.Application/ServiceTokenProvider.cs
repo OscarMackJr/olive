@@ -87,7 +87,15 @@ public sealed class ServiceTokenProvider(ITokenIssuer issuer, IOperationalAlarm 
             return new TokenOutcome.Failed("token_outlives_session_key");
         }
 
-        var usableUntil = (grant.ExpiresAt < key.ExpiresAt ? grant.ExpiresAt : key.ExpiresAt) - _skew;
+        var effectiveExpiry = grant.ExpiresAt < key.ExpiresAt ? grant.ExpiresAt : key.ExpiresAt;
+        if (effectiveExpiry <= now)
+        {
+            // WR-06: never hand hometown a token that is already dead; its 401 would raise a credential alarm that blames Olive.
+            // Not alarmed here: an expired grant is a timing fault, not a registration fault. A near-expiry token is still used once.
+            return new TokenOutcome.Failed("token_already_expired");
+        }
+
+        var usableUntil = effectiveExpiry - _skew;
         if (usableUntil > now)
         {
             if (_cache.Count >= Capacity)

@@ -59,6 +59,31 @@ public sealed class ServiceTokenProviderTests
         Assert.Equal(2, issuer.Calls);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-60)]
+    [Trait("Category", "Unit")]
+    public async Task IDN_06_freshly_issued_token_already_expired_fails_without_alarm_and_is_not_cached(int secondsFromNow)
+    {
+        var dead = Grant(expires: Start.AddSeconds(secondsFromNow));
+        var (p, issuer, alarm, _) = Make(Issued(dead), Issued(dead));
+        var first = Assert.IsType<TokenOutcome.Failed>(await p.GetAsync(Session, Key(), TestContext.Current.CancellationToken));
+        Assert.Equal("token_already_expired", first.Cause);
+        Assert.IsType<TokenOutcome.Failed>(await p.GetAsync(Session, Key(), TestContext.Current.CancellationToken));
+        Assert.Equal(2, issuer.Calls);
+        Assert.Empty(alarm.Codes);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task IDN_06_session_key_already_expired_at_issue_fails_without_alarm()
+    {
+        var (p, _, alarm, _) = Make(Issued(Grant(expires: Start)));
+        var r = Assert.IsType<TokenOutcome.Failed>(await p.GetAsync(Session, Key(expires: Start), TestContext.Current.CancellationToken));
+        Assert.Equal("token_already_expired", r.Cause);
+        Assert.Empty(alarm.Codes);
+    }
+
     [Fact]
     [Trait("Category", "Unit")]
     public async Task IDN_05_issuer_unavailable_fails_without_alarm()
