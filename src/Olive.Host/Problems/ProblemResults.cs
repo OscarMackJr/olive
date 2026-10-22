@@ -27,6 +27,8 @@ public static class ProblemResults
         ProblemReasons.ProposalNotFound => "The proposal was not found.",
         ProblemReasons.DuplicateRun => "A proposal for this run already exists.",
         ProblemReasons.CatalogVersionNotFound => "The catalog version was not found.",
+        ProblemReasons.SchemaViolation => "The request does not satisfy the contract schema.",
+        ProblemReasons.NotInCatalog => "The action type is not in the catalog.",
         ProblemReasons.PayloadTooLarge => "The request body is too large.",
         ProblemReasons.IntrospectionUnavailable => "Key introspection is unavailable.",
         _ => "An internal error occurred.",
@@ -37,6 +39,15 @@ public static class ProblemResults
         context.Response.StatusCode = status;
         context.Response.ContentType = "application/problem+json";
         await context.Response.WriteAsJsonAsync(Create(status, reason), (System.Text.Json.JsonSerializerOptions?)null, "application/problem+json", context.RequestAborted);
+    }
+
+    // Pointer and keyword are schema locations, never caller values.
+    public static IResult Result(int status, string reason, string pointer, string keyword)
+    {
+        var problem = Create(status, reason);
+        problem.Extensions["pointer"] = pointer;
+        problem.Extensions["keyword"] = keyword;
+        return Results.Json(problem, (System.Text.Json.JsonSerializerOptions?)null, "application/problem+json", status);
     }
 
     public static IResult Result(int status, string reason) =>

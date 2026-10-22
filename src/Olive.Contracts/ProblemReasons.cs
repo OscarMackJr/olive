@@ -12,5 +12,7 @@ public static class ProblemReasons
     public const string CatalogVersionNotFound = "catalog_version_not_found";
     public const string PayloadTooLarge = "payload_too_large";
     public const string IntrospectionUnavailable = "introspection_unavailable";
+    public const string SchemaViolation = "schema_violation";
+    public const string NotInCatalog = "not_in_catalog";
     public const string InternalError = "internal_error";
 }
