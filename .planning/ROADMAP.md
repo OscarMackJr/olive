@@ -140,7 +140,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 03-04-PLAN.md — Slice: stored trace refusals with reasons, 201 body, final replay (TRC-03..06)
+- [x] 03-04-PLAN.md — Slice: stored trace refusals with reasons, 201 body, final replay (TRC-03..06)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -277,7 +277,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 |-------|----------------|--------|-----------|
 | 1. Foundation and Walking Skeleton | 13/13 | Complete    | 2026-10-22 |
 | 2. Contract Integrity and Idempotent Submission | 7/7 | Complete    | 2026-10-22 |
-| 3. Trace Verification | 3/6 | In Progress|  |
+| 3. Trace Verification | 4/6 | In Progress|  |
 | 4. Policy, Expiry and Refusal | 0/TBD | Not started | - |
 | 5. Generic Review Queue and Action Approval | 0/TBD | Not started | - |
 | 6. Simulated Execution and Audit Chain | 0/TBD | Not started | - |
