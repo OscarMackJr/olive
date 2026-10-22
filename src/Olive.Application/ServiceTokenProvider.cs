@@ -7,7 +7,8 @@ public abstract record TokenOutcome
 {
     public sealed record Ok(ServiceTokenGrant Grant) : TokenOutcome;
     // Cause is a static snake_case code for Warning logs only; never shown to the caller (D-06).
-    public sealed record Failed(string Cause) : TokenOutcome;
+    // ExceptionType is the exception type name only (never its message) when the issuer threw (WR-02).
+    public sealed record Failed(string Cause, string? ExceptionType = null) : TokenOutcome;
 }
 
 // The only type that ever hands a SessionKey to an outbound port (D17.1). Time comes only from the injected TimeProvider.
@@ -48,7 +49,17 @@ public sealed class ServiceTokenProvider(ITokenIssuer issuer, IOperationalAlarm 
             _cache.TryRemove(cacheKey, out _);
         }
 
-        var result = await issuer.IssueAsync(sessionKey, ct);
+        TokenIssueResult result;
+        try
+        {
+            result = await issuer.IssueAsync(sessionKey, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // Fail closed and retryable (D-06); the message may carry secrets, so only the type name is kept.
+            return new TokenOutcome.Failed("token_issuer_exception", e.GetType().Name);
+        }
+
         switch (result)
         {
             case TokenIssueResult.Unavailable:

@@ -56,6 +56,16 @@ public sealed class HangingTokenIssuer : ITokenIssuer
     }
 }
 
+public sealed class ThrowingTokenIssuer : ITokenIssuer
+{
+    public Task<TokenIssueResult> IssueAsync(SessionKey key, CancellationToken ct) => throw new InvalidOperationException("issuer-secret-detail");
+}
+
+public sealed class ThrowingTraceResolver : ITraceResolver
+{
+    public Task<TraceLookup> ResolveAsync(ServiceTokenGrant grant, string traceId, CancellationToken ct) => throw new IOException("resolver-secret-detail");
+}
+
 public static class TraceBuilders
 {
     public static readonly Guid Tenant = Guid.Parse("11111111-1111-1111-1111-111111111111");

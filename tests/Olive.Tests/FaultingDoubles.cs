@@ -5,7 +5,7 @@ using Olive.Integrations.Popeye;
 namespace Olive.Tests;
 
 // D-16: fault cases live only in the test project. Production stubs have no toggles.
-public enum ResolverFault { None, Unavailable, Hang, CallerRejected401, CallerRejected403, Malformed, NotFound }
+public enum ResolverFault { None, Unavailable, Hang, Throw, CallerRejected401, CallerRejected403, Malformed, NotFound }
 
 public sealed class FaultingTraceResolver(ITraceResolver healthy, ResolverFault mode = ResolverFault.None) : ITraceResolver
 {
@@ -16,6 +16,7 @@ public sealed class FaultingTraceResolver(ITraceResolver healthy, ResolverFault 
         switch (Mode)
         {
             case ResolverFault.Unavailable: return new TraceLookup.Unavailable();
+            case ResolverFault.Throw: throw new HttpRequestException("resolver-fault-secret-detail");
             case ResolverFault.Hang:
                 await Task.Delay(Timeout.Infinite, ct);
                 return new TraceLookup.Unavailable();
@@ -28,7 +29,7 @@ public sealed class FaultingTraceResolver(ITraceResolver healthy, ResolverFault 
     }
 }
 
-public enum TokenFault { None, Unavailable, Hang, Refused, CallerRejected401, CallerRejected403, WrongTenant, WrongDelegatedAgent, WrongKeyId, ExpiresAfterKey }
+public enum TokenFault { None, Unavailable, Hang, Throw, Refused, CallerRejected401, CallerRejected403, WrongTenant, WrongDelegatedAgent, WrongKeyId, ExpiresAfterKey }
 
 public sealed class FaultingTokenIssuer(TokenFault mode = TokenFault.None) : ITokenIssuer
 {
@@ -42,6 +43,7 @@ public sealed class FaultingTokenIssuer(TokenFault mode = TokenFault.None) : ITo
         switch (Mode)
         {
             case TokenFault.Unavailable: return new TokenIssueResult.Unavailable();
+            case TokenFault.Throw: throw new HttpRequestException("token-fault-secret-detail");
             case TokenFault.Hang:
                 await Task.Delay(Timeout.Infinite, ct);
                 return new TokenIssueResult.Unavailable();

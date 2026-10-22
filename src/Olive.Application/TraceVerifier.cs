@@ -23,11 +23,16 @@ public sealed class TraceVerifier(ServiceTokenProvider tokens, ITraceResolver re
             {
                 return new TraceVerdict.Unavailable("token_issuer_timeout");
             }
+            catch (Exception e) when (!ct.IsCancellationRequested)
+            {
+                return new TraceVerdict.Unavailable("token_issuer_exception", e.GetType().Name);
+            }
         }
 
         if (token is not TokenOutcome.Ok ok)
         {
-            return new TraceVerdict.Unavailable(((TokenOutcome.Failed)token).Cause);
+            var failed = (TokenOutcome.Failed)token;
+            return new TraceVerdict.Unavailable(failed.Cause, failed.ExceptionType);
         }
 
         var grant = ok.Grant;
@@ -42,6 +47,11 @@ public sealed class TraceVerifier(ServiceTokenProvider tokens, ITraceResolver re
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
                 return new TraceVerdict.Unavailable("trace_resolver_timeout");
+            }
+            catch (Exception e) when (!ct.IsCancellationRequested)
+            {
+                // WR-02: a thrown port fault is still fail-closed 503 and retryable, never a 500. Type name only.
+                return new TraceVerdict.Unavailable("trace_resolver_exception", e.GetType().Name);
             }
         }
 

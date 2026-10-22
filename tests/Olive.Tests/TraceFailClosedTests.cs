@@ -104,6 +104,33 @@ public sealed class TraceFailClosedTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task TRC_07_resolver_exception_gives_503_retryable_and_stores_nothing()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = Factory(db, new FaultingTraceResolver(SeededFixture(), ResolverFault.Throw));
+        using var client = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
+        await AssertUnavailable(await Post(client, Body), db, factory);
+        Assert.Empty(factory.Alarms.Codes);
+        Assert.Contains("exception_type=HttpRequestException", factory.Logs.Text);
+        Assert.DoesNotContain("resolver-fault-secret-detail", factory.Logs.Text);
+        Assert.False(factory.Logs.HasErrorOrAbove);
+    }
+
+    [Fact]
+    public async Task TRC_07_popeye_token_exception_gives_503_retryable_and_stores_nothing()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = Factory(db, SeededFixture(), new FaultingTokenIssuer(TokenFault.Throw));
+        using var client = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
+        await AssertUnavailable(await Post(client, Body), db, factory);
+        Assert.DoesNotContain("resolve", factory.Events);
+        Assert.Empty(factory.Alarms.Codes);
+        Assert.Contains("exception_type=HttpRequestException", factory.Logs.Text);
+        Assert.DoesNotContain("token-fault-secret-detail", factory.Logs.Text);
+        Assert.False(factory.Logs.HasErrorOrAbove);
+    }
+
+    [Fact]
     public async Task TRC_07_hometown_401_gives_503_and_alarm_trace_resolver_401()
     {
         await using var db = await fixture.CreateDatabaseAsync();
@@ -258,6 +285,7 @@ public sealed class TraceFailClosedTests(PostgresFixture fixture)
     [InlineData(ResolverFault.CallerRejected403)]
     [InlineData(ResolverFault.Malformed)]
     [InlineData(ResolverFault.Unavailable)]
+    [InlineData(ResolverFault.Throw)]
     public async Task TRC_07_503_body_and_headers_never_expose_the_cause(ResolverFault fault)
     {
         await using var db = await fixture.CreateDatabaseAsync();

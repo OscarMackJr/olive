@@ -142,7 +142,8 @@ public static class ProposalEndpoints
                     // Fail closed for every other verdict: nothing is stored. The cause goes only to the Warning log (D-06).
                     if (verdict is TraceVerdict.Unavailable unavailable)
                     {
-                        logger.LogWarning("Trace verification unavailable tenant_id={TenantId} agent_id={AgentId} cause={Cause}", key.TenantId, key.AgentId, unavailable.Cause);
+                        logger.LogWarning("Trace verification unavailable tenant_id={TenantId} agent_id={AgentId} cause={Cause} exception_type={ExceptionType}",
+                            key.TenantId, key.AgentId, unavailable.Cause, unavailable.ExceptionType ?? "none");
                     }
 
                     return TraceUnavailable();
