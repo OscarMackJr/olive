@@ -223,6 +223,17 @@ public sealed class TraceVerifierTests
 
     [Fact]
     [Trait("Category", "Unit")]
+    public async Task TRC_03_answer_for_a_different_trace_id_is_unavailable_with_malformed_alarm()
+    {
+        // Every other fact matches; only the trace the answer is for differs from the trace_ref that was asked for.
+        var rig = Make(Resolver(Facts() with { TraceId = "trace-other" }));
+        var v = Assert.IsType<TraceVerdict.Unavailable>(await Run(rig, ct: TestContext.Current.CancellationToken));
+        Assert.Equal("trace_id_mismatch", v.Cause);
+        Assert.Equal([AlarmCodes.TraceResponseMalformed], rig.Alarm.Codes);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public async Task TRC_07_client_abort_propagates_instead_of_unavailable()
     {
         using var cts = new CancellationTokenSource();

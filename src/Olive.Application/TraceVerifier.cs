@@ -65,6 +65,10 @@ public sealed class TraceVerifier(ServiceTokenProvider tokens, ITraceResolver re
             case TraceLookup.Malformed:
                 alarm.Raise(AlarmCodes.TraceResponseMalformed, Component);
                 return new TraceVerdict.Unavailable("trace_response_malformed");
+            case TraceLookup.Found found when !string.Equals(found.Facts.TraceId, traceRef, StringComparison.Ordinal):
+                // WR-04: an answer for a different trace is a protocol violation, never evidence for this proposal. Fail closed.
+                alarm.Raise(AlarmCodes.TraceResponseMalformed, Component);
+                return new TraceVerdict.Unavailable("trace_id_mismatch");
             case TraceLookup.Found found:
                 return Check(found, key, grant, runId, proposalHash);
             default:
