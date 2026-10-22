@@ -242,6 +242,8 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
 
         public Task<ProposalRecord?> GetAsync(Guid tenantId, Guid proposalId, CancellationToken ct) => throw new NotSupportedException();
 
+        public Task<ProposalRunRecord?> FindByRunAsync(Guid tenantId, string agentId, string runId, CancellationToken ct) => Task.FromResult<ProposalRunRecord?>(null);
+
         public Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct) => throw new NotSupportedException();
     }
 
