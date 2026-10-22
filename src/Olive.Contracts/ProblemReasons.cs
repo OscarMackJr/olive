@@ -9,6 +9,7 @@ public static class ProblemReasons
     public const string InvalidRequest = "invalid_request";
     public const string ProposalNotFound = "proposal_not_found";
     public const string DuplicateRun = "duplicate_run";
+    public const string CatalogVersionNotFound = "catalog_version_not_found";
     public const string PayloadTooLarge = "payload_too_large";
     public const string IntrospectionUnavailable = "introspection_unavailable";
     public const string InternalError = "internal_error";

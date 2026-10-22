@@ -26,6 +26,7 @@ public static class ProblemResults
         ProblemReasons.InvalidRequest => "The request is invalid.",
         ProblemReasons.ProposalNotFound => "The proposal was not found.",
         ProblemReasons.DuplicateRun => "A proposal for this run already exists.",
+        ProblemReasons.CatalogVersionNotFound => "The catalog version was not found.",
         ProblemReasons.PayloadTooLarge => "The request body is too large.",
         ProblemReasons.IntrospectionUnavailable => "Key introspection is unavailable.",
         _ => "An internal error occurred.",
