@@ -20,7 +20,8 @@ Olive Phase 1 goes from a single-file in-memory scaffold to a governed action br
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation and Walking Skeleton** - Restructured solution, guards, both tenant-isolation layers, migrator, and an agent can submit and read a proposal through the introspection stub (completed 2026-10-21)
-- [x] **Phase 2: Contract Integrity and Idempotent Submission** - Strict raw-byte validation, v1 schemas, in-house JCS, YamlDotNet catalog endpoint, and race-safe idempotency on (agent_id, run_id) (completed 2026-10-22)
+- [x] **Phase 2: Contract Integrity and Idempotent Submission** - Strict raw-byte validation, v1 schemas, in-house JCS, YamlDotNet catalog endpoint, and race-safe idempotency on (agent_id, run_id)
+ (completed 2026-10-22)
 - [ ] **Phase 3: Trace Verification** - Fixture-backed trace resolver with ordered checks 1-5, fail-closed 503s, popeye token stub and cache, and session-key capture
 - [ ] **Phase 4: Policy, Expiry and Refusal** - Purpose, entitlement and rate-limit policy before any queueing, guarded lifecycle transitions, absolute expiry, and the asserted pipeline order
 - [ ] **Phase 5: Generic Review Queue and Action Approval** - IR-1 queue with kind registry, claim/release/decide/audit, approval rules, lazy expiry withdrawal, and the beat 4 demo
@@ -201,6 +202,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. One query against a `security_invoker` view, starting from an execution record, returns the proposal, trace verification, policy decision, named approver with rationale, and execution result.
   5. A scripted beat 2 demo submits a fixture-traced proposal, approves it, executes it in simulation, and prints the chain from the execution record.
 
+**Carry-over from Phase 3 (IDN-08)**: extend the sentinel-key search to the simulated executor JSONL output (reuse `SentinelScan.AddSource`); Phase 3 covered logs, responses and stored rows only.
 **Plans**: TBD
 **Research flag**: Run `/gsd-plan-phase 6 --research-phase`. Topics: the execution trigger, holding a per-proposal lock across the executor, and `execution_failed` semantics.
 **Notes**: Working defaults Q5 (in-process after commit plus startup sweep), Q6 (terminal failure), Q16 (re-check catalog and expiry, not entitlements) and Q18 (view, no new API endpoint) apply.
