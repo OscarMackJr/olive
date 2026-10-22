@@ -19,6 +19,23 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
     internal const string FullBody =
         "{\"run_id\":\"run-1\",\"action_type\":\"crm.case_note@1\",\"party_ref\":\"party://p1\",\"parameters\":{\"case_ref\":\"payload://c1\",\"note_ref\":\"payload://n1\"},\"justification\":\"j\",\"trace_ref\":\"trace://t1\",\"nono_session_id\":\"nono-1\"}";
 
+    // A valid all-required envelope (API-04). Optional nono_session_id is omitted unless given.
+    internal static string BodyFor(string runId, string? nonoSessionId = null, string? partyRef = null) =>
+        "{\"run_id\":\"" + runId + "\",\"action_type\":\"crm.case_note@1\",\"party_ref\":\"" + (partyRef ?? "party://p1")
+        + "\",\"parameters\":{\"case_ref\":\"payload://c1\",\"note_ref\":\"payload://n1\"},\"justification\":\"j\",\"trace_ref\":\"trace://t1\""
+        + (nonoSessionId is null ? "" : ",\"nono_session_id\":\"" + nonoSessionId + "\"") + "}";
+
+    // A catalog whose actions accept any parameters object, so hostile-but-gate-legal parameter content can reach storage.
+    internal static Olive.Catalog.CatalogSet PermissiveCatalog()
+    {
+        var any = Olive.Catalog.SchemaValidator.Compile("{\"type\":\"object\"}");
+        return new([new Olive.Catalog.CatalogRelease(1,
+        [
+            new Olive.Catalog.CatalogEntry("test.open@1", JsonDocument.Parse("{}").RootElement, any),
+            new Olive.Catalog.CatalogEntry("crm.case_note@1", JsonDocument.Parse("{}").RootElement, any),
+        ])]);
+    }
+
     internal static StringContent Json(string body) => new(body, Encoding.UTF8, "application/json");
 
     internal static async Task<NpgsqlConnection> OpenReaderAsync(TestDatabase db, Guid tenant, NpgsqlTransaction? _ = null)
@@ -106,11 +123,6 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         "{\"run_id\":1}",
         "{\"run_id\":\"\"}",
         "{\"run_id\":null}",
-        "{\"run_id\":\"r\",\"parameters\":[]}",
-        "{\"run_id\":\"r\",\"parameters\":null}",
-        "{\"run_id\":\"r\",\"action_type\":5}",
-        "{\"run_id\":\"r\",\"nono_session_id\":{}}",
-        "{\"run_id\":\"r\",\"party_ref\":null}",
         "{\"run_id\":\"r\",\"parameters\":{\"a\":\"\\u0000\"}}",
         """{"run_id":"r","parameters":{"\u0000":1}}""",
         "{\"run_id\":\"r\",\"parameters\":{\"d\":" + new string('[', 70) + new string(']', 70) + "}}",
@@ -125,6 +137,29 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         using var alpha = factory.CreateKeyClient(AlphaKey);
         var r = await alpha.PostAsync("/v1/proposals", Json(body), TestContext.Current.CancellationToken);
         await AssertProblemAsync(r, HttpStatusCode.BadRequest, ProblemReasons.InvalidRequest);
+        Assert.Equal(0, await CountRowsAsync(db, Alpha));
+        Assert.DoesNotContain("insert", factory.Events);
+    }
+
+    public static TheoryData<string> SchemaViolationBodies() => new()
+    {
+        "{\"run_id\":\"r\",\"parameters\":[]}",
+        "{\"run_id\":\"r\",\"parameters\":null}",
+        "{\"run_id\":\"r\",\"action_type\":5}",
+        "{\"run_id\":\"r\",\"nono_session_id\":{}}",
+        "{\"run_id\":\"r\",\"party_ref\":null}",
+        "{\"run_id\":\"only\",\"unknown\":1}",
+    };
+
+    [Theory]
+    [MemberData(nameof(SchemaViolationBodies))]
+    public async Task API_05_envelope_schema_violations_give_400_schema_violation_and_store_nothing(string body)
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", Json(body), TestContext.Current.CancellationToken);
+        await AssertProblemAsync(r, HttpStatusCode.BadRequest, ProblemReasons.SchemaViolation);
         Assert.Equal(0, await CountRowsAsync(db, Alpha));
         Assert.DoesNotContain("insert", factory.Events);
     }
@@ -152,7 +187,10 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         Assert.False(factory.Logs.HasErrorOrAbove);
     }
 
-    private static string NumBody(string parametersJson) => "{\"run_id\":\"r\",\"parameters\":" + parametersJson + "}";
+    // Hostile content stays in parameters, inside an otherwise-valid envelope for the permissive test.open@1 action.
+    private static string NumBody(string parametersJson) =>
+        "{\"run_id\":\"r\",\"action_type\":\"test.open@1\",\"party_ref\":\"party://p1\",\"parameters\":" + parametersJson
+        + ",\"justification\":\"j\",\"trace_ref\":\"trace://t1\"}";
 
     public static TheoryData<string> NumberRangeBodies() => new()
     {
@@ -195,7 +233,7 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         NumBody("{\"x\":[" + string.Join(",", Enumerable.Repeat("1", 70000)) + "]}"),
         NumBody("{\"x\":[" + string.Join(",", Enumerable.Repeat("1234567890", 7000)) + "]}"),
         NumBody("""{"x":"😀"}"""),
-        """{"run_id":"r","justification":"😀"}""",
+        NumBody("{}").Replace("\"justification\":\"j\"", "\"justification\":\"😀\""),
         NumBody("""{"x":"\\u0000"}"""),
     };
 
@@ -204,7 +242,7 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
     public async Task API_01_valid_numbers_and_strings_still_accepted(string body)
     {
         await using var db = await fixture.CreateDatabaseAsync();
-        await using var factory = new OliveApiFactory(db);
+        await using var factory = new OliveApiFactory(db, configureServices: s => s.AddSingleton(PermissiveCatalog()));
         using var alpha = factory.CreateKeyClient(AlphaKey);
         var r = await alpha.PostAsync("/v1/proposals", Json(body), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
@@ -300,19 +338,19 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
     }
 
     [Fact]
-    public async Task API_01_only_run_id_is_mandatory()
+    public async Task API_04_run_id_alone_is_not_enough_every_envelope_field_is_required()
     {
         await using var db = await fixture.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db);
         using var alpha = factory.CreateKeyClient(AlphaKey);
-        var r = await alpha.PostAsync("/v1/proposals", Json("{\"run_id\":\"only\",\"unknown\":1}"), TestContext.Current.CancellationToken);
-        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        Assert.Equal(1, await CountRowsAsync(db, Alpha));
+        var r = await alpha.PostAsync("/v1/proposals", Json("{\"run_id\":\"only\"}"), TestContext.Current.CancellationToken);
+        await AssertProblemAsync(r, HttpStatusCode.BadRequest, ProblemReasons.SchemaViolation);
+        Assert.Equal(0, await CountRowsAsync(db, Alpha));
     }
 
     private static string BodyOfSize(int total)
     {
-        const string prefix = "{\"run_id\":\"r\",\"justification\":\"";
+        const string prefix = "{\"run_id\":\"r\",\"action_type\":\"crm.case_note@1\",\"party_ref\":\"party://p1\",\"parameters\":{\"case_ref\":\"payload://c1\",\"note_ref\":\"payload://n1\"},\"trace_ref\":\"trace://t1\",\"justification\":\"";
         const string suffix = "\"}";
         return prefix + new string('a', total - prefix.Length - suffix.Length) + suffix;
     }

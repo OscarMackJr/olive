@@ -163,7 +163,7 @@ public sealed class IdentityEndpointTests(PostgresFixture fixture)
         await using var db = await fixture.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db);
         using var client = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
-        var body = "{\"run_id\":\"run-9\",\"nono_session_id\":\"nono-9\"}";
+        var body = ApiProposalTests.BodyFor("run-9", nonoSessionId: "nono-9");
         var r = await client.PostAsync("/v1/proposals", Json(body), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
         var id = JsonDocument.Parse(await r.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).RootElement.GetProperty("proposal_id").GetGuid();
@@ -186,7 +186,14 @@ public sealed class IdentityEndpointTests(PostgresFixture fixture)
         await using var db = await fixture.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db);
         using var client = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
-        var body = $"{{\"run_id\":\"run-t\",\"tenant_id\":\"{ApiProposalTests.Beta}\",\"agent_id\":\"mallory\",\"nono_session_id\":\"{ApiProposalTests.Beta}\"}}";
+        // Identity fields in the body are refused outright by the closed envelope (API-04); nothing is stored for either tenant.
+        var spoofed = ApiProposalTests.BodyFor("run-s")[..^1] + $",\"tenant_id\":\"{ApiProposalTests.Beta}\",\"agent_id\":\"mallory\"}}";
+        var refused = await client.PostAsync("/v1/proposals", Json(spoofed), TestContext.Current.CancellationToken);
+        await ApiProposalTests.AssertProblemAsync(refused, HttpStatusCode.BadRequest, ProblemReasons.SchemaViolation);
+        Assert.Equal(0, await ApiProposalTests.CountRowsAsync(db, ApiProposalTests.Alpha));
+
+        // A tenant-looking value in an allowed field is only advisory data; the tenant still comes from the key.
+        var body = ApiProposalTests.BodyFor("run-t", nonoSessionId: ApiProposalTests.Beta.ToString());
         var r = await client.PostAsync("/v1/proposals", Json(body), TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
         Assert.Equal(1, await ApiProposalTests.CountRowsAsync(db, ApiProposalTests.Alpha));
