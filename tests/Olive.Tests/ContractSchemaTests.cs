@@ -60,7 +60,7 @@ public sealed class ContractSchemaTests
     [Theory]
     [InlineData("""{"action_type":"crm.case_note@1","party_ref":"p","parameters":{},"justification":"j","trace_ref":"t"}""", "/", "required")]
     [InlineData("""{"run_id":"r","action_type":"crm.case_note@1","party_ref":"p","parameters":{},"justification":"j","trace_ref":"t","nono_session_id":null}""", "/nono_session_id", "type")]
-    [InlineData("""{"run_id":"r","action_type":"crm.case_note@1","party_ref":"p","parameters":{},"justification":"j","trace_ref":"t","extra":1}""", "/extra", "additionalProperties")]
+    [InlineData("""{"run_id":"r","action_type":"crm.case_note@1","party_ref":"p","parameters":{},"justification":"j","trace_ref":"t","extra":1}""", "/", "additionalProperties")]
     [InlineData("""{"run_id":"r","action_type":"crm.case_note@1","party_ref":"p","parameters":[],"justification":"j","trace_ref":"t"}""", "/parameters", "type")]
     [Trait("Category", "Unit")]
     public void API_05_request_schema_rejects_bad_envelopes(string body, string pointer, string keyword)

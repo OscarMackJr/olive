@@ -91,7 +91,7 @@ public sealed class ApiIntegrityTests(PostgresFixture fixture)
     public async Task API_05_parameter_schema_failures_give_400_with_prefixed_pointer_and_store_nothing()
     {
         var (p, rows) = await PostRefusedAsync(Env(parameters: "{\"case_ref\":\"c\",\"note_ref\":\"n\",\"extra\":1}"), ProblemReasons.SchemaViolation);
-        Assert.Equal("/parameters/extra", p.GetProperty("pointer").GetString());
+        Assert.Equal("/parameters", p.GetProperty("pointer").GetString());
         Assert.Equal("additionalProperties", p.GetProperty("keyword").GetString());
         Assert.Equal(0, rows);
         var (p2, _) = await PostRefusedAsync(Env(parameters: "{\"case_ref\":12,\"note_ref\":\"n\"}"), ProblemReasons.SchemaViolation);

@@ -57,7 +57,7 @@ public sealed class SubmissionValidator(CatalogSet catalog)
         var parameters = entry.ParametersSchema.Validate(root.GetProperty("parameters"));
         if (parameters is not null)
         {
-            return new SubmissionOutcome.Violation(parameters with { Pointer = "/parameters" + parameters.Pointer });
+            return new SubmissionOutcome.Violation(parameters with { Pointer = SchemaValidator.CapPointer("/parameters" + parameters.Pointer) });
         }
 
         return new SubmissionOutcome.Ok(entry);

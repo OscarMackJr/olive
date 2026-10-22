@@ -64,7 +64,7 @@ public sealed class SubmissionValidatorTests
     [Fact]
     [Trait("Category", "Unit")]
     public void API_05_extra_top_level_field_reports_additionalProperties() =>
-        AssertViolation(Check(Body(extra: ",\"zzz\":1")), "/zzz", "additionalProperties");
+        AssertViolation(Check(Body(extra: ",\"zzz\":1")), "", "additionalProperties");
 
     [Fact]
     [Trait("Category", "Unit")]
@@ -83,7 +83,7 @@ public sealed class SubmissionValidatorTests
     [Trait("Category", "Unit")]
     public void API_05_parameter_schema_failures_carry_prefixed_pointer()
     {
-        AssertViolation(Check(Body(parameters: "{\"case_ref\":\"c\",\"note_ref\":\"n\",\"extra\":1}")), "/parameters/extra", "additionalProperties");
+        AssertViolation(Check(Body(parameters: "{\"case_ref\":\"c\",\"note_ref\":\"n\",\"extra\":1}")), "/parameters", "additionalProperties");
         AssertViolation(Check(Body(parameters: "{\"case_ref\":5,\"note_ref\":\"n\"}")), "/parameters/case_ref", "type");
         AssertViolation(Check(Body(parameters: "{\"case_ref\":\"c\"}")), "/parameters", "required");
     }
@@ -92,7 +92,7 @@ public sealed class SubmissionValidatorTests
     [Trait("Category", "Unit")]
     public void API_05_envelope_failure_wins_over_catalog_miss_and_miss_wins_over_parameters()
     {
-        AssertViolation(Check(Body(action: "nope@1", extra: ",\"zzz\":1")), "/zzz", "additionalProperties");
+        AssertViolation(Check(Body(action: "nope@1", extra: ",\"zzz\":1")), "", "additionalProperties");
         Assert.IsType<SubmissionOutcome.NotInCatalog>(Check(Body(action: "nope@1", parameters: "{\"bad\":1}")));
     }
 

@@ -48,18 +48,37 @@ public sealed class SchemaValidator
         }
 
         var pointer = first.InstanceLocation.ToString();
-        if (pointer.Length > MaxPointerLength)
-        {
-            pointer = pointer[..MaxPointerLength];
-        }
-
         var key = first.Errors!.Keys.First();
         if (key.Length == 0)
         {
             key = LastSegment(first.EvaluationPath.ToString());
         }
 
-        return new SchemaViolation(pointer, key);
+        // WR-03: an unknown-key failure is reported at the object that refused it, never at the caller-chosen key name.
+        if (key is "additionalProperties" or "unevaluatedProperties")
+        {
+            var i = pointer.LastIndexOf('/');
+            pointer = i < 0 ? "" : pointer[..i];
+        }
+
+        return new SchemaViolation(CapPointer(pointer), key);
+    }
+
+    // Applied to the final (prefixed) pointer. Never cuts a surrogate pair or a `~0`/`~1` escape in half.
+    public static string CapPointer(string pointer)
+    {
+        if (pointer.Length <= MaxPointerLength)
+        {
+            return pointer;
+        }
+
+        var cut = MaxPointerLength;
+        while (cut > 0 && (char.IsHighSurrogate(pointer[cut - 1]) || pointer[cut - 1] == '~'))
+        {
+            cut--;
+        }
+
+        return pointer[..cut];
     }
 
     private static string LastSegment(string path)

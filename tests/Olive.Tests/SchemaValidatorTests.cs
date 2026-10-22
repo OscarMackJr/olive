@@ -33,7 +33,7 @@ public sealed class SchemaValidatorTests
     public void API_05_extra_property_reports_additionalProperties()
     {
         var v = Check(Obj, """{"n":5,"z":1}""");
-        Assert.Equal(new SchemaViolation("/z", "additionalProperties"), v);
+        Assert.Equal(new SchemaViolation("", "additionalProperties"), v);
     }
 
     [Fact]
@@ -74,9 +74,49 @@ public sealed class SchemaValidatorTests
     public void API_05_pointer_is_truncated_to_256_chars()
     {
         var name = new string('a', 400);
-        var v = Check("""{"type":"object","additionalProperties":false}""", $$"""{"{{name}}":1}""");
+        var v = Check("{\"type\":\"object\",\"properties\":{\"" + name + "\":{\"type\":\"integer\"}}}", $$"""{"{{name}}":"x"}""");
         Assert.NotNull(v);
         Assert.Equal(256, v!.Pointer.Length);
+    }
+
+    // WR-03: an unknown key is caller-chosen text (it may be a pasted secret), so it is never echoed; the refusing object is.
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void API_05_unknown_key_pointer_names_the_parent_not_the_key()
+    {
+        const string schema = """{"type":"object","additionalProperties":false,"properties":{"o":{"type":"object","additionalProperties":false}}}""";
+        var v = Check(schema, """{"o":{"sk-live-SECRET-KEY":1}}""");
+        Assert.Equal(new SchemaViolation("/o", "additionalProperties"), v);
+        var u = Check("""{"type":"object","properties":{"a":{"type":"string"}},"unevaluatedProperties":false}""", """{"a":"x","sk-live-SECRET-KEY":1}""");
+        Assert.Equal(new SchemaViolation("", "unevaluatedProperties"), u);
+    }
+
+    // WR-03: the cap applies to the final pointer and never leaves a lone high surrogate or a dangling `~` escape.
+    [Theory]
+    [Trait("Category", "Unit")]
+    [InlineData(255, "😀", 255)]
+    [InlineData(255, "~1", 255)]
+    [InlineData(256, "z", 256)]
+    public void API_05_pointer_cap_never_splits_a_surrogate_pair_or_escape(int prefixLength, string tail, int expectedLength)
+    {
+        var pointer = "/" + new string('a', prefixLength - 1) + tail;
+        var capped = SchemaValidator.CapPointer(pointer);
+        Assert.Equal(expectedLength, capped.Length);
+        Assert.False(char.IsHighSurrogate(capped[^1]));
+        Assert.NotEqual('~', capped[^1]);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void API_05_prefixed_parameters_pointer_is_capped_after_prefixing()
+    {
+        var name = new string('a', 300);
+        var schema = SchemaValidator.Compile("{\"type\":\"object\",\"properties\":{\"" + name + "\":{\"type\":\"integer\"}}}");
+        var catalog = new CatalogSet([new CatalogRelease(1, [new CatalogEntry("crm.case_note@1", JsonDocument.Parse("{}").RootElement, schema)])]);
+        using var doc = JsonDocument.Parse($$"""{"run_id":"r","action_type":"crm.case_note@1","party_ref":"p","parameters":{"{{name}}":"x"},"justification":"j","trace_ref":"t"}""");
+        var v = Assert.IsType<SubmissionOutcome.Violation>(new SubmissionValidator(catalog).Validate(doc.RootElement));
+        Assert.Equal(256, v.Detail.Pointer.Length);
+        Assert.StartsWith("/parameters/", v.Detail.Pointer);
     }
 
     [Fact]
