@@ -25,7 +25,7 @@ public static class ProblemResults
         ProblemReasons.AgentNotAllowlisted => "This agent is not allowlisted.",
         ProblemReasons.InvalidRequest => "The request is invalid.",
         ProblemReasons.ProposalNotFound => "The proposal was not found.",
-        ProblemReasons.DuplicateRun => "A proposal for this run already exists.",
+        ProblemReasons.IdempotencyConflict => "A different request already exists for this run.",
         ProblemReasons.CatalogVersionNotFound => "The catalog version was not found.",
         ProblemReasons.SchemaViolation => "The request does not satisfy the contract schema.",
         ProblemReasons.NotInCatalog => "The action type is not in the catalog.",

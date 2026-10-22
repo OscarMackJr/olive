@@ -379,15 +379,17 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
     }
 
     [Fact]
-    public async Task API_01_duplicate_run_gives_409_and_other_tenant_may_reuse_run_id()
+    public async Task API_06_different_body_same_run_gives_409_idempotency_conflict_and_other_tenant_may_reuse_run_id()
     {
         await using var db = await fixture.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db);
         using var alpha = factory.CreateKeyClient(AlphaKey);
         using var beta = factory.CreateKeyClient(BetaKey);
         Assert.Equal(HttpStatusCode.Created, (await alpha.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken)).StatusCode);
-        var dup = await alpha.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken);
-        await AssertProblemAsync(dup, HttpStatusCode.Conflict, ProblemReasons.DuplicateRun);
+        var same = await alpha.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, same.StatusCode);
+        var dup = await alpha.PostAsync("/v1/proposals", Json(FullBody.Replace("\"justification\":\"j\"", "\"justification\":\"other\"")), TestContext.Current.CancellationToken);
+        await AssertProblemAsync(dup, HttpStatusCode.Conflict, ProblemReasons.IdempotencyConflict);
         Assert.Equal(1, await CountRowsAsync(db, Alpha));
         Assert.Equal(HttpStatusCode.Created, (await beta.PostAsync("/v1/proposals", Json(FullBody), TestContext.Current.CancellationToken)).StatusCode);
         Assert.Equal(1, await CountRowsAsync(db, Beta));
