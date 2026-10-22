@@ -17,13 +17,28 @@ public abstract record SubmissionOutcome
 // The instance is validated exactly as parsed: no coercion, defaults, stripping or trimming (D-03).
 public sealed class SubmissionValidator(CatalogSet catalog)
 {
-    private static readonly Lazy<SchemaValidator> Envelope = new(() =>
+    private const string ContractInvalid = "Contract schema is missing or invalid.";
+    private const string EnvelopeResource = "contracts/proposal/v1/proposal-request.schema.json";
+
+    private static readonly Lazy<SchemaValidator> Envelope = new(() => LoadContract(typeof(SubmissionValidator).Assembly, EnvelopeResource));
+
+    // WR-05: called by the API-10 startup guard so a missing or uncompilable envelope contract stops the host before traffic.
+    public static void EnsureContractLoaded() => _ = Envelope.Value;
+
+    // Every fault is the same static message; the library's text is never surfaced.
+    public static SchemaValidator LoadContract(System.Reflection.Assembly assembly, string resourceName)
     {
-        using var s = typeof(SubmissionValidator).Assembly.GetManifestResourceStream("contracts/proposal/v1/proposal-request.schema.json")
-            ?? throw new InvalidOperationException("Contract schema is missing.");
-        using var r = new StreamReader(s);
-        return SchemaValidator.Compile(r.ReadToEnd());
-    });
+        try
+        {
+            using var s = assembly.GetManifestResourceStream(resourceName) ?? throw new InvalidOperationException(ContractInvalid);
+            using var r = new StreamReader(s);
+            return SchemaValidator.Compile(r.ReadToEnd());
+        }
+        catch (Exception e) when (e is JsonException or Json.Schema.JsonSchemaException or ArgumentException or InvalidOperationException)
+        {
+            throw new InvalidOperationException(ContractInvalid);
+        }
+    }
 
     public SubmissionOutcome Validate(JsonElement root)
     {

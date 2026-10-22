@@ -25,6 +25,21 @@ public sealed class SubmissionValidatorTests
 
     [Fact]
     [Trait("Category", "Unit")]
+    public void API_10_envelope_contract_loads_eagerly()
+    {
+        SubmissionValidator.EnsureContractLoaded();
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void API_10_missing_envelope_contract_is_static_invalid_operation()
+    {
+        var e = Assert.Throws<InvalidOperationException>(() => SubmissionValidator.LoadContract(typeof(SubmissionValidator).Assembly, "contracts/missing-secretvalue.json"));
+        Assert.Equal("Contract schema is missing or invalid.", e.Message);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public void API_05_valid_body_returns_ok_with_entry()
     {
         var ok = Assert.IsType<SubmissionOutcome.Ok>(Check(Body()));

@@ -89,4 +89,18 @@ public sealed class CatalogEndpointTests(PostgresFixture fixture)
         Assert.Equal("API-10", guard.Rule);
         Assert.DoesNotContain("secretvalue", guard.Message);
     }
+
+    // WR-05: the submission validator (and its envelope contract) is part of the API-10 guard, not first built on a request.
+    [Fact]
+    public async Task API_10_faulty_submission_validator_stops_the_host_at_startup()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, configureServices: s =>
+        {
+            s.AddSingleton<SubmissionValidator>(_ => throw new InvalidOperationException("Contract schema is missing or invalid."));
+        });
+        var guard = await StartupGuardTests.TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Equal("API-10", guard.Rule);
+    }
 }

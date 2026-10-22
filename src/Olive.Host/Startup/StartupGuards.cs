@@ -24,12 +24,15 @@ public static class StartupGuards
         }
     }
 
-    // API-10: the source-controlled catalog is loaded eagerly so a fault stops the host before it serves traffic.
+    // API-10: the source-controlled catalog, and the envelope contract it is applied through (WR-05), are loaded eagerly so a
+    // fault stops the host before it serves traffic.
     public static void CheckCatalog(IServiceProvider provider)
     {
         try
         {
             _ = provider.GetRequiredService<Olive.Catalog.CatalogSet>();
+            Olive.Catalog.SubmissionValidator.EnsureContractLoaded();
+            _ = provider.GetRequiredService<Olive.Catalog.SubmissionValidator>();
         }
         catch (Exception)
         {
