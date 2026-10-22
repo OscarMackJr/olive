@@ -85,6 +85,8 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
         public Guid ProposalId { get; set; }
         public string State { get; set; } = "";
         public string? BodySha256 { get; set; }
+        public string OnBehalfOf { get; set; } = "";
+        public string Purpose { get; set; } = "";
     }
 
     public Task<ProposalRunRecord?> FindByRunAsync(Guid tenantId, string agentId, string runId, CancellationToken ct) =>
@@ -92,7 +94,7 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
         {
             var r = await conn.QuerySingleOrDefaultAsync<RunRow>(new CommandDefinition(ProposalSql.FindByRun,
                 new { tenant_id = tenantId, agent_id = agentId, run_id = runId }, tx, cancellationToken: ct));
-            return r is null ? null : new ProposalRunRecord(r.ProposalId, r.State, r.BodySha256);
+            return r is null ? null : new ProposalRunRecord(r.ProposalId, r.State, r.BodySha256, r.OnBehalfOf, r.Purpose);
         }, ct);
 
     public Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct) =>

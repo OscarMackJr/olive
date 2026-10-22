@@ -17,7 +17,7 @@ public static class ProposalSql
         "from proposal where tenant_id = @tenant_id and proposal_id = @proposal_id";
 
     public const string FindByRun =
-        "select proposal_id, state, body_sha256 from proposal where tenant_id = @tenant_id and agent_id = @agent_id and run_id = @run_id";
+        "select proposal_id, state, body_sha256, on_behalf_of, purpose from proposal where tenant_id = @tenant_id and agent_id = @agent_id and run_id = @run_id";
 
     public const string UpdateState =
         "update proposal set state = @to_state where tenant_id = @tenant_id and proposal_id = @proposal_id and state = @from_state";

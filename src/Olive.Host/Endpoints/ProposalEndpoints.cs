@@ -70,15 +70,19 @@ public static class ProposalEndpoints
                     return null;
                 }
 
-                if (existing.BodySha256 is not null && existing.BodySha256 == bodySha)
+                // The body hash covers only the request body. on_behalf_of and purpose come from the introspected key, so they are
+                // compared too: a replay under a different delegation is a conflict, never another caller's proposal id (WR-02).
+                var sameDelegation = string.Equals(existing.OnBehalfOf, key.OnBehalfOf, StringComparison.Ordinal)
+                    && string.Equals(existing.Purpose, key.Purpose, StringComparison.Ordinal);
+                if (existing.BodySha256 is not null && existing.BodySha256 == bodySha && sameDelegation)
                 {
                     http.Response.Headers.Location = $"/v1/proposals/{existing.ProposalId}";
                     return Results.Ok(new ProposalCreatedResponse(existing.ProposalId, existing.State));
                 }
 
                 // Ids and truncated hashes only: never the body, parameters, run key or session key.
-                logger.LogWarning("Idempotency conflict tenant_id={TenantId} agent_id={AgentId} proposal_id={ProposalId} stored_hash={StoredHash} received_hash={ReceivedHash}",
-                    key.TenantId, key.AgentId, existing.ProposalId, Short(existing.BodySha256), Short(bodySha));
+                logger.LogWarning("Idempotency conflict tenant_id={TenantId} agent_id={AgentId} proposal_id={ProposalId} stored_hash={StoredHash} received_hash={ReceivedHash} delegation_match={DelegationMatch}",
+                    key.TenantId, key.AgentId, existing.ProposalId, Short(existing.BodySha256), Short(bodySha), sameDelegation);
                 return ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.IdempotencyConflict);
             }
 

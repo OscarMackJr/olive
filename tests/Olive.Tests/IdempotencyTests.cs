@@ -224,4 +224,44 @@ public sealed class IdempotencyTests(PostgresFixture fixture)
         Assert.Equal(7, codes.Count(x => x == HttpStatusCode.Conflict));
         Assert.Equal(1, await ApiProposalTests.CountRowsAsync(db, ApiProposalTests.Alpha));
     }
+
+    // WR-02: on_behalf_of and purpose come from the introspected key, not the hashed body. The same agent, body and run_id under a
+    // different delegation is a 409, never a replay of the first caller's proposal id. A rotated key with the same delegation replays.
+    private static string AgentKeyJson(string keyId, string onBehalfOf, string purpose) =>
+        "{\"active\":true,\"key_id\":\"" + keyId + "\",\"principal_type\":\"agent\",\"agent_id\":\"liam\",\"on_behalf_of\":\"" + onBehalfOf
+        + "\",\"purpose\":\"" + purpose + "\",\"tenant_id\":\"" + ApiProposalTests.Alpha + "\",\"data_class_ceiling\":\"confidential-personal\",\"expires_at\":\"2099-01-01T00:00:00Z\"}";
+
+    [Fact]
+    public async Task API_06_same_body_and_run_under_different_delegation_gives_409_not_replay()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        var keys = new Dictionary<string, string>
+        {
+            ["k-first"] = AgentKeyJson("0a1b2c3d-0000-4000-8000-0000000000a1", "analyst.alpha@example.test", "servicing"),
+            ["k-rotated"] = AgentKeyJson("0a1b2c3d-0000-4000-8000-0000000000a2", "analyst.alpha@example.test", "servicing"),
+            ["k-other-user"] = AgentKeyJson("0a1b2c3d-0000-4000-8000-0000000000a3", "other.secret-user@example.test", "servicing"),
+            ["k-other-purpose"] = AgentKeyJson("0a1b2c3d-0000-4000-8000-0000000000a4", "analyst.alpha@example.test", "collections"),
+        };
+        await using var factory = new OliveApiFactory(db, introspector: new Olive.Integrations.Popeye.StubKeyIntrospector(keys, TimeProvider.System));
+        var body = ApiProposalTests.BodyFor("delegated-run");
+
+        using var first = factory.CreateKeyClient("k-first");
+        var created = await Post(first, body);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var id = (await ReadAsync(created)).GetProperty("proposal_id").GetGuid();
+
+        using var otherUser = factory.CreateKeyClient("k-other-user");
+        await ApiProposalTests.AssertProblemAsync(await Post(otherUser, body), HttpStatusCode.Conflict, ProblemReasons.IdempotencyConflict);
+
+        using var otherPurpose = factory.CreateKeyClient("k-other-purpose");
+        await ApiProposalTests.AssertProblemAsync(await Post(otherPurpose, body), HttpStatusCode.Conflict, ProblemReasons.IdempotencyConflict);
+
+        using var rotated = factory.CreateKeyClient("k-rotated");
+        var replay = await Post(rotated, body);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal(id, (await ReadAsync(replay)).GetProperty("proposal_id").GetGuid());
+
+        Assert.Equal(1, await ApiProposalTests.CountRowsAsync(db, ApiProposalTests.Alpha));
+        Assert.DoesNotContain("other.secret-user", factory.Logs.Text);
+    }
 }

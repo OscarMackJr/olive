@@ -60,6 +60,8 @@ public sealed class ProposalStoreHashTests(PostgresFixture fixture)
         Assert.Equal(id, found!.ProposalId);
         Assert.Equal("proposed", found.State);
         Assert.Equal(Sha(Body), found.BodySha256);
+        Assert.Equal("user-1", found.OnBehalfOf);
+        Assert.Equal("case_management", found.Purpose);
         Assert.Null(await store.FindByRunAsync(TestPaths.TenantBeta, "agent-1", "run-1", Ct));
         Assert.Null(await store.FindByRunAsync(TestPaths.TenantAlpha, "agent-1", "run-other", Ct));
     }
