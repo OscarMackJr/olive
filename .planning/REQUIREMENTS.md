@@ -82,22 +82,22 @@
 - [x] **IDN-02**: `POST /v1/proposals` accepts only `principal_type = agent` with an allowlisted `agent_id` (`liam`). `user` and `application` get `403 principal_not_permitted`.
 - [ ] **IDN-03**: Agents and users can't reach Olive's service-caller path, and the proposal endpoint never accepts a service credential.
 - [x] **IDN-04**: `key_id`, `on_behalf_of`, `purpose`, `tenant_id` and `expires_at` from introspection are recorded on the proposal. `nono_session_id` is recorded as advisory only.
-- [ ] **IDN-05**: A popeye token-issuer port, with a stub, returns `application`-type tokens carrying `tenant_id`, `delegated_agent_id`, `key_id` and an expiry.
-- [ ] **IDN-06**: Service tokens are cached by `(tenant_id, delegated_agent_id, key_id)` until shortly before the earlier of the token's and the session key's expiry. A token is never reused for a new session key, and a token that expires after its session key is rejected and not cached.
-- [ ] **IDN-07**: A token whose `delegated_agent_id` or `tenant_id` differs from Olive's own introspection of the session key is discarded, and the request fails with 503 and an alarm.
+- [x] **IDN-05**: A popeye token-issuer port, with a stub, returns `application`-type tokens carrying `tenant_id`, `delegated_agent_id`, `key_id` and an expiry.
+- [x] **IDN-06**: Service tokens are cached by `(tenant_id, delegated_agent_id, key_id)` until shortly before the earlier of the token's and the session key's expiry. A token is never reused for a new session key, and a token that expires after its session key is rejected and not cached.
+- [x] **IDN-07**: A token whose `delegated_agent_id` or `tenant_id` differs from Olive's own introspection of the session key is discarded, and the request fails with 503 and an alarm.
 - [ ] **IDN-08**: A recording decorator on every outbound port proves the session key reaches only popeye. A sentinel-key search finds no session key or token in any log line (at Trace level), JSONL output or stored row.
 
 ### Trace verification (TRC)
 
-- [ ] **TRC-01**: A `TraceResolver` port has a fixture-backed implementation in `contracts/trace-resolution/`. Its fixtures are schema-checked against the seven-field response (`trace_id`, `schema_version`, `run_id`, `tenant_id`, `agent_id`, `proposal_hash`, `created_at`).
-- [ ] **TRC-02**: A trace that is not found returns `422 trace_not_found` with `retryable: true`. Nothing is stored, so a retry under the same `run_id` that now resolves is accepted.
-- [ ] **TRC-03**: A null or mismatched `run_id` is refused and stored as `refused_policy` with reason `trace_unresolved`. `trace_schema_version` is recorded.
-- [ ] **TRC-04**: A tenant mismatch is refused and stored as `refused_policy` with reason `trace_tenant_mismatch`.
-- [ ] **TRC-05**: An `agent_id` that is null or differs from the token's `delegated_agent_id` is refused and stored as `refused_policy` with reason `trace_agent_mismatch`.
-- [ ] **TRC-06**: Olive computes `proposal_hash` as JCS SHA-256 over exactly `action_type`, `party_ref`, `parameters` and `justification`, as submitted. A null or different hash is refused and stored as `refused_policy` with reason `trace_proposal_mismatch`.
-- [ ] **TRC-07**: If the resolver is unavailable or times out, Olive fails closed with 503. If hometown or popeye returns 401 or 403 to Olive, it fails closed with 503 and an operational alarm. Nothing is stored in either case.
-- [ ] **TRC-08**: A positive resolution is cached indefinitely by `(tenant_id, trace_id)`. 404, 503, 401 and 403 are never cached, and a 404 followed by a 200 reaches the resolver again.
-- [ ] **TRC-09**: Every proposal records `trace_verification ∈ {fixture, hometown}`, taken from the resolver that answered. The schema rejects any other value.
+- [x] **TRC-01**: A `TraceResolver` port has a fixture-backed implementation in `contracts/trace-resolution/`. Its fixtures are schema-checked against the seven-field response (`trace_id`, `schema_version`, `run_id`, `tenant_id`, `agent_id`, `proposal_hash`, `created_at`).
+- [x] **TRC-02**: A trace that is not found returns `422 trace_not_found` with `retryable: true`. Nothing is stored, so a retry under the same `run_id` that now resolves is accepted.
+- [x] **TRC-03**: A null or mismatched `run_id` is refused and stored as `refused_policy` with reason `trace_unresolved`. `trace_schema_version` is recorded.
+- [x] **TRC-04**: A tenant mismatch is refused and stored as `refused_policy` with reason `trace_tenant_mismatch`.
+- [x] **TRC-05**: An `agent_id` that is null or differs from the token's `delegated_agent_id` is refused and stored as `refused_policy` with reason `trace_agent_mismatch`.
+- [x] **TRC-06**: Olive computes `proposal_hash` as JCS SHA-256 over exactly `action_type`, `party_ref`, `parameters` and `justification`, as submitted. A null or different hash is refused and stored as `refused_policy` with reason `trace_proposal_mismatch`.
+- [x] **TRC-07**: If the resolver is unavailable or times out, Olive fails closed with 503. If hometown or popeye returns 401 or 403 to Olive, it fails closed with 503 and an operational alarm. Nothing is stored in either case.
+- [x] **TRC-08**: A positive resolution is cached indefinitely by `(tenant_id, trace_id)`. 404, 503, 401 and 403 are never cached, and a 404 followed by a 200 reaches the resolver again.
+- [x] **TRC-09**: Every proposal records `trace_verification ∈ {fixture, hometown}`, taken from the resolver that answered. The schema rejects any other value.
 
 ### Policy and lifecycle (POL)
 
@@ -232,19 +232,19 @@ Deferred. Tracked but not in the current roadmap.
 | IDN-02 | Phase 1 | Complete |
 | IDN-03 | Phase 8 | Pending |
 | IDN-04 | Phase 1 | Complete |
-| IDN-05 | Phase 3 | Pending |
-| IDN-06 | Phase 3 | Pending |
-| IDN-07 | Phase 3 | Pending |
-| IDN-08 | Phase 3 | Pending |
-| TRC-01 | Phase 3 | Pending |
-| TRC-02 | Phase 3 | Pending |
-| TRC-03 | Phase 3 | Pending |
-| TRC-04 | Phase 3 | Pending |
-| TRC-05 | Phase 3 | Pending |
-| TRC-06 | Phase 3 | Pending |
-| TRC-07 | Phase 3 | Pending |
-| TRC-08 | Phase 3 | Pending |
-| TRC-09 | Phase 3 | Pending |
+| IDN-05 | Phase 3 | Complete |
+| IDN-06 | Phase 3 | Complete |
+| IDN-07 | Phase 3 | Complete |
+| IDN-08 | Phase 3 (JSONL half: Phase 6) | Partial |
+| TRC-01 | Phase 3 | Complete |
+| TRC-02 | Phase 3 | Complete |
+| TRC-03 | Phase 3 | Complete |
+| TRC-04 | Phase 3 | Complete |
+| TRC-05 | Phase 3 | Complete |
+| TRC-06 | Phase 3 | Complete |
+| TRC-07 | Phase 3 | Complete |
+| TRC-08 | Phase 3 | Complete |
+| TRC-09 | Phase 3 | Complete |
 | POL-01 | Phase 4 | Pending |
 | POL-02 | Phase 4 | Pending |
 | POL-03 | Phase 4 | Pending |
