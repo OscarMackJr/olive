@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Olive.Catalog;
 using Olive.Domain;
 
 namespace Olive.Tests;
@@ -9,8 +10,7 @@ public sealed class JcsVectorTests
 
     private static JsonElement Manifest => JsonDocument.Parse(File.ReadAllText(Path.Combine(Dir, "vectors.json"))).RootElement.Clone();
 
-    private static JsonElement CaseSchema => JsonDocument.Parse(File.ReadAllText(Path.Combine(Dir, "vectors.schema.json")))
-        .RootElement.GetProperty("properties").GetProperty("cases").GetProperty("items").Clone();
+    private static SchemaValidator ManifestSchema => SchemaValidator.Compile(File.ReadAllText(Path.Combine(Dir, "vectors.schema.json")));
 
     public static TheoryData<string> CanonicalCases()
     {
@@ -101,11 +101,11 @@ public sealed class JcsVectorTests
     public void API_09_manifest_conforms_to_schema()
     {
         var m = Manifest;
+        Assert.Null(ManifestSchema.Validate(m));
         Assert.Equal(1, m.GetProperty("version").GetInt32());
         Assert.NotEmpty(m.GetProperty("source").EnumerateArray());
         foreach (var c in m.GetProperty("cases").EnumerateArray())
         {
-            Assert.Empty(JsonSchemaLite.Validate(CaseSchema, c));
             var reject = c.TryGetProperty("expect", out _);
             Assert.Equal(!reject, c.TryGetProperty("canonical", out _));
             Assert.Equal(!reject, c.TryGetProperty("sha256", out _));
