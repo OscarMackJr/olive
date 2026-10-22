@@ -167,6 +167,33 @@ public sealed class CatalogLoaderTests
         Assert.Throws<InvalidOperationException>(() => Load(Manifest, Files(WithParameters(parameters))));
     }
 
+    // CR-01: closure is an allowlist. Every node must name what it admits, `true` is refused and arrays must bound their items.
+    [Theory]
+    [InlineData("a: true")]
+    [InlineData("a: {}")]
+    [InlineData("a: { type: array }")]
+    [InlineData("a: { type: array, prefixItems: [ { type: string } ] }")]
+    [InlineData("a: { type: array, items: true }")]
+    [InlineData("a: { type: [string, array] }")]
+    [InlineData("a: { not: { type: string } }")]
+    [InlineData("a: { required: [x] }")]
+    [InlineData("a: { anyOf: [ { type: string }, {} ] }")]
+    [InlineData("a: { type: string, not: true }")]
+    public void API_10_d02_vetting_refuses_untyped_true_and_itemless_array_subschemas(string property)
+    {
+        var p = "parameters:\n  type: object\n  additionalProperties: false\n  properties:\n    " + property;
+        Assert.Throws<InvalidOperationException>(() => Load(Manifest, Files(WithParameters(p))));
+    }
+
+    [Fact]
+    public void API_10_d02_vetting_accepts_typed_arrays_enums_and_typed_combinators()
+    {
+        var p = "parameters:\n  type: object\n  additionalProperties: false\n  properties:\n    a: { type: array, items: { type: string } }\n    b: { enum: [x, y] }\n    c: { const: z }\n    d: { anyOf: [ { type: string }, { type: integer } ] }\n    e: { type: array, items: false }";
+        var schema = Assert.Single(Load(Manifest, Files(WithParameters(p))).Current.Entries).ParametersSchema;
+        using var nested = JsonDocument.Parse("""{"a":[{"x":1}]}""");
+        Assert.NotNull(schema.Validate(nested.RootElement));
+    }
+
     [Fact]
     public void API_10_d02_vetting_accepts_closed_nested_schema_with_local_ref_and_allowed_format()
     {

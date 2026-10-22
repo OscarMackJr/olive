@@ -30,9 +30,15 @@ public static class CatalogVetting
             throw new InvalidOperationException(Invalid);
         }
 
-        if (schema.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        // Allowlist (CR-01): `false` admits nothing; `true` (and any untyped node) admits arbitrary values, so it is refused.
+        if (schema.ValueKind == JsonValueKind.False)
         {
             return;
+        }
+
+        if (schema.ValueKind == JsonValueKind.True)
+        {
+            throw new InvalidOperationException(Invalid);
         }
 
         if (schema.ValueKind != JsonValueKind.Object)
@@ -61,6 +67,16 @@ public static class CatalogVetting
 
                     break;
             }
+        }
+
+        if (!IsConstrained(schema))
+        {
+            throw new InvalidOperationException(Invalid);
+        }
+
+        if (IncludesType(schema, "array") && !schema.TryGetProperty("items", out _))
+        {
+            throw new InvalidOperationException(Invalid);
         }
 
         if (IsObjectSchema(schema)
@@ -110,20 +126,39 @@ public static class CatalogVetting
         }
     }
 
-    private static bool IsObjectSchema(JsonElement schema)
+    // A node must name what it admits: a type, an exact value set, a reference (vetted at its target) or a non-empty
+    // combinator whose branches are each vetted under these same rules. `{}`, `{ not: ... }`, `{ required: [...] }` are refused.
+    private static bool IsConstrained(JsonElement schema)
     {
-        if (schema.TryGetProperty("properties", out _) || schema.TryGetProperty("patternProperties", out _))
+        if (schema.TryGetProperty("type", out _) || schema.TryGetProperty("const", out _) || schema.TryGetProperty("enum", out _)
+            || schema.TryGetProperty("$ref", out _))
         {
             return true;
         }
 
+        foreach (var k in (string[])["allOf", "anyOf", "oneOf"])
+        {
+            if (schema.TryGetProperty(k, out var arr) && arr.ValueKind == JsonValueKind.Array && arr.GetArrayLength() > 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsObjectSchema(JsonElement schema) =>
+        schema.TryGetProperty("properties", out _) || schema.TryGetProperty("patternProperties", out _) || IncludesType(schema, "object");
+
+    private static bool IncludesType(JsonElement schema, string type)
+    {
         if (!schema.TryGetProperty("type", out var t))
         {
             return false;
         }
 
         return t.ValueKind == JsonValueKind.String
-            ? t.GetString() == "object"
-            : t.ValueKind == JsonValueKind.Array && t.EnumerateArray().Any(x => x.ValueKind == JsonValueKind.String && x.GetString() == "object");
+            ? t.GetString() == type
+            : t.ValueKind == JsonValueKind.Array && t.EnumerateArray().Any(x => x.ValueKind == JsonValueKind.String && x.GetString() == type);
     }
 }
