@@ -100,8 +100,8 @@ Threat Flags: 03-01, 03-03, 03-04, 03-05 and 03-06 report "None". 03-02-SUMMARY.
 
 ## Audit Notes (non-blocking)
 
-- **T-03-10:** the 10,000-entry cap in `ServiceTokenProvider` (`:101-104`) has no dedicated test. Only the `CachingTraceResolver` cap is tested (`TRC_08_cap_clears_without_changing_results`).
-- **T-03-19:** no test proves that a non-numeric or non-positive `OLIVE_TRACE_TIMEOUT_MS` refuses startup. The code path is `Program.cs:47-50`.
+- **T-03-10:** resolved 2026-10-22 by `/gsd-validate-phase 3`. `IDN_06_token_cache_cap_clears_without_changing_results` covers the `ServiceTokenProvider` cap.
+- **T-03-19:** resolved 2026-10-22 by `/gsd-validate-phase 3`. `TRC_07_invalid_trace_timeout_refuses_start` (theory over 0, -5, abc) and the positive control `TRC_07_valid_trace_timeout_is_applied_at_start`. The same pass found that `OliveApiFactory`'s `extraConfig` was applied after `Program.cs` reads `OLIVE_TRACE_TIMEOUT_MS`, so the earlier "100 ms via the setting" hang tests had actually run on the 5 s default. The factory now also passes that key with `UseSetting`, so the 100 ms claims in T-03-19 and T-03-29 now hold.
 - **T-03-02:** the plan says "owner-connection test". The actual tests use the app connection: the CHECK rejection gives 23514 because the app holds the INSERT grant on that column, and the UPDATE gives 42501. Together these prove the constraint and the grant.
 - **T-03-14:** the null-session-key 503 guard (`ProposalEndpoints.cs:114-118`) has no test, because the auth handler rejects first with the same `AgentKeyHeader.TryRead`. This is the documented deviation in 03-03-SUMMARY and 03-VERIFICATION.
 - **WR-04 alarm choice:** reusing `trace_response_malformed` for a trace_id mismatch is still awaiting human confirmation (03-REVIEW-FIX.md).
