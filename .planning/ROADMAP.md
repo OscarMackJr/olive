@@ -95,9 +95,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 7 plans
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — In-house RFC 8785 JCS, lossless-number rule, golden vectors in contracts/jcs/v1 (API-09)
-- [ ] 02-02-PLAN.md — JsonSchema.Net 8.0.5, SchemaValidator, versioned contracts and v1 proposal schemas (API-05)
-- [ ] 02-03-PLAN.md — Migration 0004 (canonical_body, body_sha256, proposal_hash) and tenant-scoped FindByRun (API-06, API-07)
+- [x] 02-01-PLAN.md — In-house RFC 8785 JCS, lossless-number rule, golden vectors in contracts/jcs/v1 (API-09)
+- [x] 02-02-PLAN.md — JsonSchema.Net 8.0.5, SchemaValidator, versioned contracts and v1 proposal schemas (API-05)
+- [x] 02-03-PLAN.md — Migration 0004 (canonical_body, body_sha256, proposal_hash) and tenant-scoped FindByRun (API-06, API-07)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -254,7 +254,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation and Walking Skeleton | 13/13 | Complete    | 2026-10-22 |
-| 2. Contract Integrity and Idempotent Submission | 0/TBD | Not started | - |
+| 2. Contract Integrity and Idempotent Submission | 3/7 | In Progress|  |
 | 3. Trace Verification | 0/TBD | Not started | - |
 | 4. Policy, Expiry and Refusal | 0/TBD | Not started | - |
 | 5. Generic Review Queue and Action Approval | 0/TBD | Not started | - |
