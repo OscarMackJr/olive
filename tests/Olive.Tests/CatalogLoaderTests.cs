@@ -59,6 +59,41 @@ public sealed class CatalogLoaderTests
         Assert.Equal(JsonValueKind.String, set.Current.Entries[0].EntryJson.GetProperty("target_system").ValueKind);
     }
 
+    // WR-06: `!!str` is honoured, so a tagged plain scalar that looks like a number stays a string.
+    [Fact]
+    public void API_10_str_tag_keeps_scalar_a_string()
+    {
+        var set = Load(Manifest, Files(Entry.Replace("target_system: nexus_crm", "target_system: !!str 10")));
+        var target = set.Current.Entries[0].EntryJson.GetProperty("target_system");
+        Assert.Equal(JsonValueKind.String, target.ValueKind);
+        Assert.Equal("10", target.GetString());
+    }
+
+    // WR-06: other explicit tags, and numbers that would lose precision, are refused rather than silently converted.
+    [Theory]
+    [InlineData("target_system: !!int nexus_crm")]
+    [InlineData("target_system: !custom nexus_crm")]
+    [InlineData("parameters: !!map\n  type: object\n  additionalProperties: false\n  properties:\n    case_ref: { type: string }\n  required: [case_ref]")]
+    [InlineData("parameters:\n  type: object\n  additionalProperties: false\n  properties:\n    case_ref: { type: integer, maximum: 99999999999999999999 }\n  required: [case_ref]")]
+    [InlineData("parameters:\n  type: object\n  additionalProperties: false\n  properties:\n    case_ref: { type: number, maximum: 9007199254740993.0 }\n  required: [case_ref]")]
+    [InlineData("parameters:\n  type: object\n  additionalProperties: false\n  properties:\n    case_ref: { type: number, maximum: 1e999 }\n  required: [case_ref]")]
+    public void API_10_explicit_tags_and_lossy_numbers_fail(string replacement)
+    {
+        var entry = replacement.StartsWith("target_system", StringComparison.Ordinal)
+            ? Entry.Replace("target_system: nexus_crm", replacement)
+            : WithParameters(replacement);
+        Assert.Throws<InvalidOperationException>(() => Load(Manifest, Files(entry)));
+    }
+
+    [Fact]
+    public void API_10_in_range_integers_and_exact_decimals_still_load()
+    {
+        var p = "parameters:\n  type: object\n  additionalProperties: false\n  properties:\n    case_ref: { type: number, minimum: 0.1, maximum: 9007199254740993 }\n  required: [case_ref]";
+        var schema = Assert.Single(Load(Manifest, Files(WithParameters(p))).Current.Entries).ParametersSchema;
+        using var over = JsonDocument.Parse("""{"case_ref":9007199254740994}""");
+        Assert.NotNull(schema.Validate(over.RootElement));
+    }
+
     [Fact]
     public void API_10_catalog_has_no_runtime_registration_member()
     {
