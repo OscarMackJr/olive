@@ -25,6 +25,11 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 - ✓ Submission idempotency on `(agent_id, run_id)` using an RFC 8785 JCS `body_sha256`. An identical body (and the same `on_behalf_of` and `purpose`) returns `200` with the current state; a different body returns `409 idempotency_conflict`. A unique constraint resolves concurrent first submissions. Validated in Phase 2: Contract Integrity and Idempotent Submission.
 - ✓ Schema validation is non-mutating: no coercion, no defaults, no key stripping. A `400` is not stored. Validated in Phase 2: Contract Integrity and Idempotent Submission.
 - ✓ `GET /v1/catalog/{version}` serves the YamlDotNet-loaded catalog, vetted closed and validated at startup. Validated in Phase 2: Contract Integrity and Idempotent Submission.
+- ✓ A popeye service-token client using a stub. Tokens are cached by `(tenant_id, delegated_agent_id, key_id)` and never outlive the session key. A token whose claims disagree with Olive's introspection is discarded, and the call fails closed with `503` and an alarm. Validated in Phase 3: Trace Verification.
+- ✓ A `TraceResolver` interface with a fixture-backed implementation in `contracts/trace-resolution/`. Its response has seven fields, including `proposal_hash`. Validated in Phase 3: Trace Verification.
+- ✓ Ordered checks: `trace_not_found` (`422`, not stored, retryable) → `trace_unresolved` → `trace_tenant_mismatch` → `trace_agent_mismatch` → `trace_proposal_mismatch`. A resolver that is unavailable, or a 401/403 from hometown or popeye, fails closed with `503`, and the auth failures also raise an alarm. Validated in Phase 3: Trace Verification.
+- ✓ Positive resolutions are cached by `(tenant_id, trace_id)`. Not-found results are never cached. Validated in Phase 3: Trace Verification.
+- ✓ `trace_verification ∈ {fixture, hometown}` and `trace_schema_version` are recorded. The service refuses to start in `production` with the fixture resolver or the token stub, including when it is decorated. Validated in Phase 3: Trace Verification.
 
 ### Active
 
@@ -37,14 +42,7 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 - [ ] A popeye introspection client behind an interface, with a stub for Phase 1. It covers `active`, `key_id`, `principal_type = agent`, the agent allowlist (`liam`), `on_behalf_of`, `purpose`, `tenant_id` and `expires_at`.
 - [ ] Separate caller paths. Users and applications receive `403 principal_not_permitted` on the proposal endpoint, and agents and users cannot use Olive's service path.
 - [ ] Authorization uses the intersection of the agent's entitlements and the `on_behalf_of` user's entitlements.
-- [ ] A popeye service-token client using a stub. Tokens are cached by `(tenant_id, delegated_agent_id, key_id)` and never outlive the session key. A token whose claims disagree with Olive's introspection is discarded, and the call fails closed with `503` and an alarm.
-- [ ] The session key is sent only to popeye. A capture of every outbound call proves this.
-
-**Trace verification (Decision §14, §16, §17)**
-- [ ] A `TraceResolver` interface with a fixture-backed implementation in `contracts/trace-resolution/`. Its response has seven fields, including `proposal_hash`.
-- [ ] Ordered checks: `trace_not_found` (`422`, not stored, retryable) → `trace_unresolved` → `trace_tenant_mismatch` → `trace_agent_mismatch` → `trace_proposal_mismatch`. If the resolver is unavailable, or hometown or popeye returns 401/403, the request fails closed with `503`; the auth failures also raise an alarm.
-- [ ] Positive resolutions are cached indefinitely by `(tenant_id, trace_id)`. Not-found results are never cached.
-- [ ] `trace_verification ∈ {fixture, hometown}` and `trace_schema_version` are recorded. `OLIVE_ENVIRONMENT` is required, and the service refuses to start in `production` with the fixture resolver.
+- [ ] The session key is sent only to popeye. A capture of every outbound call proves this. (Phase 3 proved it for responses, Trace-level logs and stored rows. The JSONL output check is deferred to Phase 6.)
 
 **Policy and lifecycle (Charter §3)**
 - [ ] Policy (purpose, entitlements, per-agent rate limits) runs before queueing. A `refused_policy` proposal is stored and never queued.
@@ -135,4 +133,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-22 after Phase 2 (Contract Integrity and Idempotent Submission) completed: bodies pass an I-JSON gate and closed v1 schemas without mutation, resubmissions converge via a JCS body hash, and the YAML catalog is served and vetted at startup; 589 tests green*
+*Last updated: 2026-10-22 after Phase 3 (Trace Verification) completed. Proposals proceed only when the fixture trace matches on run, tenant, agent and hash. Mismatches are stored as `refused_policy`, and resolver or auth failures fail closed with 422 or 503, raising alarms where specified. The session key is shown to reach only popeye, except that the JSONL check is deferred to Phase 6. 735 tests are green.*
