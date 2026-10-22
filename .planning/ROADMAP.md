@@ -131,8 +131,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 6 plans
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Migration 0006, InsertRefusedAsync, additive response contract (TRC-03, TRC-09)
-- [ ] 03-02-PLAN.md — Ports, token provider and cache, trace cache, TraceVerifier with unit tests (TRC-02..08, IDN-05..07)
+- [x] 03-01-PLAN.md — Migration 0006, InsertRefusedAsync, additive response contract (TRC-03, TRC-09)
+- [x] 03-02-PLAN.md — Ports, token provider and cache, trace cache, TraceVerifier with unit tests (TRC-02..08, IDN-05..07)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -277,7 +277,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 |-------|----------------|--------|-----------|
 | 1. Foundation and Walking Skeleton | 13/13 | Complete    | 2026-10-22 |
 | 2. Contract Integrity and Idempotent Submission | 7/7 | Complete    | 2026-10-22 |
-| 3. Trace Verification | 0/TBD | Not started | - |
+| 3. Trace Verification | 2/6 | In Progress|  |
 | 4. Policy, Expiry and Refusal | 0/TBD | Not started | - |
 | 5. Generic Review Queue and Action Approval | 0/TBD | Not started | - |
 | 6. Simulated Execution and Audit Chain | 0/TBD | Not started | - |
