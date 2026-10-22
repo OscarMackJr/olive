@@ -22,14 +22,15 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 
 - ✓ A forward-only SQL migration runner with a `schema_migrations` table. Validated in Phase 1: Foundation and Walking Skeleton.
 - ✓ Testcontainers Postgres in CI. In-memory stores are used only in unit tests. Validated in Phase 1: Foundation and Walking Skeleton.
+- ✓ Submission idempotency on `(agent_id, run_id)` using an RFC 8785 JCS `body_sha256`. An identical body (and the same `on_behalf_of` and `purpose`) returns `200` with the current state; a different body returns `409 idempotency_conflict`. A unique constraint resolves concurrent first submissions. Validated in Phase 2: Contract Integrity and Idempotent Submission.
+- ✓ Schema validation is non-mutating: no coercion, no defaults, no key stripping. A `400` is not stored. Validated in Phase 2: Contract Integrity and Idempotent Submission.
+- ✓ `GET /v1/catalog/{version}` serves the YamlDotNet-loaded catalog, vetted closed and validated at startup. Validated in Phase 2: Contract Integrity and Idempotent Submission.
 
 ### Active
 
 **Contract and API (Decision §6, §12, §15)**
 - [ ] `POST /v1/proposals`, `GET /v1/proposals/{proposal_id}` and `GET /v1/catalog/{version}` as ASP.NET Core endpoints.
 - [ ] JSON Schema 2020-12 payloads under `contracts/proposal/v1/`, OpenAPI 3.1 that `$ref`s those schemas, and an S-OL-1 → v1 `COMPATIBILITY.md`.
-- [ ] Submission idempotency on `(agent_id, run_id)` using an RFC 8785 JCS `body_sha256`. An identical body returns `200` with the current state; a different body returns `409 idempotency_conflict`. A unique constraint resolves concurrent first submissions.
-- [ ] Schema validation is non-mutating: no coercion, no defaults, no key stripping. A `400` is not stored.
 - [ ] The §15.2 / §16 / §17 order of operations: introspect → principal checks → idempotency → schema/catalog → trace resolution → policy → persist and enqueue.
 
 **Identity and authorization (Decision §7, §17.1)**
@@ -134,4 +135,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-22 after Phase 1 (Foundation and Walking Skeleton) completed: an agent can POST and GET a proposal through the real host on Postgres with two-layer tenant isolation; 314 tests green*
+*Last updated: 2026-10-22 after Phase 2 (Contract Integrity and Idempotent Submission) completed: bodies pass an I-JSON gate and closed v1 schemas without mutation, resubmissions converge via a JCS body hash, and the YAML catalog is served and vetted at startup; 589 tests green*
