@@ -31,8 +31,9 @@ public static class StartupGuards
         {
             _ = provider.GetRequiredService<Olive.Catalog.CatalogSet>();
         }
-        catch (InvalidOperationException)
+        catch (Exception)
         {
+            // Any fault, whatever its type, maps to the static refusal; the original message may quote catalog content (WR-01).
             throw new StartupGuardException("API-10", "the source-controlled catalog failed validation");
         }
     }

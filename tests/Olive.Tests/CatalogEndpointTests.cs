@@ -74,4 +74,19 @@ public sealed class CatalogEndpointTests(PostgresFixture fixture)
         Assert.NotNull(guard);
         Assert.Contains("API-10", guard.Message);
     }
+
+    // WR-01: a catalog fault of any exception type still yields the static API-10 refusal and never echoes its message.
+    [Fact]
+    public async Task API_10_non_invalid_operation_catalog_fault_refuses_with_static_message()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, configureServices: s =>
+        {
+            s.AddSingleton<CatalogSet>(_ => throw new Json.Schema.JsonSchemaException("x-hidden secretvalue"));
+        });
+        var guard = await StartupGuardTests.TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Equal("API-10", guard.Rule);
+        Assert.DoesNotContain("secretvalue", guard.Message);
+    }
 }

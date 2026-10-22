@@ -194,6 +194,17 @@ public sealed class CatalogLoaderTests
         Assert.NotNull(schema.Validate(nested.RootElement));
     }
 
+    // WR-01: schema-library compile faults (unknown keywords) map to the static catalog refusal, never the library's message.
+    [Fact]
+    public void API_10_schema_compile_fault_is_static_invalid_operation()
+    {
+        var p = "parameters:\n  type: object\n  additionalProperties: false\n  properties:\n    a: { type: string, x-hidden: secretvalue }";
+        var e = Assert.Throws<InvalidOperationException>(() => Load(Manifest, Files(WithParameters(p))));
+        Assert.Equal("Catalog is invalid.", e.Message);
+        Assert.DoesNotContain("secretvalue", e.Message);
+        Assert.DoesNotContain("x-hidden", e.Message);
+    }
+
     // CR-02: a reference must resolve, at load time, to a vetted schema node. Otherwise every submission would fail at request time.
     [Theory]
     [InlineData("a: { $ref: '#/$defs/missing' }")]

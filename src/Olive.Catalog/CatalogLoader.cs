@@ -54,7 +54,8 @@ public static partial class CatalogLoader
         {
             return ParseCore(manifestText, entryFilesByName, purposes);
         }
-        catch (Exception e) when (e is YamlDotNet.Core.YamlException or JsonException or InvalidOperationException or ArgumentException or FormatException)
+        catch (Exception e) when (e is YamlDotNet.Core.YamlException or JsonException or Json.Schema.JsonSchemaException
+            or InvalidOperationException or ArgumentException or FormatException)
         {
             throw new InvalidOperationException(Invalid);
         }
