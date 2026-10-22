@@ -45,28 +45,28 @@
 
 ### Foundation (FND)
 
-- [ ] **FND-01**: The solution is split into Domain, Contracts, Application, Persistence, Catalog, Executor.Simulated, Integrations.Popeye, Integrations.Hometown, Integrations.Entra, Host and Migrator projects. Dependencies point inward.
-- [ ] **FND-02**: Architecture tests fail the build if Domain, Application or Executor reference an HTTP client, or if a project references a package outside its allowlist. BannedApiAnalyzers bans `new HttpClient`.
-- [ ] **FND-03**: `.gitattributes` keeps vendored, schema and fixture files byte-stable (LF, no conversion). The vendored `vocabulary.yaml` SHA-256 is verified at startup and in CI.
-- [ ] **FND-04**: `OLIVE_ENVIRONMENT ∈ {local, ci, nonprod, production}` must be set; it has no default. The service refuses to start if it is unset.
-- [ ] **FND-05**: With `OLIVE_ENVIRONMENT=production`, the service refuses to start if any implementation marked `INonProductionOnly` is registered. That covers the fixture resolver, popeye stubs and the dev identity provider.
-- [ ] **FND-06**: The session key and the service token are sealed types that redact themselves. Neither value appears in `ToString`, logs, exceptions or serialized output.
-- [ ] **FND-07**: CI on Ubuntu builds the solution and runs unit, architecture and Testcontainers integration tests, with locked package versions (Central Package Management plus lockfiles).
+- [x] **FND-01**: The solution is split into Domain, Contracts, Application, Persistence, Catalog, Executor.Simulated, Integrations.Popeye, Integrations.Hometown, Integrations.Entra, Host and Migrator projects. Dependencies point inward.
+- [x] **FND-02**: Architecture tests fail the build if Domain, Application or Executor reference an HTTP client, or if a project references a package outside its allowlist. BannedApiAnalyzers bans `new HttpClient`.
+- [x] **FND-03**: `.gitattributes` keeps vendored, schema and fixture files byte-stable (LF, no conversion). The vendored `vocabulary.yaml` SHA-256 is verified at startup and in CI.
+- [x] **FND-04**: `OLIVE_ENVIRONMENT ∈ {local, ci, nonprod, production}` must be set; it has no default. The service refuses to start if it is unset.
+- [x] **FND-05**: With `OLIVE_ENVIRONMENT=production`, the service refuses to start if any implementation marked `INonProductionOnly` is registered. That covers the fixture resolver, popeye stubs and the dev identity provider.
+- [x] **FND-06**: The session key and the service token are sealed types that redact themselves. Neither value appears in `ToString`, logs, exceptions or serialized output.
+- [x] **FND-07**: CI on Ubuntu builds the solution and runs unit, architecture and Testcontainers integration tests, with locked package versions (Central Package Management plus lockfiles).
 
 ### Persistence and tenant isolation (DB)
 
-- [ ] **DB-01**: The `olive_owner`, `olive_migrator`, `olive_app` and `olive_reader` roles are created by an idempotent bootstrap script, with the D§13 privileges.
-- [ ] **DB-02**: A forward-only migration runner applies `sql/migrations/NNNN_*.sql` as `olive_owner`. It records each migration in `schema_migrations`, takes an advisory lock, and fails if an applied file has changed. Only the runner reads `OLIVE_MIGRATOR_URL`.
-- [ ] **DB-03**: The `proposal`, `proposal_event`, `queue_item`, `queue_item_event` and `execution_ledger` tables all carry `tenant_id uuid NOT NULL`, with ENABLE and FORCE ROW LEVEL SECURITY. Each policy checks `current_setting('olive.tenant_id')` (no `missing_ok`) in both USING and WITH CHECK.
-- [ ] **DB-04**: `proposal_event`, `queue_item_event` and `execution_ledger` are INSERT-only for `olive_app`: no UPDATE or DELETE grant or policy. A privilege-matrix test checks that UPDATE and DELETE are denied.
-- [ ] **DB-05**: Every database access goes through a tenant unit of work. It sets `set_config('olive.tenant_id', $1, true)` in an explicit transaction, and every query also includes an application-level tenant predicate.
-- [ ] **DB-06**: Negative tests remove each isolation layer in turn and show the other still blocks cross-tenant reads and writes. The tests run as `olive_app` (asserting the role is not a superuser and does not bypass RLS), with two seeded tenants, and with `Max Pool Size=1`. An unset tenant raises an error. (Charter REQ-QUE-02)
-- [ ] **DB-07**: At startup, the service refuses to run as a superuser, as a role with BYPASSRLS, or as the owner role. It also refuses to run if the migration version doesn't match.
+- [x] **DB-01**: The `olive_owner`, `olive_migrator`, `olive_app` and `olive_reader` roles are created by an idempotent bootstrap script, with the D§13 privileges.
+- [x] **DB-02**: A forward-only migration runner applies `sql/migrations/NNNN_*.sql` as `olive_owner`. It records each migration in `schema_migrations`, takes an advisory lock, and fails if an applied file has changed. Only the runner reads `OLIVE_MIGRATOR_URL`.
+- [x] **DB-03**: The `proposal`, `proposal_event`, `queue_item`, `queue_item_event` and `execution_ledger` tables all carry `tenant_id uuid NOT NULL`, with ENABLE and FORCE ROW LEVEL SECURITY. Each policy checks `current_setting('olive.tenant_id')` (no `missing_ok`) in both USING and WITH CHECK.
+- [x] **DB-04**: `proposal_event`, `queue_item_event` and `execution_ledger` are INSERT-only for `olive_app`: no UPDATE or DELETE grant or policy. A privilege-matrix test checks that UPDATE and DELETE are denied.
+- [x] **DB-05**: Every database access goes through a tenant unit of work. It sets `set_config('olive.tenant_id', $1, true)` in an explicit transaction, and every query also includes an application-level tenant predicate.
+- [x] **DB-06**: Negative tests remove each isolation layer in turn and show the other still blocks cross-tenant reads and writes. The tests run as `olive_app` (asserting the role is not a superuser and does not bypass RLS), with two seeded tenants, and with `Max Pool Size=1`. An unset tenant raises an error. (Charter REQ-QUE-02)
+- [x] **DB-07**: At startup, the service refuses to run as a superuser, as a role with BYPASSRLS, or as the owner role. It also refuses to run if the migration version doesn't match.
 
 ### Proposal API and contract (API)
 
-- [ ] **API-01**: An agent can `POST /v1/proposals` with `action_type`, `party_ref`, `parameters`, `justification`, `trace_ref`, `run_id` and an optional `nono_session_id`. It receives a `proposal_id` and the lifecycle state.
-- [ ] **API-02**: A caller can `GET /v1/proposals/{proposal_id}` within its own tenant. An id from another tenant returns 404.
+- [x] **API-01**: An agent can `POST /v1/proposals` with `action_type`, `party_ref`, `parameters`, `justification`, `trace_ref`, `run_id` and an optional `nono_session_id`. It receives a `proposal_id` and the lifecycle state.
+- [x] **API-02**: A caller can `GET /v1/proposals/{proposal_id}` within its own tenant. An id from another tenant returns 404.
 - [ ] **API-03**: A caller can `GET /v1/catalog/{version}` and receives the source-controlled catalog entry, including the parameter JSON Schema.
 - [ ] **API-04**: The request body is read as raw bytes, parsed once with duplicate keys rejected, and never bound to a model. A body is rejected with 400 if it needs type coercion, defaults, key stripping or trimming to validate, or if it contains a null optional field.
 - [ ] **API-05**: The v1 payload JSON Schemas (2020-12) live under `contracts/proposal/v1/` and are validated with format assertion on.
@@ -78,10 +78,10 @@
 
 ### Identity and service credentials (IDN)
 
-- [ ] **IDN-01**: Every request is introspected through a popeye introspection port, with a stub implementation that follows POPEYE_v0.4.2. Inactive or invalid keys get 401, and introspection always runs first.
-- [ ] **IDN-02**: `POST /v1/proposals` accepts only `principal_type = agent` with an allowlisted `agent_id` (`liam`). `user` and `application` get `403 principal_not_permitted`.
+- [x] **IDN-01**: Every request is introspected through a popeye introspection port, with a stub implementation that follows POPEYE_v0.4.2. Inactive or invalid keys get 401, and introspection always runs first.
+- [x] **IDN-02**: `POST /v1/proposals` accepts only `principal_type = agent` with an allowlisted `agent_id` (`liam`). `user` and `application` get `403 principal_not_permitted`.
 - [ ] **IDN-03**: Agents and users can't reach Olive's service-caller path, and the proposal endpoint never accepts a service credential.
-- [ ] **IDN-04**: `key_id`, `on_behalf_of`, `purpose`, `tenant_id` and `expires_at` from introspection are recorded on the proposal. `nono_session_id` is recorded as advisory only.
+- [x] **IDN-04**: `key_id`, `on_behalf_of`, `purpose`, `tenant_id` and `expires_at` from introspection are recorded on the proposal. `nono_session_id` is recorded as advisory only.
 - [ ] **IDN-05**: A popeye token-issuer port, with a stub, returns `application`-type tokens carrying `tenant_id`, `delegated_agent_id`, `key_id` and an expiry.
 - [ ] **IDN-06**: Service tokens are cached by `(tenant_id, delegated_agent_id, key_id)` until shortly before the earlier of the token's and the session key's expiry. A token is never reused for a new session key, and a token that expires after its session key is rejected and not cached.
 - [ ] **IDN-07**: A token whose `delegated_agent_id` or `tenant_id` differs from Olive's own introspection of the session key is discarded, and the request fails with 503 and an alarm.
@@ -204,22 +204,22 @@ Deferred. Tracked but not in the current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FND-01 | Phase 1 | Pending |
-| FND-02 | Phase 1 | Pending |
-| FND-03 | Phase 1 | Pending |
-| FND-04 | Phase 1 | Pending |
-| FND-05 | Phase 1 | Pending |
-| FND-06 | Phase 1 | Pending |
-| FND-07 | Phase 1 | Pending |
-| DB-01 | Phase 1 | Pending |
-| DB-02 | Phase 1 | Pending |
+| FND-01 | Phase 1 | Complete |
+| FND-02 | Phase 1 | Complete |
+| FND-03 | Phase 1 | Complete |
+| FND-04 | Phase 1 | Complete |
+| FND-05 | Phase 1 | Complete |
+| FND-06 | Phase 1 | Complete |
+| FND-07 | Phase 1 | Complete |
+| DB-01 | Phase 1 | Complete |
+| DB-02 | Phase 1 | Complete |
 | DB-03 | Phase 1 | Partial (pattern established in Phase 1; tables completed in Phases 5/6) |
 | DB-04 | Phase 1 | Partial (pattern established in Phase 1; tables completed in Phases 5/6) |
-| DB-05 | Phase 1 | Pending |
-| DB-06 | Phase 1 | Pending |
-| DB-07 | Phase 1 | Pending |
-| API-01 | Phase 1 | Pending |
-| API-02 | Phase 1 | Pending |
+| DB-05 | Phase 1 | Complete |
+| DB-06 | Phase 1 | Complete |
+| DB-07 | Phase 1 | Complete |
+| API-01 | Phase 1 | Complete |
+| API-02 | Phase 1 | Complete |
 | API-03 | Phase 2 | Pending |
 | API-04 | Phase 2 | Pending |
 | API-05 | Phase 2 | Pending |
@@ -228,10 +228,10 @@ Deferred. Tracked but not in the current roadmap.
 | API-08 | Phase 4 | Pending |
 | API-09 | Phase 2 | Pending |
 | API-10 | Phase 2 | Pending |
-| IDN-01 | Phase 1 | Pending |
-| IDN-02 | Phase 1 | Pending |
+| IDN-01 | Phase 1 | Complete |
+| IDN-02 | Phase 1 | Complete |
 | IDN-03 | Phase 8 | Pending |
-| IDN-04 | Phase 1 | Pending |
+| IDN-04 | Phase 1 | Complete |
 | IDN-05 | Phase 3 | Pending |
 | IDN-06 | Phase 3 | Pending |
 | IDN-07 | Phase 3 | Pending |
