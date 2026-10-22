@@ -1,0 +1,1 @@
+{"action_type":"crm.case_note@1","party_ref":"party://tenant-alpha/p-001","parameters":{"visibility":"internal","note_ref":"payload://n/1"},"justification":"Follow-up per hometown trace","nono_session_id":"sess-123"}

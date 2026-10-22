@@ -14,4 +14,5 @@ packages.lock.json text eol=lf
 contracts/** text eol=lf
 sql/** text eol=lf
 config/** text eol=lf
+contracts/jcs/v1/* -text
 contracts/vendored/** -text
