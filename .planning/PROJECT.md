@@ -20,6 +20,9 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 - ✓ A Postgres migration sketch with `tenant_id` and RLS policies (`db/migrations/V001__action_broker.sql`). Existing scaffold; needs the §13 role model and corrections.
 - ✓ Tests named by requirement ID (`tests/Olive.Tests/RequirementsTests.cs`). Existing scaffold convention.
 
+- ✓ A forward-only SQL migration runner with a `schema_migrations` table. Validated in Phase 1: Foundation and Walking Skeleton.
+- ✓ Testcontainers Postgres in CI. In-memory stores are used only in unit tests. Validated in Phase 1: Foundation and Walking Skeleton.
+
 ### Active
 
 **Contract and API (Decision §6, §12, §15)**
@@ -51,9 +54,7 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 **Persistence (Decision §10, §13)**
 - [ ] Postgres tables `proposal`, `proposal_event`, `queue_item` and `execution_ledger`, all with `tenant_id`, ENABLE + FORCE RLS, and `current_setting('olive.tenant_id')` without `missing_ok`.
 - [ ] The roles `olive_owner`, `olive_migrator`, `olive_app` and `olive_reader`. `execution_ledger` and `proposal_event` are INSERT-only.
-- [ ] A forward-only SQL migration runner with a `schema_migrations` table.
 - [ ] Application tenant predicates in every query, plus a negative test that removes each layer in turn.
-- [ ] Testcontainers Postgres in CI. In-memory stores are used only in unit tests.
 
 **Review queue (Charter §4, IR-1)**
 - [ ] A generic queue built on IR-1's model: states, decision values and decision history; `subject_ref` and `payload_ref` only, never record bodies; a kind registry.
@@ -133,4 +134,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-21 after initialization*
+*Last updated: 2026-10-22 after Phase 1 (Foundation and Walking Skeleton) completed: an agent can POST and GET a proposal through the real host on Postgres with two-layer tenant isolation; 314 tests green*
