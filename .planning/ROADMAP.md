@@ -82,7 +82,6 @@ Decimal phases appear between their surrounding integers in numeric order.
 ### Phase 2: Contract Integrity and Idempotent Submission
 
 **Goal**: A submitted body is validated exactly as received and never mutated. Resubmissions converge on one proposal through a canonical JCS hash, and the source-controlled catalog is served from YAML.
-**Mode:** mvp
 **Depends on**: Phase 1
 **Requirements**: API-03, API-04, API-05, API-06, API-07, API-09, API-10
 **Success Criteria** (what must be TRUE):
