@@ -32,17 +32,17 @@ public static partial class TraceResolutionResponse
                 return new TraceLookup.Malformed();
             }
 
-            var count = 0;
+            // Each allowed field exactly once: a duplicate key is malformed, because which duplicate wins is parser-dependent (WR-03).
+            var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (var p in root.EnumerateObject())
             {
-                count++;
-                if (Array.IndexOf(Fields, p.Name) < 0)
+                if (Array.IndexOf(Fields, p.Name) < 0 || !seen.Add(p.Name))
                 {
                     return new TraceLookup.Malformed();
                 }
             }
 
-            if (count != Fields.Length)
+            if (seen.Count != Fields.Length)
             {
                 return new TraceLookup.Malformed();
             }
@@ -71,7 +71,11 @@ public static partial class TraceResolutionResponse
     private static bool Str(JsonElement root, string name, bool nullable, out string? value)
     {
         value = null;
-        var v = root.GetProperty(name);
+        if (!root.TryGetProperty(name, out var v))
+        {
+            return false;
+        }
+
         if (v.ValueKind == JsonValueKind.Null)
         {
             return nullable;

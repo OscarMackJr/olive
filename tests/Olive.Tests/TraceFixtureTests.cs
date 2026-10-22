@@ -142,4 +142,18 @@ public sealed class TraceFixtureTests
         Assert.IsType<TraceLookup.Malformed>(TraceResolutionResponse.Parse("not json"));
         Assert.IsType<TraceLookup.Malformed>(TraceResolutionResponse.Parse(Good.Replace("\"liam\"", "\"\"")));
     }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void TRC_07_parser_returns_malformed_for_duplicate_keys_and_never_throws()
+    {
+        // Seven properties with trace_id twice and created_at missing: the count matches, so only a uniqueness check catches it.
+        var dupInsteadOfCreated = Good.Replace("\"created_at\"", "\"trace_id\"");
+        Assert.IsType<TraceLookup.Malformed>(TraceResolutionResponse.Parse(dupInsteadOfCreated));
+
+        // A duplicate on top of a complete set (eight properties) is malformed too.
+        var dupExtra = Good.Replace("\"agent_id\": \"liam\",", "\"agent_id\": \"liam\", \"agent_id\": \"mallory\",");
+        Assert.NotEqual(Good, dupExtra);
+        Assert.IsType<TraceLookup.Malformed>(TraceResolutionResponse.Parse(dupExtra));
+    }
 }
