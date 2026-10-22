@@ -77,7 +77,7 @@ public static class ProposalEndpoints
                 if (existing.BodySha256 is not null && existing.BodySha256 == bodySha && sameDelegation)
                 {
                     http.Response.Headers.Location = $"/v1/proposals/{existing.ProposalId}";
-                    return Results.Ok(new ProposalCreatedResponse(existing.ProposalId, existing.State));
+                    return Results.Ok(new ProposalCreatedResponse(existing.ProposalId, existing.State, existing.RefusalReason));
                 }
 
                 // Ids and truncated hashes only: never the body, parameters, run key or session key.
@@ -119,27 +119,42 @@ public static class ProposalEndpoints
 
             var proposalHash = Jcs.ProposalHash(root);
             var verdict = await verifier.VerifyAsync(sessionKey, key, runId, traceRef!, proposalHash, ct);
-            if (verdict is not TraceVerdict.Verified verified)
+            string source, schemaVersion;
+            string? refusalReason = null;
+            switch (verdict)
             {
-                // Fail closed for every non-Verified verdict: nothing is stored (plans 03-04 and 03-05 refine this arm).
-                if (verdict is TraceVerdict.Unavailable unavailable)
-                {
-                    logger.LogWarning("Trace verification unavailable tenant_id={TenantId} agent_id={AgentId} cause={Cause}", key.TenantId, key.AgentId, unavailable.Cause);
-                }
+                case TraceVerdict.Verified verified:
+                    source = verified.Source;
+                    schemaVersion = verified.SchemaVersion;
+                    logger.LogTrace("Trace verified tenant_id={TenantId} agent_id={AgentId} hash={Hash} verdict={Verdict}", key.TenantId, key.AgentId, Short(proposalHash), nameof(TraceVerdict.Verified));
+                    break;
+                case TraceVerdict.Refused refused:
+                    source = refused.Source;
+                    schemaVersion = refused.SchemaVersion;
+                    refusalReason = refused.Reason;
+                    // Static reason codes only: never trace_ref, token or parameters.
+                    logger.LogTrace("Trace refused tenant_id={TenantId} agent_id={AgentId} hash={Hash} reason={Reason}", key.TenantId, key.AgentId, Short(proposalHash), refused.Reason);
+                    break;
+                default:
+                    // Fail closed for every other verdict: nothing is stored (plan 03-05 refines this arm).
+                    if (verdict is TraceVerdict.Unavailable unavailable)
+                    {
+                        logger.LogWarning("Trace verification unavailable tenant_id={TenantId} agent_id={AgentId} cause={Cause}", key.TenantId, key.AgentId, unavailable.Cause);
+                    }
 
-                return TraceUnavailable();
+                    return TraceUnavailable();
             }
-
-            logger.LogTrace("Trace verified tenant_id={TenantId} agent_id={AgentId} hash={Hash} verdict={Verdict}", key.TenantId, key.AgentId, Short(proposalHash), nameof(TraceVerdict.Verified));
 
             // Tenant comes only from the introspected key, never from the body (IDN-04).
             var proposal = new NewProposal(key.AgentId, key.KeyId, key.OnBehalfOf, key.Purpose, key.ExpiresAt,
                 nonoSessionId, runId, actionType, partyRef, parametersJson, justification, traceRef,
-                Encoding.UTF8.GetString(canonical), bodySha, proposalHash, verified.Source, verified.SchemaVersion);
+                Encoding.UTF8.GetString(canonical), bodySha, proposalHash, source, schemaVersion);
             Guid? id;
             try
             {
-                id = await store.InsertAsync(key.TenantId, proposal, ct);
+                id = refusalReason is null
+                    ? await store.InsertAsync(key.TenantId, proposal, ct)
+                    : await store.InsertRefusedAsync(key.TenantId, proposal, refusalReason, ct);
             }
             catch (PostgresException e) when (e.SqlState is PostgresErrorCodes.NumericValueOutOfRange
                                                  or PostgresErrorCodes.InvalidTextRepresentation
@@ -158,7 +173,9 @@ public static class ProposalEndpoints
                 return await DecideExistingAsync() ?? ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.IdempotencyConflict);
             }
 
-            return Results.Created($"/v1/proposals/{id}", new ProposalCreatedResponse(id.Value, ProposalStates.Proposed));
+            return Results.Created($"/v1/proposals/{id}", refusalReason is null
+                ? new ProposalCreatedResponse(id.Value, ProposalStates.Proposed)
+                : new ProposalCreatedResponse(id.Value, ProposalStates.RefusedPolicy, refusalReason));
         }
     }
 
