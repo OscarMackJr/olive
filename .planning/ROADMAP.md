@@ -186,7 +186,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 04-05-PLAN.md — Slice: directory DI and production guard, endpoint entitlement step, fail-closed 503 (POL-02)
+- [x] 04-05-PLAN.md — Slice: directory DI and production guard, endpoint entitlement step, fail-closed 503 (POL-02)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
@@ -307,7 +307,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 1. Foundation and Walking Skeleton | 13/13 | Complete    | 2026-10-22 |
 | 2. Contract Integrity and Idempotent Submission | 7/7 | Complete    | 2026-10-22 |
 | 3. Trace Verification | 6/6 | Complete    | 2026-10-22 |
-| 4. Policy, Expiry and Refusal | 4/7 | In Progress|  |
+| 4. Policy, Expiry and Refusal | 5/7 | In Progress|  |
 | 5. Generic Review Queue and Action Approval | 0/TBD | Not started | - |
 | 6. Simulated Execution and Audit Chain | 0/TBD | Not started | - |
 | 7. Reviewer UI and Entra OIDC | 0/TBD | Not started | - |
