@@ -19,7 +19,7 @@ namespace Olive.Tests;
 
 public enum TraceMode { AutoFixture, Explicit }
 
-public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null, string? environment = "ci", Action<IServiceCollection>? configureServices = null, bool replaceIntrospector = true, TraceMode traceMode = TraceMode.AutoFixture, ITraceResolver? innerResolver = null, ITokenIssuer? innerIssuer = null, IDirectoryGroupResolver? innerDirectory = null)
+public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null, string? environment = "ci", Action<IServiceCollection>? configureServices = null, bool replaceIntrospector = true, TraceMode traceMode = TraceMode.AutoFixture, ITraceResolver? innerResolver = null, ITokenIssuer? innerIssuer = null, IDirectoryGroupResolver? innerDirectory = null, IUserIdentityResolver? innerUserIdentity = null)
     : WebApplicationFactory<Program>
 {
     private static readonly IReadOnlySet<string> CatalogPurposes = new HashSet<string> { "servicing", "origination", "collections", "analytics", "marketing", "compliance-review", "internal-support" };
@@ -46,6 +46,10 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
 
     public RecordingDirectoryResolver Directory { get; private set; } = null!;
 
+    public FixtureUserIdentityResolver FixtureUserIdentity { get; } = FixtureUserIdentityResolver.CreateDefault();
+
+    public RecordingUserIdentityResolver UserIdentity { get; private set; } = null!;
+
     public RecordingAlarm Alarms { get; } = new();
 
     public List<OutboundCall> OutboundCalls { get; } = [];
@@ -64,7 +68,7 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
 
         builder.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(config));
         // Program.cs reads the trace and directory timeouts before Build(), which ConfigureAppConfiguration does not reach.
-        foreach (var name in new[] { "OLIVE_TRACE_TIMEOUT_MS", "OLIVE_DIRECTORY_TIMEOUT_MS" })
+        foreach (var name in new[] { "OLIVE_TRACE_TIMEOUT_MS", "OLIVE_DIRECTORY_TIMEOUT_MS", "OLIVE_IDENTITY_RESOLVER_TIMEOUT_MS" })
         {
             if (config.TryGetValue(name, out var timeout))
             {
@@ -103,6 +107,8 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
 
             Directory = new RecordingDirectoryResolver(innerDirectory ?? FixtureDirectory, Events, OutboundCalls);
             services.AddSingleton<IDirectoryGroupResolver>(Directory);
+            UserIdentity = new RecordingUserIdentityResolver(innerUserIdentity ?? FixtureUserIdentity, Events, OutboundCalls);
+            services.AddSingleton<IUserIdentityResolver>(UserIdentity);
             services.AddScoped<IProposalStore>(sp =>
                 new RecordingProposalStore(ActivatorUtilities.CreateInstance<PostgresProposalStore>(sp), Events));
             configureServices?.Invoke(services);

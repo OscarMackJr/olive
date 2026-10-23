@@ -1,4 +1,5 @@
 using Olive.Application;
+using Olive.Integrations.Entra;
 
 namespace Olive.Tests;
 
@@ -96,5 +97,47 @@ public sealed class UserIdentityResolverTests
         var (check, fake) = Make(_ => Ok(new UserIdentityLookup.Resolved(Oid, Tid)));
         Assert.IsType<ApprovalIdentityVerdict.Unresolved>(await check.CheckAsync(Tenant, blank, Oid, Tid, default));
         Assert.Equal(0, fake.Calls);
+    }
+
+    private static readonly Guid Alpha = Guid.Parse("5325ffe9-5727-4d88-9832-aebabb8d0538");
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task APR_02_default_fixture_resolves_the_analyst_to_one_oid_and_tid()
+    {
+        var r = FixtureUserIdentityResolver.CreateDefault();
+        var found = Assert.IsType<UserIdentityLookup.Resolved>(await r.ResolveAsync(Alpha, "analyst.alpha@example.test", default));
+        Assert.Equal(Oid, found.Oid);
+        Assert.Equal(Tid, found.Tid);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task APR_02_fixture_reports_ambiguous_notfound_and_cross_tenant_as_notfound()
+    {
+        var r = FixtureUserIdentityResolver.CreateDefault();
+        Assert.IsType<UserIdentityLookup.Ambiguous>(await r.ResolveAsync(Alpha, "ambiguous.alpha@example.test", default));
+        Assert.IsType<UserIdentityLookup.NotFound>(await r.ResolveAsync(Alpha, "nobody@example.test", default));
+        Assert.IsType<UserIdentityLookup.NotFound>(await r.ResolveAsync(Guid.NewGuid(), "analyst.alpha@example.test", default));
+        Assert.IsType<UserIdentityLookup.Malformed>(await r.ResolveAsync(Alpha, " ", default));
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public async Task APR_02_end_to_end_fixture_lookalike_upn_with_different_oid_is_allowed_and_same_oid_is_refused()
+    {
+        var r = FixtureUserIdentityResolver.CreateDefault();
+        var check = new ApprovalIdentityCheck(new UserIdentityVerifier(r, new UserIdentityVerifierOptions()));
+        Assert.IsType<ApprovalIdentityVerdict.SelfApproval>(await check.CheckAsync(Alpha, "analyst.alpha@example.test", Oid, Tid, default));
+        Assert.IsType<ApprovalIdentityVerdict.Allowed>(await check.CheckAsync(Alpha, "analyst.alpha@example.test", "cccccccc-0000-4000-8000-000000000001", Tid, default));
+        Assert.IsType<ApprovalIdentityVerdict.Unresolved>(await check.CheckAsync(Alpha, "ambiguous.alpha@example.test", Oid, Tid, default));
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void APR_02_fixture_is_non_production_only_and_the_port_is_an_outbound_port()
+    {
+        Assert.True(typeof(INonProductionOnly).IsAssignableFrom(typeof(FixtureUserIdentityResolver)));
+        Assert.NotNull(typeof(IUserIdentityResolver).GetCustomAttributes(typeof(OutboundPortAttribute), false).SingleOrDefault());
     }
 }
