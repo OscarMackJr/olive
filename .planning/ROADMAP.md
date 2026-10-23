@@ -216,8 +216,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 10 plans
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — Migration 0008 (queue_item, queue_item_event, RLS, grants, CHECKs), QueueStates, IR-1 v1 contract, delete v0
-- [ ] 05-02-PLAN.md — Kind registry, reviewer tenant map, startup consistency check (D-21)
+- [x] 05-01-PLAN.md — Migration 0008 (queue_item, queue_item_event, RLS, grants, CHECKs), QueueStates, IR-1 v1 contract, delete v0
+- [x] 05-02-PLAN.md — Kind registry, reviewer tenant map, startup consistency check (D-21)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -342,7 +342,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 2. Contract Integrity and Idempotent Submission | 7/7 | Complete    | 2026-10-22 |
 | 3. Trace Verification | 6/6 | Complete    | 2026-10-22 |
 | 4. Policy, Expiry and Refusal | 7/7 | Complete    | 2026-10-23 |
-| 5. Generic Review Queue and Action Approval | 0/TBD | Not started | - |
+| 5. Generic Review Queue and Action Approval | 2/10 | In Progress|  |
 | 6. Simulated Execution and Audit Chain | 0/TBD | Not started | - |
 | 7. Reviewer UI and Entra OIDC | 0/TBD | Not started | - |
 | 8. Identity Review Queue Kind | 0/TBD | Not started | - |
