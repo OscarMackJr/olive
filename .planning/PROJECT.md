@@ -30,6 +30,8 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 - ✓ Ordered checks: `trace_not_found` (`422`, not stored, retryable) → `trace_unresolved` → `trace_tenant_mismatch` → `trace_agent_mismatch` → `trace_proposal_mismatch`. A resolver that is unavailable, or a 401/403 from hometown or popeye, fails closed with `503`, and the auth failures also raise an alarm. Validated in Phase 3: Trace Verification.
 - ✓ Positive resolutions are cached by `(tenant_id, trace_id)`. Not-found results are never cached. Validated in Phase 3: Trace Verification.
 - ✓ `trace_verification ∈ {fixture, hometown}` and `trace_schema_version` are recorded. The service refuses to start in `production` with the fixture resolver or the token stub, including when it is decorated. Validated in Phase 3: Trace Verification.
+- ✓ Authorization uses the intersection of the agent's entitlements (source-controlled allowlist) and the `on_behalf_of` user's directory entitlements. Missing data refuses (`entitlement_missing`), and a directory failure fails closed with a retryable `503`. Validated in Phase 4: Policy, Expiry and Refusal.
+- ✓ Policy (purpose, entitlements, per-agent rate limits under an advisory lock) runs before queueing. `not_in_catalog`, `purpose_not_permitted`, `entitlement_missing` and `rate_limited` are stored as `refused_policy` with a `policy_evaluated` event, replay as `200`, and never reach `awaiting_approval`. Validated in Phase 4: Policy, Expiry and Refusal.
 
 ### Active
 
@@ -41,13 +43,11 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 **Identity and authorization (Decision §7, §17.1)**
 - [ ] A popeye introspection client behind an interface, with a stub for Phase 1. It covers `active`, `key_id`, `principal_type = agent`, the agent allowlist (`liam`), `on_behalf_of`, `purpose`, `tenant_id` and `expires_at`.
 - [ ] Separate caller paths. Users and applications receive `403 principal_not_permitted` on the proposal endpoint, and agents and users cannot use Olive's service path.
-- [ ] Authorization uses the intersection of the agent's entitlements and the `on_behalf_of` user's entitlements.
 - [ ] The session key is sent only to popeye. A capture of every outbound call proves this. (Phase 3 proved it for responses, Trace-level logs and stored rows. The JSONL output check is deferred to Phase 6.)
 
 **Policy and lifecycle (Charter §3)**
-- [ ] Policy (purpose, entitlements, per-agent rate limits) runs before queueing. A `refused_policy` proposal is stored and never queued.
-- [ ] The full lifecycle: `proposed` → `refused_policy` | `awaiting_approval` → `approved` | `rejected` → `executed` | `execution_failed` | `expired`, with state guards on every transition.
-- [ ] Expiry defaults to 8 hours, with a per-action maximum. `expires_in_seconds` can only shorten it, and it is capped at the key's `expires_at`. Expired proposals cannot be approved or executed and return a distinct error.
+- [ ] The full lifecycle: `proposed` → `refused_policy` | `awaiting_approval` → `approved` | `rejected` → `executed` | `execution_failed` | `expired`, with state guards on every transition. (Phase 4 added the transition table and guarded compare-and-set `TransitionAsync`; the approve, reject, execute and expire callers arrive in Phase 5.)
+- [ ] Expiry defaults to 8 hours, with a per-action maximum. `expires_in_seconds` can only shorten it, and it is capped at the key's `expires_at`. Expired proposals cannot be approved or executed and return a distinct error. (Phase 4 delivered the default, per-action maximum, shorten-only and key cap with an absolute `expires_at`; the approve/execute refusal is POL-08 in Phase 5.)
 - [ ] Execution is idempotent on `proposal_id`. A retry returns the first result.
 
 **Persistence (Decision §10, §13)**
@@ -133,4 +133,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-22 after Phase 3 (Trace Verification) completed. Proposals proceed only when the fixture trace matches on run, tenant, agent and hash. Mismatches are stored as `refused_policy`, and resolver or auth failures fail closed with 422 or 503, raising alarms where specified. The session key is shown to reach only popeye, except that the JSONL check is deferred to Phase 6. 735 tests are green.*
+*Last updated: 2026-10-23 after Phase 4 (Policy, Expiry and Refusal) completed. Policy now decides before any human sees a proposal: unknown-action, wrong-purpose, unentitled and rate-limited proposals are stored as replayable `refused_policy` rows with a `policy_evaluated` event and never reach `awaiting_approval`. Directory failures fail closed with a retryable 503. Accepted proposals carry a server-computed absolute `expires_at`. Lifecycle transitions are table-guarded, and the full submission order is asserted end to end. 889 tests are green.*
