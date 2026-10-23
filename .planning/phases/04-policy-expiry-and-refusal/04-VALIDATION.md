@@ -38,16 +38,16 @@ created: 2026-10-22
 
 | Req ID | Plans | Behavior | Test Type | Automated Command | File Exists | Status |
 |--------|-------|----------|-----------|-------------------|-------------|--------|
-| POL-01 | TBD | Wrong purpose -> stored `purpose_not_permitted`, never queue-eligible; unknown action -> stored `not_in_catalog`, no trace/resolver call | unit + integration | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~POL_01"` | ❌ W0 | ⬜ pending |
-| POL-02 | TBD | Intersection matrix (user only / agent only / both / neither / null / empty); unknown user refused; resolver fault -> 503 nothing stored; credential rejection alarm | unit + integration | `--filter "FullyQualifiedName~POL_02"` | ❌ W0 | ⬜ pending |
-| POL-03 | TBD | Refusals do not consume limit; limit+1 -> `rate_limited`; N parallel above limit accepts exactly `limit`; window slides; per-tenant/per-agent scope | integration | `--filter "FullyQualifiedName~POL_03"` | ❌ W0 | ⬜ pending |
-| POL-04 | TBD | `policy_evaluated` event with outcome/reasons/checks for allowed, each refusal, `not_in_catalog`; no parameter values or groups in detail (sentinel scan) | integration | `--filter "FullyQualifiedName~POL_04"` | ❌ W0 | ⬜ pending |
-| POL-05 | TBD | Replay of stored refusal under same key -> same refusal, evaluator/resolver call counts and event count unchanged; different body -> 409 | integration | `--filter "FullyQualifiedName~POL_05"` | ❌ W0 | ⬜ pending |
-| POL-06 | TBD | Full transition matrix; CAS fails on stale `from`; each success writes exactly one `proposal_event`; illegal transitions rejected | unit + integration | `--filter "FullyQualifiedName~POL_06"` | ❌ W0 | ⬜ pending |
-| POL-07 | TBD | Default 8h; shorten; <=0 or >max -> 400 nothing stored; key-expiry cap; absolute `expires_at` (unchanged after clock advance); GET exposes it | integration (ManualTimeProvider) | `--filter "FullyQualifiedName~POL_07"` | ❌ W0 | ⬜ pending |
-| API-08 | TBD | Multi-fault request peeled one fault at a time; recorder asserts call order and absence of later calls | integration | `--filter "FullyQualifiedName~API_08"` | ❌ W0 | ⬜ pending |
-| Schema/migration | TBD | Catalog schema new fields; proposal `expires_in_seconds` valid/invalid; migration 0007 privilege matrix and checksum | contract + integration | `--filter "FullyQualifiedName~ContractSchema\|PrivilegeMatrix\|MigrationRunner"` | extend existing | ⬜ pending |
-| Guards | TBD | Production + `FixtureDirectoryGroupResolver` refuses start (incl. behind decorator); architecture tests accept new outbound destination | integration/arch | `--filter "FullyQualifiedName~StartupGuard\|Architecture"` | extend existing | ⬜ pending |
+| POL-01 | 04-02 | Wrong purpose -> stored `purpose_not_permitted`, never queue-eligible; unknown action -> stored `not_in_catalog`, no trace/resolver call | unit + integration | `dotnet test tests/Olive.Tests --filter "FullyQualifiedName~POL_01"` | ❌ W0 | ⬜ pending |
+| POL-02 | 04-01, 04-04, 04-05 | Intersection matrix (user only / agent only / both / neither / null / empty); unknown user refused; resolver fault -> 503 nothing stored; credential rejection alarm | unit + integration | `--filter "FullyQualifiedName~POL_02"` | ❌ W0 | ⬜ pending |
+| POL-03 | 04-06 | Refusals do not consume limit; limit+1 -> `rate_limited`; N parallel above limit accepts exactly `limit`; window slides; per-tenant/per-agent scope | integration | `--filter "FullyQualifiedName~POL_03"` | ❌ W0 | ⬜ pending |
+| POL-04 | 04-02, 04-06 | `policy_evaluated` event with outcome/reasons/checks for allowed, each refusal, `not_in_catalog`; no parameter values or groups in detail (sentinel scan) | integration | `--filter "FullyQualifiedName~POL_04"` | ❌ W0 | ⬜ pending |
+| POL-05 | 04-02, 04-07 | Replay of stored refusal under same key -> same refusal, evaluator/resolver call counts and event count unchanged; different body -> 409 | integration | `--filter "FullyQualifiedName~POL_05"` | ❌ W0 | ⬜ pending |
+| POL-06 | 04-06, 04-07 | Full transition matrix; CAS fails on stale `from`; each success writes exactly one `proposal_event`; illegal transitions rejected | unit + integration | `--filter "FullyQualifiedName~POL_06"` | ❌ W0 | ⬜ pending |
+| POL-07 | 04-01, 04-03 | Default 8h; shorten; <=0 or >max -> 400 nothing stored; key-expiry cap; absolute `expires_at` (unchanged after clock advance); GET exposes it | integration (ManualTimeProvider) | `--filter "FullyQualifiedName~POL_07"` | ❌ W0 | ⬜ pending |
+| API-08 | 04-07 | Multi-fault request peeled one fault at a time; recorder asserts call order and absence of later calls | integration | `--filter "FullyQualifiedName~API_08"` | ❌ W0 | ⬜ pending |
+| Schema/migration | 04-01, 04-03, 04-04 | Catalog schema new fields; proposal `expires_in_seconds` valid/invalid; migration 0007 privilege matrix and checksum | contract + integration | `--filter "FullyQualifiedName~ContractSchema\|PrivilegeMatrix\|MigrationRunner"` | extend existing | ⬜ pending |
+| Guards | 04-04, 04-05 | Production + `FixtureDirectoryGroupResolver` refuses start (incl. behind decorator); architecture tests accept new outbound destination | integration/arch | `--filter "FullyQualifiedName~StartupGuard\|Architecture"` | extend existing | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
