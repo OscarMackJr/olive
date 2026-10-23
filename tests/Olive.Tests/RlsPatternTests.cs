@@ -6,7 +6,7 @@ namespace Olive.Tests;
 public class RlsPatternTests(PostgresFixture fx)
 {
     // Phases 5 and 6 append queue_item, queue_item_event, execution_ledger here (DB-03/DB-04 text names five tables; D-03 limits 0001 to two).
-    private static readonly string[] ExpectedTables = ["proposal", "proposal_event"];
+    private static readonly string[] ExpectedTables = ["proposal", "proposal_event", "queue_item", "queue_item_event"];
 
     private static async Task<List<string>> DiscoverAsync(NpgsqlConnection conn)
     {
