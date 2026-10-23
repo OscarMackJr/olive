@@ -31,6 +31,8 @@ public sealed class CatalogEndpointTests(PostgresFixture fixture)
         Assert.Equal(JsonValueKind.True, entry.GetProperty("reversible").ValueKind);
         Assert.Equal(JsonValueKind.Number, entry.GetProperty("max_rate").GetProperty("limit").ValueKind);
         Assert.Equal(10, entry.GetProperty("max_rate").GetProperty("limit").GetInt32());
+        Assert.Equal("ent:crm.case_note.write", entry.GetProperty("required_entitlement").GetString());
+        Assert.Equal(28800, entry.GetProperty("max_expiry_seconds").GetInt32());
     }
 
     [Fact]

@@ -34,6 +34,8 @@ public static partial class CatalogLoader
         [JsonPropertyName("required_approval")] public string? RequiredApproval { get; set; }
         [JsonPropertyName("reversible")] public bool? Reversible { get; set; }
         [JsonPropertyName("max_rate")] public RateDoc? MaxRate { get; set; }
+        [JsonPropertyName("required_entitlement")] public string? RequiredEntitlement { get; set; }
+        [JsonPropertyName("max_expiry_seconds")] public int? MaxExpirySeconds { get; set; }
     }
 
     private sealed class RateDoc
@@ -114,8 +116,16 @@ public static partial class CatalogLoader
             throw new InvalidOperationException(Invalid);
         }
 
+        // D-03: no entitlement means no grant, so the entry is refused at startup. D-13: expiry ceiling is mandatory.
+        if (string.IsNullOrWhiteSpace(entry.RequiredEntitlement) || entry.MaxExpirySeconds is not > 0
+            || entry.MaxRate is not { Limit: > 0, WindowSeconds: > 0 } rate)
+        {
+            throw new InvalidOperationException(Invalid);
+        }
+
         CatalogVetting.Check(entry.Parameters);
-        return new CatalogEntry(actionId, element, SchemaValidator.Compile(entry.Parameters.GetRawText()));
+        return new CatalogEntry(actionId, element, SchemaValidator.Compile(entry.Parameters.GetRawText()),
+            req.ToArray(), rate.Limit, rate.WindowSeconds, entry.RequiredEntitlement, entry.MaxExpirySeconds.Value);
     }
 
     public static CatalogSet LoadEmbedded(string vocabularyPath)
