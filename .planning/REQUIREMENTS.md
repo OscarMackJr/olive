@@ -108,28 +108,28 @@
 - [x] **POL-05**: Retrying a stored refusal under the same key returns the same refusal without re-evaluating it.
 - [x] **POL-06**: Every lifecycle transition is a compare-and-set update paired with a `proposal_event` row. Illegal transitions are rejected. (`proposed` → `refused_policy` | `awaiting_approval` → `approved` | `rejected` → `executed` | `execution_failed` | `expired`)
 - [x] **POL-07**: Expiry defaults to 8 hours, with a maximum per action type. `expires_in_seconds` can only shorten it (Q3), and it is capped at the key's `expires_at`. `expires_at` is stored as an absolute time.
-- [ ] **POL-08**: An expired proposal can't be approved or executed. It returns a distinct `proposal_expired` error, and the expiry transition is committed before the error is returned. (Charter REQ-ACT-05)
+- [x] **POL-08**: An expired proposal can't be approved or executed. It returns a distinct `proposal_expired` error, and the expiry transition is committed before the error is returned. (Charter REQ-ACT-05)
 
 ### Review queue (QUE)
 
-- [ ] **QUE-01**: Queue items follow the IR-1 model: its states, `subject_ref` and `payload_ref` (references only, with a CHECK on reference schemes), and its decision history. An item that carries an inline payload is rejected. (Charter REQ-QUE-01)
-- [ ] **QUE-02**: A source-controlled kind registry defines each kind's subtypes, decision set, required role and allowed reference schemes. The registered kinds are `action_approval` and `identity_review`, and runtime registration is impossible.
-- [ ] **QUE-03**: A proposal that passes policy is enqueued as `action_approval` in the same transaction that persists it.
-- [ ] **QUE-04**: A reviewer can list open items for their tenant. Expired action items are filtered out.
-- [ ] **QUE-05**: A reviewer can claim an open item. Claiming is compare-and-set, so concurrent claims produce exactly one winner.
-- [ ] **QUE-06**: Only the claimant can release their claim. The item returns to open, and the release is recorded (Q7).
-- [ ] **QUE-07**: Only the claimant can decide. Every decision records `decided_by`, `decided_at` and `rationale`, and a decision missing `decided_by` or with a blank rationale is rejected. (Charter REQ-QUE-03)
-- [ ] **QUE-08**: Resubmitting the same decision by the same reviewer is a no-op that returns the recorded decision. A conflicting decision is rejected.
-- [ ] **QUE-09**: Each claim, release, decision and withdrawal is appended to `queue_item_event`, and the full history is available for audit.
-- [ ] **QUE-10**: When a queued proposal expires, its item moves to `withdrawn` with reason `proposal_expired` (Q11).
+- [x] **QUE-01**: Queue items follow the IR-1 model: its states, `subject_ref` and `payload_ref` (references only, with a CHECK on reference schemes), and its decision history. An item that carries an inline payload is rejected. (Charter REQ-QUE-01)
+- [x] **QUE-02**: A source-controlled kind registry defines each kind's subtypes, decision set, required role and allowed reference schemes. The registered kinds are `action_approval` and `identity_review`, and runtime registration is impossible.
+- [x] **QUE-03**: A proposal that passes policy is enqueued as `action_approval` in the same transaction that persists it.
+- [x] **QUE-04**: A reviewer can list open items for their tenant. Expired action items are filtered out.
+- [x] **QUE-05**: A reviewer can claim an open item. Claiming is compare-and-set, so concurrent claims produce exactly one winner.
+- [x] **QUE-06**: Only the claimant can release their claim. The item returns to open, and the release is recorded (Q7).
+- [x] **QUE-07**: Only the claimant can decide. Every decision records `decided_by`, `decided_at` and `rationale`, and a decision missing `decided_by` or with a blank rationale is rejected. (Charter REQ-QUE-03)
+- [x] **QUE-08**: Resubmitting the same decision by the same reviewer is a no-op that returns the recorded decision. A conflicting decision is rejected.
+- [x] **QUE-09**: Each claim, release, decision and withdrawal is appended to `queue_item_event`, and the full history is available for audit.
+- [x] **QUE-10**: When a queued proposal expires, its item moves to `withdrawn` with reason `proposal_expired` (Q11).
 
 ### Approval rules (APR)
 
-- [ ] **APR-01**: Approval is per proposal and needs an authenticated reviewer identity; an approval without one is rejected.
-- [ ] **APR-02**: The approver may not be the proposal's `on_behalf_of` user. The check uses the explicit oid and tid mapping, and a missing or ambiguous mapping is refused.
+- [x] **APR-01**: Approval is per proposal and needs an authenticated reviewer identity; an approval without one is rejected.
+- [x] **APR-02**: The approver may not be the proposal's `on_behalf_of` user. The check uses the explicit oid and tid mapping, and a missing or ambiguous mapping is refused.
 - [ ] **APR-03**: `role:case_supervisor` is checked at decision time, not when the item is claimed.
-- [ ] **APR-04**: An action_approval decision (approve or reject) updates the queue item and the proposal state in one transaction.
-- [ ] **APR-05**: The reviewer's authentication source (`entra | stub`) is recorded with each decision.
+- [x] **APR-04**: An action_approval decision (approve or reject) updates the queue item and the proposal state in one transaction.
+- [x] **APR-05**: The reviewer's authentication source (`entra | stub`) is recorded with each decision.
 
 ### Execution and audit chain (EXE)
 
@@ -161,7 +161,7 @@
 
 - [ ] **EVD-01**: Every case in the D§16.8 and D§17.4 test tables, plus charter TC-ACT-01..06 and TC-QUE-01..04, has a named test that passes in CI.
 - [ ] **EVD-02**: A scripted local beat 2 demo shows a proposal verified against a fixture trace being approved and executed in simulation, with the chain queried from the execution record.
-- [ ] **EVD-03**: A scripted local beat 4 demo shows an out-of-purpose proposal being refused, its refusal traced, and the proposal never appearing in the queue.
+- [x] **EVD-03**: A scripted local beat 4 demo shows an out-of-purpose proposal being refused, its refusal traced, and the proposal never appearing in the queue.
 - [ ] **EVD-04**: A hand-authored OpenAPI 3.1 at `contracts/proposal/v1/openapi.yaml` `$ref`s the v1 schemas, and a drift test checks it against the live routes.
 - [ ] **EVD-05**: `contracts/proposal/v1/COMPATIBILITY.md` maps S-OL-1 to v1 field by field, including the 422 behaviour and the Q1–Q3 outcomes. Liam fixtures accompany it for the §3 joint review.
 - [ ] **EVD-06**: A credential audit across repos shows zero write-capable credentials, Olive included. (Charter REQ-ACT-04)
@@ -252,22 +252,22 @@ Deferred. Tracked but not in the current roadmap.
 | POL-05 | Phase 4 | Complete |
 | POL-06 | Phase 4 | Complete |
 | POL-07 | Phase 4 | Complete |
-| POL-08 | Phase 5 | Pending |
-| QUE-01 | Phase 5 | Pending |
-| QUE-02 | Phase 5 | Pending |
-| QUE-03 | Phase 5 | Pending |
-| QUE-04 | Phase 5 | Pending |
-| QUE-05 | Phase 5 | Pending |
-| QUE-06 | Phase 5 | Pending |
-| QUE-07 | Phase 5 | Pending |
-| QUE-08 | Phase 5 | Pending |
-| QUE-09 | Phase 5 | Pending |
-| QUE-10 | Phase 5 | Pending |
-| APR-01 | Phase 5 | Pending |
-| APR-02 | Phase 5 | Pending |
+| POL-08 | Phase 5 | Complete |
+| QUE-01 | Phase 5 | Complete |
+| QUE-02 | Phase 5 | Complete |
+| QUE-03 | Phase 5 | Complete |
+| QUE-04 | Phase 5 | Complete |
+| QUE-05 | Phase 5 | Complete |
+| QUE-06 | Phase 5 | Complete |
+| QUE-07 | Phase 5 | Complete |
+| QUE-08 | Phase 5 | Complete |
+| QUE-09 | Phase 5 | Complete |
+| QUE-10 | Phase 5 | Complete |
+| APR-01 | Phase 5 | Complete |
+| APR-02 | Phase 5 | Complete |
 | APR-03 | Phase 7 | Pending |
-| APR-04 | Phase 5 | Pending |
-| APR-05 | Phase 5 | Pending |
+| APR-04 | Phase 5 | Complete |
+| APR-05 | Phase 5 | Complete |
 | EXE-01 | Phase 6 | Pending |
 | EXE-02 | Phase 6 | Pending |
 | EXE-03 | Phase 6 | Pending |
@@ -287,7 +287,7 @@ Deferred. Tracked but not in the current roadmap.
 | IRQ-04 | Phase 8 | Pending |
 | EVD-01 | Phase 9 | Pending |
 | EVD-02 | Phase 6 | Pending |
-| EVD-03 | Phase 5 | Pending |
+| EVD-03 | Phase 5 | Complete |
 | EVD-04 | Phase 9 | Pending |
 | EVD-05 | Phase 9 | Pending |
 | EVD-06 | Phase 9 | Pending |
