@@ -63,7 +63,7 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 - Real executors need a signed divisional write agreement and a scoped credential (charter §3.3, `specs/OLIVE_CHARTER_v0.4.md`). Do not add one until both exist.
 - Proposals originate outside Olive. Olive only validates, queues, approves and simulates execution.
 - Never edit `contracts/vendored/vocabulary.yaml` (see `contracts/vendored/VENDORED.md`). Update catalog entries in `catalog/*.yaml` instead.
-- Queue payloads are references (`payload://...`, `proposal://...`), never inline bodies. Queue-item schema is `additionalProperties: false` (`contracts/queue-item/v0/queue-item.schema.json`).
+- Queue payloads are references of the form `olive:proposal/<proposal_id>`, never inline bodies. Queue-item schema is `additionalProperties: false` (`contracts/queue-item/v1/queue-item.schema.json`).
 - Keep tenant predicates in application queries (`x.TenantId == tenantId`) even though PostgreSQL RLS is also enforced (`db/migrations/V001__action_broker.sql`).
 - Catalog action types are source-controlled (`catalog/`). No runtime registration API; `Catalog.AddAtRuntime` throws `NotSupportedException`.
 ## Naming Patterns
@@ -128,7 +128,7 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 ## Layers
 - Purpose: JSON Schemas + valid/invalid examples, queue-kind contracts, vendored vocabulary
 - Location: `contracts/`
-- Contains: `proposal/v1/`, `catalog/v1/`, `queue-item/v0/`, `execution-record/v0/`, `introspection/`, `queue/identity-review/`, `vendored/` (read-only `vocabulary.yaml`)
+- Contains: `proposal/v1/`, `catalog/v1/`, `queue-item/v1/`, `execution-record/v0/`, `introspection/`, `queue/identity-review/`, `vendored/` (read-only `vocabulary.yaml`)
 - Used by: tests (`RequirementsTests`), external producers/consumers
 - Location: `catalog/` (YAML per action type, named `<action_id>.yaml`)
 - Parsed by line-based reader in `Catalog.Parse` (not a YAML library)

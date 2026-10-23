@@ -16,6 +16,10 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
         ("proposal", "olive_reader", ["SELECT"]),
         ("proposal_event", "olive_app", ["SELECT", "INSERT"]),
         ("proposal_event", "olive_reader", ["SELECT"]),
+        ("queue_item", "olive_app", ["SELECT"]),
+        ("queue_item", "olive_reader", ["SELECT"]),
+        ("queue_item_event", "olive_app", ["SELECT", "INSERT"]),
+        ("queue_item_event", "olive_reader", ["SELECT"]),
     ];
 
     [Fact]
@@ -186,6 +190,57 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
         }
         await using var sel = new NpgsqlCommand("select state from proposal", conn, tx);
         Assert.Equal("proposed", (string)(await sel.ExecuteScalarAsync())!);
+    }
+
+    private static readonly string[] QueueInsertable =
+        ["tenant_id", "item_id", "kind", "subtype", "producer", "producer_ref", "subject_ref", "payload_ref", "proposal_id", "ruleset_version", "expires_at"];
+
+    private static readonly string[] QueueUpdatable =
+        ["state", "claimed_by", "claimed_at", "decision", "decided_by", "decided_at", "rationale", "auth_source", "withdrawn_reason"];
+
+    private async Task AssertQueueColumnPrivilegesAsync(string[] allowed, string privilege)
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        await using var conn = new NpgsqlConnection(db.ReaderConnectionString);
+        await conn.OpenAsync();
+        var cols = new List<string>();
+        await using (var q = new NpgsqlCommand("select attname from pg_attribute where attrelid = 'public.queue_item'::regclass and attnum > 0 and not attisdropped", conn))
+        await using (var r = await q.ExecuteReaderAsync())
+            while (await r.ReadAsync()) cols.Add(r.GetString(0));
+        Assert.Contains("state", cols);
+        foreach (var col in cols)
+        {
+            await using var cmd = new NpgsqlCommand($"select has_column_privilege('olive_app', 'public.queue_item', @c, '{privilege}')", conn);
+            cmd.Parameters.AddWithValue("c", col);
+            Assert.Equal(allowed.Contains(col), (bool)(await cmd.ExecuteScalarAsync())!);
+        }
+    }
+
+    [Fact]
+    public Task QUE_09_app_insert_on_queue_item_is_limited_to_reference_columns() => AssertQueueColumnPrivilegesAsync(QueueInsertable, "INSERT");
+
+    [Fact]
+    public Task QUE_09_app_update_on_queue_item_is_limited_to_workflow_columns() => AssertQueueColumnPrivilegesAsync(QueueUpdatable, "UPDATE");
+
+    [Fact]
+    public async Task QUE_09_app_cannot_insert_state_or_claim_or_update_identity_columns()
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        var p = await db.SeedProposalAsync(TestPaths.TenantAlpha, "agent-1", "run-1");
+        await db.SeedQueueItemAsync(TestPaths.TenantAlpha, p);
+        var good = $"olive:proposal/{p}";
+        foreach (var extra in new[] { ("state", "'claimed'"), ("created_at", "'2020-01-01'"), ("claimed_by", "'x'") })
+            Assert.Equal("42501", await SqlStateAsync(db.AppConnectionString,
+                $"insert into queue_item (tenant_id, item_id, kind, subtype, producer, producer_ref, subject_ref, payload_ref, proposal_id, {extra.Item1}) " +
+                $"values ('{TestPaths.TenantAlpha}', gen_random_uuid(), 'action_approval', 'proposal', 'olive', '{p}', '{good}', '{good}', '{p}', {extra.Item2})"));
+        foreach (var sql in new[]
+        {
+            "update queue_item set tenant_id = gen_random_uuid()",
+            "update queue_item set kind = 'identity_review'",
+            "update queue_item set subject_ref = 'x'",
+            "update queue_item set payload_ref = 'x'",
+        })
+            Assert.Equal("42501", await SqlStateAsync(db.AppConnectionString, sql));
     }
 
     [Fact]

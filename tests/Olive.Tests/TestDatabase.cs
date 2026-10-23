@@ -69,6 +69,43 @@ public sealed class TestDatabase(PostgresFixture fixture, string name) : IAsyncD
         return proposalId;
     }
 
+    // Inserts an open action_approval queue_item (plus a created event) for an existing proposal, as olive_app.
+    public async Task<Guid> SeedQueueItemAsync(Guid tenantId, Guid proposalId)
+    {
+        var itemId = Guid.NewGuid();
+        await using var conn = new NpgsqlConnection(AppConnectionString);
+        await conn.OpenAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+        await using (var set = new NpgsqlCommand("select set_config('olive.tenant_id', @t, true)", conn, tx))
+        {
+            set.Parameters.AddWithValue("t", tenantId.ToString());
+            await set.ExecuteNonQueryAsync();
+        }
+
+        await using (var ins = new NpgsqlCommand(
+            "insert into queue_item (tenant_id, item_id, kind, subtype, producer, producer_ref, subject_ref, payload_ref, proposal_id) " +
+            "values (@t, @i, 'action_approval', 'proposal', 'olive', @p, 'olive:proposal/' || @p::text, 'olive:proposal/' || @p::text, @p)", conn, tx))
+        {
+            ins.Parameters.AddWithValue("t", tenantId);
+            ins.Parameters.AddWithValue("i", itemId);
+            ins.Parameters.AddWithValue("p", proposalId);
+            await ins.ExecuteNonQueryAsync();
+        }
+
+        await using (var ev = new NpgsqlCommand(
+            "insert into queue_item_event (tenant_id, event_id, item_id, event_type, to_state, actor) " +
+            "values (@t, @e, @i, 'created', 'open', 'olive')", conn, tx))
+        {
+            ev.Parameters.AddWithValue("t", tenantId);
+            ev.Parameters.AddWithValue("e", Guid.NewGuid());
+            ev.Parameters.AddWithValue("i", itemId);
+            await ev.ExecuteNonQueryAsync();
+        }
+
+        await tx.CommitAsync();
+        return itemId;
+    }
+
     // Test-only: runs SQL as the container superuser (bypasses RLS and column grants), e.g. to backdate created_at.
     public async Task<int> AdminExecAsync(string sql)
     {
