@@ -24,8 +24,8 @@ public sealed class QueueDecisionStoreTests(PostgresFixture fixture)
     // Thin alias so tuples stay readable.
     private sealed record PostgresQueueStoreHandle(Olive.Persistence.PostgresQueueStore Inner)
     {
-        public Task<DecideResult> Decide(Guid item, string actor, string decision, DateTimeOffset? at = null, string rationale = Rationale) =>
-            Inner.DecideAsync(Alpha, item, actor, "stub", decision, rationale, at ?? Now, Ct);
+        public Task<DecideResult> Decide(Guid item, string actor, string decision, DateTimeOffset? at = null, string rationale = Rationale, bool verified = true) =>
+            Inner.DecideAsync(Alpha, item, actor, "stub", decision, rationale, verified, at ?? Now, Ct);
     }
 
     private static Task<long> EventCount(TestDatabase db, Guid item, string type) =>
@@ -106,11 +106,35 @@ public sealed class QueueDecisionStoreTests(PostgresFixture fixture)
         Assert.IsType<DecideResult.NotClaimed>(await store.Decide(open, "rev-1", "approve"));
         Assert.IsType<DecideResult.NotClaimant>(await store.Decide(item, "rev-2", "approve"));
         Assert.IsType<DecideResult.NotFound>(await store.Decide(Guid.NewGuid(), "rev-1", "approve"));
-        Assert.IsType<DecideResult.NotFound>(await store.Inner.DecideAsync(Beta, item, "rev-1", "stub", "approve", Rationale, Now, Ct));
+        Assert.IsType<DecideResult.NotFound>(await store.Inner.DecideAsync(Beta, item, "rev-1", "stub", "approve", Rationale, true, Now, Ct));
         await Assert.ThrowsAsync<ArgumentException>(() => store.Decide(item, " ", "approve"));
         await Assert.ThrowsAsync<ArgumentException>(() => store.Decide(item, "rev-1", "approve", rationale: "   "));
         await Assert.ThrowsAsync<ArgumentException>(() => store.Decide(item, "rev-1", "defer"));
         Assert.Equal("claimed", await QueueClaimTests.Scalar<string>(db, Alpha, "select state from queue_item where item_id = @i", ("i", item)));
+    }
+
+    [Fact]
+    public async Task APR_02_CR_01_unverified_approve_on_a_claim_that_landed_after_the_pre_read_is_not_applied()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        var (proposal, item, store) = await Claimed(db, "cr01");
+
+        Assert.IsType<DecideResult.NotClaimed>(await store.Decide(item, "rev-1", "approve", verified: false));
+
+        Assert.Equal("claimed", await QueueClaimTests.Scalar<string>(db, Alpha, "select state from queue_item where item_id = @i", ("i", item)));
+        Assert.Equal("awaiting_approval", await QueueClaimTests.Scalar<string>(db, Alpha, "select state from proposal where proposal_id = @p", ("p", proposal)));
+        Assert.Equal(0L, await EventCount(db, item, "decided"));
+
+        // The client retries and the identity check then runs, so the verified approve succeeds.
+        Assert.IsType<DecideResult.Decided>(await store.Decide(item, "rev-1", "approve", verified: true));
+    }
+
+    [Fact]
+    public async Task APR_02_CR_01_unverified_reject_is_still_applied()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        var (_, item, store) = await Claimed(db, "cr01r");
+        Assert.IsType<DecideResult.Decided>(await store.Decide(item, "rev-1", "reject", verified: false));
     }
 
     [Fact]

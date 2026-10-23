@@ -51,11 +51,17 @@ public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry,
     }
 
     // claimed_by holds the Entra oid (A4). Role is deliberately not required to claim or release.
-    public Task<ClaimResult> ClaimAsync(ReviewerContext reviewer, Guid itemId, CancellationToken ct) =>
-        store.ClaimAsync(reviewer.TenantId, itemId, reviewer.Oid, time.GetUtcNow(), ct);
+    public Task<ClaimResult> ClaimAsync(ReviewerContext reviewer, Guid itemId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(reviewer.Oid)) { throw new ArgumentException("A reviewer oid is required.", nameof(reviewer)); }
+        return store.ClaimAsync(reviewer.TenantId, itemId, reviewer.Oid, time.GetUtcNow(), ct);
+    }
 
-    public Task<ReleaseResult> ReleaseAsync(ReviewerContext reviewer, Guid itemId, CancellationToken ct) =>
-        store.ReleaseAsync(reviewer.TenantId, itemId, reviewer.Oid, time.GetUtcNow(), ct);
+    public Task<ReleaseResult> ReleaseAsync(ReviewerContext reviewer, Guid itemId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(reviewer.Oid)) { throw new ArgumentException("A reviewer oid is required.", nameof(reviewer)); }
+        return store.ReleaseAsync(reviewer.TenantId, itemId, reviewer.Oid, time.GetUtcNow(), ct);
+    }
 
     public const int MaxRationaleLength = 4000;
 
@@ -69,13 +75,14 @@ public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry,
         if (item is null) { return new DecisionResult.NotFound(); }
         if (item.Kind != QueueStates.ActionApproval || !registry.TryGet(item.Kind, out var definition)) { return new DecisionResult.KindNotSupported(); }
         if (decision is null || !definition.Decisions.Contains(decision, StringComparer.Ordinal)) { return new DecisionResult.InvalidRequest(); }
-        if (string.IsNullOrWhiteSpace(rationale) || rationale.Length > MaxRationaleLength) { return new DecisionResult.InvalidRequest(); }
+        if (string.IsNullOrWhiteSpace(rationale) || rationale.Length > MaxRationaleLength || rationale.Contains('\0')) { return new DecisionResult.InvalidRequest(); }
         if (!reviewer.Groups.Contains(definition.RequiredRole, StringComparer.Ordinal)) { return new DecisionResult.RoleNotPermitted(); }
 
         var now = time.GetUtcNow();
         var live = item.State == QueueStates.Claimed
             && string.Equals(item.ClaimedBy, reviewer.Oid, StringComparison.Ordinal)
             && (item.ExpiresAt is null || item.ExpiresAt > now);
+        var identityVerified = false;
         if (decision == QueueStates.Approve && live)
         {
             var payload = await store.GetPayloadAsync(reviewer.TenantId, itemId, ct);
@@ -87,9 +94,11 @@ public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry,
                 case ApprovalIdentityVerdict.Unresolved: return new DecisionResult.Unresolved();
                 case ApprovalIdentityVerdict.Unavailable: return new DecisionResult.Unavailable();
             }
+
+            identityVerified = true;
         }
 
-        var result = await store.DecideAsync(reviewer.TenantId, itemId, reviewer.Oid, reviewer.AuthSource, decision, rationale, now, ct);
+        var result = await store.DecideAsync(reviewer.TenantId, itemId, reviewer.Oid, reviewer.AuthSource, decision, rationale, identityVerified, now, ct);
         return result switch
         {
             DecideResult.Decided d => new DecisionResult.Decided(d.Item),

@@ -20,17 +20,31 @@ public sealed class QueueServiceDecideTests
     {
         public int DecideCalls { get; private set; }
         public DecideResult Outcome { get; set; } = new DecideResult.NotFound();
+        public bool? LastVerified { get; private set; }
+        public int ClaimCalls { get; private set; }
+        public int ReleaseCalls { get; private set; }
 
         public Task<IReadOnlyList<QueueItemSummary>> ListAsync(Guid tenantId, string? kind, string? state, DateTimeOffset now, int limit, CancellationToken ct) => throw new NotSupportedException();
         public Task<QueueItemDetail?> GetAsync(Guid tenantId, Guid itemId, CancellationToken ct) => Task.FromResult(item);
         public Task<IReadOnlyList<QueueItemEventRecord>?> EventsAsync(Guid tenantId, Guid itemId, CancellationToken ct) => throw new NotSupportedException();
         public Task<ReviewerPayload?> GetPayloadAsync(Guid tenantId, Guid itemId, CancellationToken ct) =>
             Task.FromResult<ReviewerPayload?>(new ReviewerPayload(itemId, "action_approval", "crm.case_note@1", "{}", "j", "analyst.alpha@example.test", null, null));
-        public Task<ClaimResult> ClaimAsync(Guid tenantId, Guid itemId, string actor, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
-        public Task<ReleaseResult> ReleaseAsync(Guid tenantId, Guid itemId, string actor, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
-        public Task<DecideResult> DecideAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, DateTimeOffset now, CancellationToken ct)
+        public Task<ClaimResult> ClaimAsync(Guid tenantId, Guid itemId, string actor, DateTimeOffset now, CancellationToken ct)
+        {
+            ClaimCalls++;
+            return Task.FromResult<ClaimResult>(new ClaimResult.NotFound());
+        }
+
+        public Task<ReleaseResult> ReleaseAsync(Guid tenantId, Guid itemId, string actor, DateTimeOffset now, CancellationToken ct)
+        {
+            ReleaseCalls++;
+            return Task.FromResult<ReleaseResult>(new ReleaseResult.NotFound());
+        }
+
+        public Task<DecideResult> DecideAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, bool approveIdentityVerified, DateTimeOffset now, CancellationToken ct)
         {
             DecideCalls++;
+            LastVerified = approveIdentityVerified;
             return Task.FromResult(Outcome);
         }
     }
@@ -108,6 +122,43 @@ public sealed class QueueServiceDecideTests
             await service.DecideAsync(Reviewer(), Guid.NewGuid(), "approve", "ok", Ct);
             Assert.Equal(0, resolver.CallCount);
         }
+    }
+
+    [Fact]
+    public async Task APR_02_CR_01_approve_after_a_racing_claim_passes_identity_verified_false_to_the_store()
+    {
+        // Pre-read sees the item open (the claim has not landed yet), so the identity check is skipped and the flag must be false.
+        var (service, store, resolver) = Build(Item(state: "open", claimedBy: null));
+        store.Outcome = new DecideResult.NotClaimed();
+        Assert.IsType<DecisionResult.NotClaimed>(await service.DecideAsync(Reviewer(), Guid.NewGuid(), "approve", "ok", Ct));
+        Assert.Equal(0, resolver.CallCount);
+        Assert.Equal(false, store.LastVerified);
+    }
+
+    [Fact]
+    public async Task APR_02_CR_01_approve_after_a_passed_identity_check_passes_identity_verified_true_to_the_store()
+    {
+        var (service, store, _) = Build(Item());
+        store.Outcome = new DecideResult.Decided(Item(state: "decided"));
+        await service.DecideAsync(Reviewer(), Guid.NewGuid(), "approve", "ok", Ct);
+        Assert.Equal(true, store.LastVerified);
+    }
+
+    [Fact]
+    public async Task WR_01_rationale_with_a_nul_character_is_invalid_request_and_never_reaches_the_store()
+    {
+        var (service, store, _) = Build(Item());
+        Assert.IsType<DecisionResult.InvalidRequest>(await service.DecideAsync(Reviewer(), Guid.NewGuid(), "approve", "a\0b", Ct));
+        Assert.Equal(0, store.DecideCalls);
+    }
+
+    [Fact]
+    public async Task WR_02_blank_reviewer_oid_is_refused_for_claim_and_release_before_the_store()
+    {
+        var (service, store, _) = Build(Item());
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ClaimAsync(Reviewer(" "), Guid.NewGuid(), Ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ReleaseAsync(Reviewer(""), Guid.NewGuid(), Ct));
+        Assert.Equal(0, store.ClaimCalls + store.ReleaseCalls);
     }
 
     [Fact]

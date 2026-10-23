@@ -230,7 +230,7 @@ public sealed class PostgresQueueStore(TenantUnitOfWork uow) : IQueueStore
     // APR-04: the item UPDATE, the proposal compare-and-set and both events share one (conn, tx). The proposal store's own transition
     // method is deliberately not used because it opens its own transaction. The rationale is stored once on the item row and never
     // reaches an event detail.
-    public Task<DecideResult> DecideAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, DateTimeOffset now, CancellationToken ct)
+    public Task<DecideResult> DecideAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, bool approveIdentityVerified, DateTimeOffset now, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(actor)) { throw new ArgumentException("A reviewer is required.", nameof(actor)); }
         if (string.IsNullOrWhiteSpace(rationale)) { throw new ArgumentException("A rationale is required.", nameof(rationale)); }
@@ -264,6 +264,8 @@ public sealed class PostgresQueueStore(TenantUnitOfWork uow) : IQueueStore
             if (row.State == QueueStates.Withdrawn) { return new DecideResult.Closed(); }
             if (row.State == QueueStates.Open) { return new DecideResult.NotClaimed(); }
             if (!string.Equals(row.ClaimedBy, actor, StringComparison.Ordinal)) { return new DecideResult.NotClaimant(); }
+            // CR-01: the claim landed after the caller's pre-read, so the identity check did not run. Never approve unverified.
+            if (decision == QueueStates.Approve && !approveIdentityVerified) { return new DecideResult.NotClaimed(); }
             if (row.ProposalId is not { } proposalId) { throw new InvalidOperationException("Decision requires an item with a proposal."); }
 
             var n = await conn.ExecuteAsync(new CommandDefinition(QueueSql.Decide,

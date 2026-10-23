@@ -21,7 +21,10 @@ public interface IQueueStore
     Task<ReleaseResult> ReleaseAsync(Guid tenantId, Guid itemId, string actor, DateTimeOffset now, CancellationToken ct);
 
     // APR-04: item decision and proposal transition in one transaction. QUE-08: idempotent for the same actor and decision.
-    Task<DecideResult> DecideAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, DateTimeOffset now, CancellationToken ct);
+    // REQ-APR-02 / CR-01: approveIdentityVerified is true only when the caller ran the approval identity check and it returned Allowed.
+    // Under the row lock an approve with the flag false is never applied; a claim that landed after the caller's pre-read yields NotClaimed
+    // so the client retries and the check then runs. Reject is unaffected (D-18).
+    Task<DecideResult> DecideAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, bool approveIdentityVerified, DateTimeOffset now, CancellationToken ct);
 }
 
 public abstract record DecideResult
