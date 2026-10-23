@@ -213,7 +213,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Approving an expired proposal returns a distinct `proposal_expired` error after the expiry transition is committed, and its queue item moves to `withdrawn` with reason `proposal_expired`. Every claim, release, decision and withdrawal appears in the item's `queue_item_event` history.
   5. A scripted beat 4 demo shows an out-of-purpose proposal refused, its refusal traceable, and the proposal never appearing in the queue.
 
-**Plans**: 9 plans
+**Plans**: 10 plans
 **Wave 1**
 
 - [ ] 05-01-PLAN.md — Migration 0008 (queue_item, queue_item_event, RLS, grants, CHECKs), QueueStates, IR-1 v1 contract, delete v0
@@ -226,23 +226,27 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 3**
 
-- [ ] 05-05-PLAN.md — DevReviewer auth scheme, caller separation, list and get endpoints
+- [ ] 05-05-PLAN.md — Reviewer fixtures, DevReviewer auth scheme, AgentKey adjustments, caller-separation matrix, production guard
 
 **Wave 4**
 
-- [ ] 05-06-PLAN.md — Role-gated reviewer payload endpoint and audit history endpoint
+- [ ] 05-06-PLAN.md — QueueService read side, DTOs, list and get endpoints, tenant resolution tests
 
 **Wave 5**
 
-- [ ] 05-07-PLAN.md — Claim, release and lazy expiry withdrawal
+- [ ] 05-07-PLAN.md — Role-gated reviewer payload endpoint and audit history endpoint
 
 **Wave 6**
 
-- [ ] 05-08-PLAN.md — Decide (approve/reject), self-approval, one-transaction item+proposal update
+- [ ] 05-08-PLAN.md — Claim, release and lazy expiry withdrawal
 
 **Wave 7**
 
-- [ ] 05-09-PLAN.md — Beat 4 demo (EVD-03) and surface invariant tests
+- [ ] 05-09-PLAN.md — Decide (approve/reject), self-approval, one-transaction item+proposal update
+
+**Wave 8**
+
+- [ ] 05-10-PLAN.md — Beat 4 demo (EVD-03) and surface invariant tests
 
 **Research flag**: Run `/gsd-plan-phase 5 --research-phase`. Topics: how action_approval maps onto IR-1 states and decisions (Q10), and the `queue_item_event` grants.
 **Notes**: Rulings Q7 (claimant-only release), Q9 (`queue_item_event` INSERT-only, five tables), Q11 (lazy `withdrawn`/`proposal_expired`) and Q13 (server-side group-to-tenant map) are settled and shape migration 0002. Q8, Q10 and Q14 working defaults apply. Migration 0002 must follow the Phase 1 RLS/grant pattern and extend the privilege-matrix test. The decision-time role check (APR-03) arrives with the real IdP in Phase 7.

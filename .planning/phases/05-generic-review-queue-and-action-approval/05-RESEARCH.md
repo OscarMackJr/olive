@@ -493,17 +493,21 @@ return await uow.ExecuteAsync<DecideResult>(tenantId, async (conn, tx) => {
 | A9 | Decision events carry no rationale; rationale only on the item row | Pattern 5 | Audit consumers wanting rationale in history must join to the item |
 | A10 | Entra fixture project is the right home for reviewer/identity fixtures (matches `FixtureDirectoryGroupResolver`) | Structure | None functionally |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `reject` also require identity resolution?**
    - Known: APR-02 and D-06 speak of "approval"/"approver".
    - Unclear: whether reject by the requester is a concern.
    - Recommendation: approve only (A3); one-line change if the user disagrees.
+   - RESOLVED: D-18 (the identity check applies to approve only; reject never calls the resolver).
 2. **Registry-vs-catalog role duplication.**
    - Known: catalog `required_approval` is per action; D-09 puts `required_role` on the kind.
    - Recommendation: keep kind-level as the enforced source and add a startup equality check against all catalog entries.
+   - RESOLVED: D-21 (startup consistency check between catalog required_approval and the kind required_role).
 3. **Does the reviewer need a role to read the payload?** (A8) Needs a product call before Phase 7 UI; no rework cost either way.
+   - RESOLVED: D-19 (the payload endpoint is gated by the kind required_role).
 4. **Release/claim of already-expired but not yet withdrawn items** is handled by the lazy path (claim, release and decide all take the expiry path). Confirm release should also trigger lazy expiry; recommended yes for consistency (QUE-10).
+   - RESOLVED: D-20 (release also triggers lazy expiry and returns 409 proposal_expired).
 
 ## Environment Availability
 
