@@ -45,6 +45,8 @@ public sealed class ContractSchemaTests
 
     [Theory]
     [InlineData("contracts/proposal/v1/proposal-submit-response.schema.json", "contracts/proposal/v1/proposal-submit-response.refused.valid.json", true)]
+    [InlineData("contracts/proposal/v1/proposal-submit-response.schema.json", "contracts/proposal/v1/proposal-submit-response.policy-refused.valid.json", true)]
+    [InlineData("contracts/proposal/v1/proposal.schema.json", "contracts/proposal/v1/proposal.policy-refused.valid.json", true)]
     [InlineData("contracts/proposal/v1/proposal-submit-response.schema.json", "contracts/proposal/v1/proposal-submit-response.badreason.invalid.json", false)]
     [InlineData("contracts/proposal/v1/proposal.schema.json", "contracts/proposal/v1/proposal.refused.valid.json", true)]
     [InlineData("contracts/proposal/v1/proposal.schema.json", "contracts/proposal/v1/proposal.badtrace.invalid.json", false)]
