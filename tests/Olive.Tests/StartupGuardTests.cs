@@ -199,6 +199,52 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
         s.AddSingleton<ITokenIssuer>(new FakeTokenIssuer());
         s.RemoveAll<ITraceResolver>();
         s.AddSingleton<ITraceResolver>(new FakeTraceResolver());
+        s.RemoveAll<IDirectoryGroupResolver>();
+        s.AddSingleton<IDirectoryGroupResolver>(new FaultingDirectoryResolver(new ProductionDirectoryStub(), ResolverFault.Unavailable));
+    }
+
+    private sealed class ProductionDirectoryStub : IDirectoryGroupResolver
+    {
+        public Task<DirectoryLookup> ResolveAsync(Guid tenantId, string onBehalfOf, CancellationToken ct) => Task.FromResult<DirectoryLookup>(new DirectoryLookup.UnknownUser());
+    }
+
+    private sealed class DecoratingDirectory(IDirectoryGroupResolver inner) : IDirectoryGroupResolver, IComponentDecorator
+    {
+        public object Inner => inner;
+
+        public Task<DirectoryLookup> ResolveAsync(Guid tenantId, string onBehalfOf, CancellationToken ct) => inner.ResolveAsync(tenantId, onBehalfOf, ct);
+    }
+
+    [Fact]
+    public async Task POL_02_production_refuses_fixture_directory_resolver()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s => { ProductionSafePorts(s); s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>(); s.RemoveAll<IDirectoryGroupResolver>(); s.AddSingleton<IDirectoryGroupResolver>(_ => Olive.Integrations.Entra.FixtureDirectoryGroupResolver.CreateDefault()); });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task POL_02_production_refuses_fixture_directory_resolver_behind_decorator()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s => { ProductionSafePorts(s); s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>(); s.RemoveAll<IDirectoryGroupResolver>(); s.AddSingleton<IDirectoryGroupResolver>(_ => new DecoratingDirectory(Olive.Integrations.Entra.FixtureDirectoryGroupResolver.CreateDefault())); });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task POL_02_non_production_host_resolves_directory_services()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "ci");
+        Assert.Null(await TryStartAsync(factory));
+        Assert.NotNull(factory.Services.GetService<IDirectoryGroupResolver>());
+        Assert.NotNull(factory.Services.GetService<DirectoryVerifier>());
     }
 
     [Fact]

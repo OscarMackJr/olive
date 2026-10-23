@@ -36,3 +36,23 @@ public sealed class RecordingTokenIssuer(ITokenIssuer inner, List<string> events
         return inner.IssueAsync(key!, ct);
     }
 }
+
+public sealed class RecordingDirectoryResolver(IDirectoryGroupResolver inner, List<string> events, List<OutboundCall> calls) : IDirectoryGroupResolver, IComponentDecorator
+{
+    private static readonly OutboundDestination Destination =
+        typeof(IDirectoryGroupResolver).GetCustomAttribute<OutboundPortAttribute>()!.Destination;
+
+    private readonly List<(Guid Tenant, string OnBehalfOf)> _requests = [];
+
+    public object Inner => inner;
+
+    public IReadOnlyList<(Guid Tenant, string OnBehalfOf)> Requests { get { lock (_requests) { return [.. _requests]; } } }
+
+    public Task<DirectoryLookup> ResolveAsync(Guid tenantId, string onBehalfOf, CancellationToken ct)
+    {
+        lock (events) { events.Add("directory"); }
+        lock (calls) { calls.Add(new OutboundCall(nameof(IDirectoryGroupResolver), Destination, false, false)); }
+        lock (_requests) { _requests.Add((tenantId, onBehalfOf)); }
+        return inner.ResolveAsync(tenantId, onBehalfOf, ct);
+    }
+}

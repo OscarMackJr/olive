@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Olive.Application;
 using Olive.Domain;
+using Olive.Integrations.Entra;
 using Olive.Integrations.Hometown;
 using Olive.Integrations.Popeye;
 using Olive.Persistence;
@@ -18,7 +19,7 @@ namespace Olive.Tests;
 
 public enum TraceMode { AutoFixture, Explicit }
 
-public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null, string? environment = "ci", Action<IServiceCollection>? configureServices = null, bool replaceIntrospector = true, TraceMode traceMode = TraceMode.AutoFixture, ITraceResolver? innerResolver = null, ITokenIssuer? innerIssuer = null)
+public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null, string? environment = "ci", Action<IServiceCollection>? configureServices = null, bool replaceIntrospector = true, TraceMode traceMode = TraceMode.AutoFixture, ITraceResolver? innerResolver = null, ITokenIssuer? innerIssuer = null, IDirectoryGroupResolver? innerDirectory = null)
     : WebApplicationFactory<Program>
 {
     public InMemoryLogCapture Logs { get; } = new();
@@ -28,6 +29,10 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
     public RecordingKeyIntrospector Introspector { get; private set; } = null!;
 
     public FixtureTraceResolver FixtureResolver { get; } = new();
+
+    public FixtureDirectoryGroupResolver FixtureDirectory { get; } = FixtureDirectoryGroupResolver.CreateDefault();
+
+    public RecordingDirectoryResolver Directory { get; private set; } = null!;
 
     public RecordingAlarm Alarms { get; } = new();
 
@@ -81,6 +86,8 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
                 services.AddSingleton<IStartupFilter>(new AutoFixtureStartupFilter(inner));
             }
 
+            Directory = new RecordingDirectoryResolver(innerDirectory ?? FixtureDirectory, Events, OutboundCalls);
+            services.AddSingleton<IDirectoryGroupResolver>(Directory);
             services.AddScoped<IProposalStore>(sp =>
                 new RecordingProposalStore(ActivatorUtilities.CreateInstance<PostgresProposalStore>(sp), Events));
             configureServices?.Invoke(services);
