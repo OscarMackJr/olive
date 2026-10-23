@@ -1,0 +1,15 @@
+# Review queue kind registry (QUE-02). Source-controlled and change-managed. Not overridable by environment variable or appsettings. No runtime registration.
+# identity_review is configuration only until Phase 8; the link challenge subtype is deliberately absent.
+kinds:
+  - kind: action_approval
+    subtypes: [proposal]
+    decisions: [approve, reject]
+    required_role: role:case_supervisor
+    ref_schemes: [olive]
+    expires: true
+  - kind: identity_review
+    subtypes: [candidate_pair]
+    decisions: [accept, reject, defer]
+    required_role: role:identity_steward
+    ref_schemes: [bluto]
+    expires: false

@@ -1,0 +1,11 @@
+# Reviewer group to tenant map (D-08, Q13). Source-controlled and change-managed. Not overridable by environment variable or appsettings.
+# Role groups such as role:case_supervisor carry no tenant and are not listed here.
+tenants:
+  - group: tenant-alpha-reviewers
+    tenant_id: 5325ffe9-5727-4d88-9832-aebabb8d0538
+  - group: tenant-beta-reviewers
+    tenant_id: f92c9dba-50f1-4cad-9690-5d79f8ded335
+  - group: tenant-gamma-reviewers
+    tenant_id: 5325ffe9-5727-4d88-9832-aebabb8d0538
+  - group: tenant-alpha-duplicate
+    tenant_id: f92c9dba-50f1-4cad-9690-5d79f8ded335
