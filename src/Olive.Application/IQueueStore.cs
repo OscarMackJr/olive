@@ -13,6 +13,40 @@ public interface IQueueStore
     Task<IReadOnlyList<QueueItemEventRecord>?> EventsAsync(Guid tenantId, Guid itemId, CancellationToken ct);
 
     Task<ReviewerPayload?> GetPayloadAsync(Guid tenantId, Guid itemId, CancellationToken ct);
+
+    // QUE-05: one winner under concurrency. D-11: an expired proposal is withdrawn and committed, then ProposalExpired is returned.
+    Task<ClaimResult> ClaimAsync(Guid tenantId, Guid itemId, string actor, DateTimeOffset now, CancellationToken ct);
+
+    // QUE-06: claimant only. D-20: release also triggers lazy expiry.
+    Task<ReleaseResult> ReleaseAsync(Guid tenantId, Guid itemId, string actor, DateTimeOffset now, CancellationToken ct);
+}
+
+public abstract record ClaimResult
+{
+    public sealed record Claimed(QueueItemDetail Item) : ClaimResult;
+
+    public sealed record AlreadyClaimed : ClaimResult;
+
+    public sealed record ProposalExpired : ClaimResult;
+
+    public sealed record Closed : ClaimResult;
+
+    public sealed record NotFound : ClaimResult;
+}
+
+public abstract record ReleaseResult
+{
+    public sealed record Released(QueueItemDetail Item) : ReleaseResult;
+
+    public sealed record NotClaimant : ReleaseResult;
+
+    public sealed record NotClaimed : ReleaseResult;
+
+    public sealed record ProposalExpired : ReleaseResult;
+
+    public sealed record Closed : ReleaseResult;
+
+    public sealed record NotFound : ReleaseResult;
 }
 
 public sealed record QueueItemSummary(Guid TenantId, Guid ItemId, string Kind, string Subtype, string Producer, Guid ProducerRef, string State, string SubjectRef, string PayloadRef, string? ClaimedBy, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt);
