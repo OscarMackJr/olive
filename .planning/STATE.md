@@ -67,6 +67,7 @@ Recent decisions affecting current work:
 - [Roadmap]: 9 vertical slices. Phases 6, 7 and 8 depend only on Phase 5 and can run in parallel.
 - [Roadmap]: DB-03 and DB-04 (all five tables) are assigned to Phase 1, which sets the RLS/grant pattern. Migrations 0002 (Phase 5) and 0003 (Phase 6) must follow it and extend the privilege-matrix test.
 - [Roadmap]: API-08 (asserted pipeline order) is assigned to Phase 4, where steps 1-6 are all real. APR-03 (decision-time role check) is assigned to Phase 7, with the real IdP.
+- [Phase 5 D-06, Q14 ruling]: `on_behalf_of` stays an opaque UPN-style string on the wire. `IUserIdentityResolver` resolves `(tenant_id, on_behalf_of)` to exactly one Entra `(oid, tid)`. A result that finds no match, several matches, a malformed record or no resolver refuses the approval (fail closed). Self-approval means oid+tid equality. Rejects are exempt (D-18). The live adapter is deferred.
 
 ### Pending Todos
 
@@ -83,7 +84,7 @@ None yet.
 #### Open coordination items
 
 - Agent-key header (D-12): confirm the header name with the nono owner; currently assumed `Authorization: Bearer`, isolated in `AgentKeyHeader`.
-- Q14 conflict: NONO_v0.4.3 section 5 says on_behalf_of is a UPN, while the Q14 working default maps by Entra oid+tid and never UPN. Needs a ruling before Phase 5 and before Phase 7. Fixtures use UPN-style placeholders.
+- Q14 conflict: CLOSED 2026-10-23 by Phase 5 D-06 (see Decisions). `on_behalf_of` stays an opaque UPN-style string; oid+tid is resolved through `IUserIdentityResolver`.
 - Q4 closed 2026-10-22 (Phase 4 D-01): proceed, citing POPEYE_v0.4.2 lines 55 and 91 and vocabulary v0.4 section 3.2; POPEYE_v0.4.3 checked, no change; entitlement source is Olive-owned IDirectoryGroupResolver (read-only, fixture-backed) intersected with allowlist agent entitlements; Q14 (UPN vs oid+tid) stays open for the live adapter.
 - PHASE 3 RESEARCH: POPEYE section 2.1 returns active:false for non-agent keys, while D§7 requires 403 principal_not_permitted for user/application. Phase 1 stub fixtures return active:true with those principal types.
 - Introspection cache constraint (D-14, POPEYE section 2.2): positives cached at most 60 s and never past expires_at; negatives never cached. No cache in Phase 1.
