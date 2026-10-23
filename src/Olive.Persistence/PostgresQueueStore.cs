@@ -226,4 +226,73 @@ public sealed class PostgresQueueStore(TenantUnitOfWork uow) : IQueueStore
             await InsertItemEvent(conn, tx, tenantId, itemId, QueueStates.EventReleased, QueueStates.Claimed, QueueStates.Open, actor, null, ct);
             return new ReleaseResult.Released(await Reload(conn, tx, tenantId, itemId, ct));
         }, ct);
+
+    // APR-04: the item UPDATE, the proposal compare-and-set and both events share one (conn, tx). The proposal store's own transition
+    // method is deliberately not used because it opens its own transaction. The rationale is stored once on the item row and never
+    // reaches an event detail.
+    public Task<DecideResult> DecideAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, DateTimeOffset now, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(actor)) { throw new ArgumentException("A reviewer is required.", nameof(actor)); }
+        if (string.IsNullOrWhiteSpace(rationale)) { throw new ArgumentException("A rationale is required.", nameof(rationale)); }
+        if (string.IsNullOrWhiteSpace(authSource)) { throw new ArgumentException("An auth source is required.", nameof(authSource)); }
+        var target = decision switch
+        {
+            QueueStates.Approve => ProposalStates.Approved,
+            QueueStates.Reject => ProposalStates.Rejected,
+            _ => throw new ArgumentException("Decision must be approve or reject.", nameof(decision)),
+        };
+
+        return uow.ExecuteAsync<DecideResult>(tenantId, async (conn, tx) =>
+        {
+            var row = await LockItem(conn, tx, tenantId, itemId, ct);
+            if (row is null) { return new DecideResult.NotFound(); }
+            if (row.State == QueueStates.Decided)
+            {
+                if (!string.Equals(row.DecidedBy, actor, StringComparison.Ordinal)) { return new DecideResult.NotClaimant(); }
+                return string.Equals(row.Decision, decision, StringComparison.Ordinal)
+                    ? new DecideResult.AlreadyDecidedSame(ToDetail(row))
+                    : new DecideResult.Conflict();
+            }
+
+            if (IsExpired(row, now))
+            {
+                await ExpireInTransactionAsync(conn, tx, tenantId, ToDetail(row), "decide", ct);
+                return new DecideResult.ProposalExpired();
+            }
+
+            if (IsWithdrawnExpired(row)) { return new DecideResult.ProposalExpired(); }
+            if (row.State == QueueStates.Withdrawn) { return new DecideResult.Closed(); }
+            if (row.State == QueueStates.Open) { return new DecideResult.NotClaimed(); }
+            if (!string.Equals(row.ClaimedBy, actor, StringComparison.Ordinal)) { return new DecideResult.NotClaimant(); }
+            if (row.ProposalId is not { } proposalId) { throw new InvalidOperationException("Decision requires an item with a proposal."); }
+
+            var n = await conn.ExecuteAsync(new CommandDefinition(QueueSql.Decide,
+                new { tenant_id = tenantId, item_id = itemId, actor, now = now.UtcDateTime, decision, rationale, auth_source = authSource }, tx, cancellationToken: ct));
+            if (n != 1) { throw new InvalidOperationException("Decide did not affect exactly one row."); }
+
+            if (!ProposalStates.CanTransition(ProposalStates.AwaitingApproval, target))
+            {
+                throw new InvalidOperationException("Lifecycle table does not permit this decision.");
+            }
+
+            var p = await conn.ExecuteAsync(new CommandDefinition(ProposalSql.UpdateState,
+                new { tenant_id = tenantId, proposal_id = proposalId, from_state = ProposalStates.AwaitingApproval, to_state = target }, tx, cancellationToken: ct));
+            if (p != 1) { throw new InvalidOperationException("Decision found the proposal in an unexpected state."); }
+
+            var detail = "{\"item_id\":\"" + itemId + "\",\"decision\":\"" + decision + "\",\"auth_source\":\"" + authSource + "\"}";
+            await conn.ExecuteAsync(new CommandDefinition(ProposalSql.InsertEvent, new
+            {
+                tenant_id = tenantId,
+                event_id = Guid.NewGuid(),
+                proposal_id = proposalId,
+                event_type = "transition",
+                from_state = ProposalStates.AwaitingApproval,
+                to_state = target,
+                actor,
+                detail,
+            }, tx, cancellationToken: ct));
+            await InsertItemEvent(conn, tx, tenantId, itemId, QueueStates.EventDecided, QueueStates.Claimed, QueueStates.Decided, actor, detail, ct);
+            return new DecideResult.Decided(await Reload(conn, tx, tenantId, itemId, ct));
+        }, ct);
+    }
 }

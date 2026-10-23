@@ -50,6 +50,10 @@ public static class QueueSql
         "update queue_item set state = 'open', claimed_by = null, claimed_at = null " +
         "where tenant_id = @tenant_id and item_id = @item_id and state = 'claimed' and claimed_by = @actor";
 
+    public const string Decide =
+        "update queue_item set state = 'decided', decision = @decision, decided_by = @actor, decided_at = @now, rationale = @rationale, auth_source = @auth_source " +
+        "where tenant_id = @tenant_id and item_id = @item_id and state = 'claimed' and claimed_by = @actor";
+
     public const string Withdraw =
         "update queue_item set state = 'withdrawn', withdrawn_reason = @reason " +
         "where tenant_id = @tenant_id and item_id = @item_id and state in ('open','claimed')";

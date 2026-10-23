@@ -29,6 +29,7 @@ public static class QueueEndpoints
         group.MapGet("/{id:guid}/events", EventsAsync);
         group.MapPost("/{id:guid}/claim", ClaimAsync);
         group.MapPost("/{id:guid}/release", ReleaseAsync);
+        group.MapPost("/{id:guid}/decision", DecisionAsync);
         return app;
     }
 
@@ -109,6 +110,56 @@ public static class QueueEndpoints
             ReleaseResult.ProposalExpired => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ProposalExpired),
             ReleaseResult.Closed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemClosed),
             ReleaseResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
+        };
+    }
+
+    // APR-01: only decision and rationale are read from the body. Identity, tenant and auth source come from the authenticated claim.
+    private static async Task<IResult> DecisionAsync(Guid id, HttpContext http, QueueService service, CancellationToken ct)
+    {
+        var invalid = ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.InvalidRequest);
+        if (!http.Request.HasJsonContentType()) { return invalid; }
+        var bytes = await ProposalEndpoints.ReadBoundedAsync(http.Request, ct);
+        if (bytes is null) { return ProblemResults.Result(StatusCodes.Status413PayloadTooLarge, ProblemReasons.PayloadTooLarge); }
+
+        string? decision = null;
+        string? rationale = null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(bytes, new System.Text.Json.JsonDocumentOptions { MaxDepth = 8, AllowDuplicateProperties = false });
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) { return invalid; }
+            foreach (var p in doc.RootElement.EnumerateObject())
+            {
+                if (p.Value.ValueKind != System.Text.Json.JsonValueKind.String) { return invalid; }
+                switch (p.Name)
+                {
+                    case "decision": decision = p.Value.GetString(); break;
+                    case "rationale": rationale = p.Value.GetString(); break;
+                    default: return invalid;
+                }
+            }
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException)
+        {
+            return invalid;
+        }
+
+        var result = await service.DecideAsync(http.User.ToReviewerContext()!, id, decision, rationale, ct);
+        return result switch
+        {
+            DecisionResult.Decided d => Results.Ok(ToDto(service.ToView(d.Item))),
+            DecisionResult.AlreadyDecidedSame d => Results.Ok(ToDto(service.ToView(d.Item))),
+            DecisionResult.Conflict => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.DecisionConflict),
+            DecisionResult.NotClaimant => ProblemResults.Result(StatusCodes.Status403Forbidden, ProblemReasons.NotClaimant),
+            DecisionResult.NotClaimed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemNotClaimed),
+            DecisionResult.Closed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemClosed),
+            DecisionResult.ProposalExpired => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ProposalExpired),
+            DecisionResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
+            DecisionResult.RoleNotPermitted => ProblemResults.Result(StatusCodes.Status403Forbidden, ProblemReasons.RoleNotPermitted),
+            DecisionResult.SelfApproval => ProblemResults.Result(StatusCodes.Status403Forbidden, ProblemReasons.SelfApprovalForbidden),
+            DecisionResult.Unresolved => ProblemResults.Result(StatusCodes.Status403Forbidden, ProblemReasons.ApprovalIdentityUnresolved),
+            DecisionResult.Unavailable => ProblemResults.Retryable(StatusCodes.Status503ServiceUnavailable, ProblemReasons.IdentityResolutionUnavailable),
+            DecisionResult.KindNotSupported => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.KindNotSupported),
+            DecisionResult.InvalidRequest => invalid,
         };
     }
 

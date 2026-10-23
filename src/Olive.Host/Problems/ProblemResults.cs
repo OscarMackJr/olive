@@ -43,6 +43,11 @@ public static class ProblemResults
         ProblemReasons.ItemNotClaimed => "The queue item is not claimed.",
         ProblemReasons.ItemClosed => "The queue item is closed.",
         ProblemReasons.ProposalExpired => "The proposal has expired.",
+        ProblemReasons.DecisionConflict => "The queue item was already decided differently.",
+        ProblemReasons.SelfApprovalForbidden => "A requester may not approve their own proposal.",
+        ProblemReasons.ApprovalIdentityUnresolved => "The requester identity could not be resolved.",
+        ProblemReasons.IdentityResolutionUnavailable => "Identity resolution is unavailable.",
+        ProblemReasons.KindNotSupported => "This queue item kind does not support decisions yet.",
         _ => "An internal error occurred.",
     };
 

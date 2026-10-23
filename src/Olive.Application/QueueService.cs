@@ -4,7 +4,7 @@ namespace Olive.Application;
 
 // Reviewer-facing queue application service (D-01). Shared by the Host JSON API and the Phase 7 pages. Business outcomes are
 // result values, never exceptions. Time comes from the injected provider.
-public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry, TimeProvider time)
+public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry, ApprovalIdentityCheck identityCheck, TimeProvider time)
 {
     public const int DefaultLimit = 100;
     public const int MaxLimit = 500;
@@ -57,6 +57,53 @@ public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry,
     public Task<ReleaseResult> ReleaseAsync(ReviewerContext reviewer, Guid itemId, CancellationToken ct) =>
         store.ReleaseAsync(reviewer.TenantId, itemId, reviewer.Oid, time.GetUtcNow(), ct);
 
+    public const int MaxRationaleLength = 4000;
+
+    // D-09/D-06/D-18. The pre-read only decides which checks to run; the store re-validates everything under the row lock.
+    // The rationale is passed to the store once and is never logged, returned or placed in a result.
+    public async Task<DecisionResult> DecideAsync(ReviewerContext reviewer, Guid itemId, string? decision, string? rationale, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(reviewer.Oid)) { throw new ArgumentException("A reviewer oid is required.", nameof(reviewer)); }
+
+        var item = await store.GetAsync(reviewer.TenantId, itemId, ct);
+        if (item is null) { return new DecisionResult.NotFound(); }
+        if (item.Kind != QueueStates.ActionApproval || !registry.TryGet(item.Kind, out var definition)) { return new DecisionResult.KindNotSupported(); }
+        if (decision is null || !definition.Decisions.Contains(decision, StringComparer.Ordinal)) { return new DecisionResult.InvalidRequest(); }
+        if (string.IsNullOrWhiteSpace(rationale) || rationale.Length > MaxRationaleLength) { return new DecisionResult.InvalidRequest(); }
+        if (!reviewer.Groups.Contains(definition.RequiredRole, StringComparer.Ordinal)) { return new DecisionResult.RoleNotPermitted(); }
+
+        var now = time.GetUtcNow();
+        var live = item.State == QueueStates.Claimed
+            && string.Equals(item.ClaimedBy, reviewer.Oid, StringComparison.Ordinal)
+            && (item.ExpiresAt is null || item.ExpiresAt > now);
+        if (decision == QueueStates.Approve && live)
+        {
+            var payload = await store.GetPayloadAsync(reviewer.TenantId, itemId, ct);
+            if (payload is null) { return new DecisionResult.NotFound(); }
+            var verdict = await identityCheck.CheckAsync(reviewer.TenantId, payload.OnBehalfOf, reviewer.Oid, reviewer.Tid, ct);
+            switch (verdict)
+            {
+                case ApprovalIdentityVerdict.SelfApproval: return new DecisionResult.SelfApproval();
+                case ApprovalIdentityVerdict.Unresolved: return new DecisionResult.Unresolved();
+                case ApprovalIdentityVerdict.Unavailable: return new DecisionResult.Unavailable();
+            }
+        }
+
+        var result = await store.DecideAsync(reviewer.TenantId, itemId, reviewer.Oid, reviewer.AuthSource, decision, rationale, now, ct);
+        return result switch
+        {
+            DecideResult.Decided d => new DecisionResult.Decided(d.Item),
+            DecideResult.AlreadyDecidedSame d => new DecisionResult.AlreadyDecidedSame(d.Item),
+            DecideResult.Conflict => new DecisionResult.Conflict(),
+            DecideResult.NotClaimant => new DecisionResult.NotClaimant(),
+            DecideResult.NotClaimed => new DecisionResult.NotClaimed(),
+            DecideResult.Closed => new DecisionResult.Closed(),
+            DecideResult.ProposalExpired => new DecisionResult.ProposalExpired(),
+            DecideResult.NotFound => new DecisionResult.NotFound(),
+            _ => throw new InvalidOperationException("Unknown decide result."),
+        };
+    }
+
     public QueueItemView ToView(QueueItemDetail d) => new(d.TenantId, d.ItemId, d.Kind, d.Subtype, d.Producer, d.ProducerRef, d.State, d.SubjectRef, d.PayloadRef, d.ClaimedBy, d.CreatedAt, AgeSeconds(d.CreatedAt, time.GetUtcNow()), d.ExpiresAt, d.Decision, d.DecidedBy, d.DecidedAt, d.AuthSource, d.WithdrawnReason);
 
     private static long AgeSeconds(DateTimeOffset created, DateTimeOffset now) => Math.Max(0, (long)(now - created).TotalSeconds);
@@ -79,6 +126,37 @@ public abstract record PayloadResult
     public sealed record NotFound : PayloadResult;
 
     public sealed record RoleNotPermitted : PayloadResult;
+}
+
+public abstract record DecisionResult
+{
+    public sealed record Decided(QueueItemDetail Item) : DecisionResult;
+
+    public sealed record AlreadyDecidedSame(QueueItemDetail Item) : DecisionResult;
+
+    public sealed record Conflict : DecisionResult;
+
+    public sealed record NotClaimant : DecisionResult;
+
+    public sealed record NotClaimed : DecisionResult;
+
+    public sealed record Closed : DecisionResult;
+
+    public sealed record ProposalExpired : DecisionResult;
+
+    public sealed record NotFound : DecisionResult;
+
+    public sealed record RoleNotPermitted : DecisionResult;
+
+    public sealed record SelfApproval : DecisionResult;
+
+    public sealed record Unresolved : DecisionResult;
+
+    public sealed record Unavailable : DecisionResult;
+
+    public sealed record KindNotSupported : DecisionResult;
+
+    public sealed record InvalidRequest : DecisionResult;
 }
 
 public abstract record EventsResult
