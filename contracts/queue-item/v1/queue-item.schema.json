@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olive.invalid/contracts/queue-item/v1/queue-item.schema.json",
+  "title": "Review queue item (IR-1 v1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["item_id", "kind", "subtype", "tenant_id", "producer", "producer_ref", "subject_ref", "payload_ref", "state", "created_at"],
+  "properties": {
+    "item_id": { "type": "string", "format": "uuid" },
+    "kind": { "enum": ["action_approval", "identity_review"] },
+    "subtype": { "enum": ["proposal", "candidate_pair"] },
+    "tenant_id": { "type": "string", "format": "uuid" },
+    "producer": { "enum": ["olive", "bluto"] },
+    "producer_ref": { "type": "string", "format": "uuid" },
+    "subject_ref": { "type": "string", "pattern": "^(olive:proposal|bluto:candidate|bluto:review-evidence)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "payload_ref": { "type": "string", "pattern": "^(olive:proposal|bluto:candidate|bluto:review-evidence)/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "state": { "enum": ["open", "claimed", "decided", "withdrawn"] },
+    "ruleset_version": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "claimed_by": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "claimed_at": { "type": "string", "format": "date-time" },
+    "decision": { "enum": ["approve", "reject", "accept", "defer"] },
+    "decided_by": { "type": "string", "minLength": 1, "maxLength": 256 },
+    "decided_at": { "type": "string", "format": "date-time" },
+    "rationale": { "type": "string", "maxLength": 4000 },
+    "auth_source": { "enum": ["entra", "stub"] },
+    "withdrawn_reason": { "type": "string", "pattern": "^[a-z][a-z_]{0,63}$" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "age_seconds": { "type": "integer", "minimum": 0 },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}
