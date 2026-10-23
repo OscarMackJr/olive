@@ -57,7 +57,14 @@ Carried forward, not re-decided: the settled rulings Q7 (only the claimant can r
 
   The transcript contains no parameter values.
 
+### Post-research rulings (2026-10-23, answering 05-RESEARCH.md open questions)
+- **D-18:** The self-approval identity check (D-06: resolving UPN to oid+tid and failing closed) applies to **approve only**. A reject can't cause execution, so a resolver outage or an unresolved mapping does not block it. Rejects still need the claimant, the role and a rationale.
+- **D-19:** `GET /v1/queue/items/{item_id}/payload` is gated by the **kind's `required_role`**, the same role as deciding. A tenant reviewer without that role gets 403. Proposal parameters are visible only to reviewers who can act on them.
+- **D-20:** **Release also triggers lazy expiry.** Releasing an item whose proposal has expired commits the withdrawal and returns `409 proposal_expired`, the same as claim and decide (extends D-11).
+- **D-21:** **A startup consistency check** fails startup if a catalog entry's `required_approval` (for example `role:case_supervisor`) differs from the kind registry's `required_role` for `action_approval`, so the two can't drift.
+
 ### Claude's Discretion
+- Research assumptions A1, A2, A4–A7, A9 and A10 in `05-RESEARCH.md` (the subtype constant `proposal`, `expires_at <= now` counts as expired, `claimed_by`/`decided_by` hold the reviewer oid, the default list filter `state=open`, a re-claim gets 409 `already_claimed`, a resolver outage on approve gets 503 `identity_resolution_unavailable`, decision events carry no rationale, fixtures in `Olive.Integrations.Entra`) are accepted as planning defaults.
 - Exact route shapes (for example `POST /v1/queue/items/{id}/claim|release|decision`, `GET /v1/queue/items/{id}/events`) and DTO names in `Olive.Contracts`.
 - The header name for the DevReviewer scheme, and the reviewer fixture and tenant-map file paths and schemas. Each fixture gets a schema with valid and invalid examples, following `contracts/directory/`.
 - Table design for `queue_item` and `queue_item_event`. Use the next forward-only migration numbers after `0007_policy_expiry_rate.sql`, follow the Phase 1 RLS and grant pattern (ENABLE + FORCE RLS, `current_setting('olive.tenant_id')` without missing_ok, column-level grants, state kept out of the INSERT grant where CAS applies), and extend `PrivilegeMatrixTests`, `RlsPatternTests`, `MigrationRunnerTests` and the tenant-isolation ablation tests to the new tables. Decide whether the item has a unique constraint on `(tenant_id, producer, producer_ref)` now; recommended yes, since it also backs IR-1 idempotency in Phase 8.
