@@ -21,5 +21,10 @@ public static class ProblemReasons
     public const string ReviewerTenantUnresolved = "reviewer_tenant_unresolved";
     public const string RoleNotPermitted = "role_not_permitted";
     public const string ItemNotFound = "item_not_found";
+    public const string AlreadyClaimed = "already_claimed";
+    public const string NotClaimant = "not_claimant";
+    public const string ItemNotClaimed = "item_not_claimed";
+    public const string ItemClosed = "item_closed";
+    public const string ProposalExpired = "proposal_expired";
     public const string InternalError = "internal_error";
 }

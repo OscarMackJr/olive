@@ -121,7 +121,11 @@ public sealed class ReviewerTenantTests(PostgresFixture fixture)
         foreach (var route in queueRoutes)
         {
             var methods = route.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? [];
-            Assert.DoesNotContain("POST", methods);
+            var raw = route.RoutePattern.RawText!;
+            if (!raw.EndsWith("/claim", StringComparison.OrdinalIgnoreCase) && !raw.EndsWith("/release", StringComparison.OrdinalIgnoreCase))
+            {
+                Assert.DoesNotContain("POST", methods);
+            }
             Assert.False(route.RoutePattern.RawText!.EndsWith("/withdraw", StringComparison.OrdinalIgnoreCase));
         }
 
