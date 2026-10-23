@@ -33,6 +33,8 @@ builder.Services.AddSingleton(sp =>
 });
 builder.Services.AddSingleton<TenantUnitOfWork>();
 builder.Services.AddSingleton<IProposalStore, PostgresProposalStore>();
+builder.Services.AddSingleton<IQueueStore, PostgresQueueStore>();
+builder.Services.AddSingleton<QueueService>();
 // Phase 1 has only the stub introspector; the production guard in 01-06 refuses it.
 builder.Services.AddSingleton<IKeyIntrospector>(sp => StubKeyIntrospector.CreateDefault(sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<IOperationalAlarm, LoggingOperationalAlarm>();
@@ -74,6 +76,7 @@ app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapProposalEndpoints();
+app.MapQueueEndpoints();
 app.MapCatalogEndpoints();
 app.Run();
 
