@@ -63,8 +63,7 @@ public static class QueueEndpoints
             : Results.Ok(ToDto(item));
     }
 
-    // The result hierarchies are closed by construction (sealed cases, no other subclasses); CS8509 cannot see that.
-#pragma warning disable CS8509
+    // Each result switch has an explicit default arm: an unmapped future subtype fails with a static message, not a SwitchExpressionException.
     private static async Task<IResult> PayloadAsync(Guid id, HttpContext http, QueueService service, CancellationToken ct)
     {
         var result = await service.GetPayloadAsync(http.User.ToReviewerContext()!, id, ct);
@@ -73,6 +72,7 @@ public static class QueueEndpoints
             PayloadResult.Found f => Results.Ok(new ReviewerPayloadResponse(f.Payload.ActionType, ParseJson(f.Payload.ParametersJson), f.Payload.Justification, f.Payload.OnBehalfOf, f.Payload.ExpiresAt, f.Payload.TraceRef)),
             PayloadResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
             PayloadResult.RoleNotPermitted => ProblemResults.Result(StatusCodes.Status403Forbidden, ProblemReasons.RoleNotPermitted),
+            _ => throw new InvalidOperationException("Unknown payload result."),
         };
     }
 
@@ -83,6 +83,7 @@ public static class QueueEndpoints
         {
             EventsResult.Found f => Results.Ok(new QueueItemEventsResponse(f.Events.Select(e => new QueueItemEventDto(e.Seq, e.EventType, e.FromState, e.ToState, e.Actor, e.CreatedAt, ParseJson(e.DetailJson))).ToList())),
             EventsResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
+            _ => throw new InvalidOperationException("Unknown events result."),
         };
     }
 
@@ -96,6 +97,7 @@ public static class QueueEndpoints
             ClaimResult.ProposalExpired => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ProposalExpired),
             ClaimResult.Closed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemClosed),
             ClaimResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
+            _ => throw new InvalidOperationException("Unknown claim result."),
         };
     }
 
@@ -110,6 +112,7 @@ public static class QueueEndpoints
             ReleaseResult.ProposalExpired => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ProposalExpired),
             ReleaseResult.Closed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemClosed),
             ReleaseResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
+            _ => throw new InvalidOperationException("Unknown release result."),
         };
     }
 
@@ -160,10 +163,9 @@ public static class QueueEndpoints
             DecisionResult.Unavailable => ProblemResults.Retryable(StatusCodes.Status503ServiceUnavailable, ProblemReasons.IdentityResolutionUnavailable),
             DecisionResult.KindNotSupported => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.KindNotSupported),
             DecisionResult.InvalidRequest => invalid,
+            _ => throw new InvalidOperationException("Unknown decision result."),
         };
     }
-
-#pragma warning restore CS8509
 
     private static System.Text.Json.JsonElement? ParseJson(string? json)
     {
