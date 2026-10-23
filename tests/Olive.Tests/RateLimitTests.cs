@@ -196,9 +196,11 @@ public sealed class RateLimitTests(PostgresFixture fixture)
         await using var holder = new NpgsqlConnection(db.AppConnectionString);
         await holder.OpenAsync(Ct);
         await using var tx = await holder.BeginTransactionAsync(Ct);
-        await using (var lockCmd = new NpgsqlCommand("select pg_advisory_xact_lock(hashtextextended(@t::text || '|liam|crm.case_note@1', 0))", holder, tx))
+        await using (var lockCmd = new NpgsqlCommand(ProposalSql.LockRate, holder, tx))
         {
-            lockCmd.Parameters.AddWithValue("t", Alpha);
+            lockCmd.Parameters.AddWithValue("tenant_id", Alpha);
+            lockCmd.Parameters.AddWithValue("agent_id", "liam");
+            lockCmd.Parameters.AddWithValue("action_type", "crm.case_note@1");
             await lockCmd.ExecuteNonQueryAsync(Ct);
         }
 
@@ -218,9 +220,11 @@ public sealed class RateLimitTests(PostgresFixture fixture)
         await using var holder = new NpgsqlConnection(db.AppConnectionString);
         await holder.OpenAsync(Ct);
         await using var tx = await holder.BeginTransactionAsync(Ct);
-        await using (var lockCmd = new NpgsqlCommand("select pg_advisory_xact_lock(hashtextextended(@t::text || '|liam|crm.case_note@1', 0))", holder, tx))
+        await using (var lockCmd = new NpgsqlCommand(ProposalSql.LockRate, holder, tx))
         {
-            lockCmd.Parameters.AddWithValue("t", Alpha);
+            lockCmd.Parameters.AddWithValue("tenant_id", Alpha);
+            lockCmd.Parameters.AddWithValue("agent_id", "liam");
+            lockCmd.Parameters.AddWithValue("action_type", "crm.case_note@1");
             await lockCmd.ExecuteNonQueryAsync(Ct);
         }
 
@@ -229,6 +233,30 @@ public sealed class RateLimitTests(PostgresFixture fixture)
         Assert.False(pending.IsCompleted);
         await tx.RollbackAsync(Ct);
         Assert.Equal("awaiting_approval", (await pending).Body.GetProperty("state").GetString());
+    }
+
+    // WR-01: scopes that a plain separator join would merge must take different locks.
+    [Theory]
+    [InlineData("a|b", "c", "a", "b|c")]
+    [InlineData("a:1", "x", "a", "1:x")]
+    [InlineData("liam", "crm.case_note@1", "liam:", "crm.case_note@1")]
+    public async Task POL_03_rate_lock_key_is_unambiguous_across_scopes(string agentA, string actionA, string agentB, string actionB)
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var conn = new NpgsqlConnection(db.AppConnectionString);
+        await conn.OpenAsync(Ct);
+
+        async Task<long> KeyAsync(string agent, string action)
+        {
+            await using var cmd = new NpgsqlCommand("select " + ProposalSql.RateLockKey, conn);
+            cmd.Parameters.AddWithValue("tenant_id", Alpha);
+            cmd.Parameters.AddWithValue("agent_id", agent);
+            cmd.Parameters.AddWithValue("action_type", action);
+            return (long)(await cmd.ExecuteScalarAsync(Ct))!;
+        }
+
+        Assert.NotEqual(await KeyAsync(agentA, actionA), await KeyAsync(agentB, actionB));
+        Assert.Equal(await KeyAsync(agentA, actionA), await KeyAsync(agentA, actionA));
     }
 
     [Fact]

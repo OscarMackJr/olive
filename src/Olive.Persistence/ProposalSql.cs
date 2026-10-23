@@ -12,9 +12,14 @@ public static class ProposalSql
         "insert into proposal_event (tenant_id, event_id, proposal_id, event_type, from_state, to_state, actor, detail) " +
         "values (@tenant_id, @event_id, @proposal_id, @event_type, @from_state, @to_state, @actor, @detail::jsonb)";
 
-    // D-08: the lock key hashes tenant|agent|action; held to the end of the transaction. Taken only after catalog, purpose and entitlement passed.
-    public const string LockRate =
-        "select pg_advisory_xact_lock(hashtextextended(@tenant_id::text || '|' || @agent_id || '|' || @action_type, 0))";
+    // D-08 / WR-01: the rate scope key. The tenant uuid text is fixed length and the agent id is length-prefixed, so no two distinct
+    // (tenant, agent, action) scopes encode to the same string, whatever characters the agent id or action type contain. The 64-bit
+    // hash can still collide; a collision only serialises two unrelated scopes and never skips a lock, so it is harmless.
+    public const string RateLockKey =
+        "hashtextextended(@tenant_id::text || ':' || length(@agent_id)::text || ':' || @agent_id || ':' || @action_type, 0)";
+
+    // Held to the end of the transaction. Taken only after catalog, purpose and entitlement passed.
+    public const string LockRate = "select pg_advisory_xact_lock(" + RateLockKey + ")";
 
     // D-09/D-10: refused proposals never count; created_at is database time so the window uses now() in SQL.
     public const string CountAccepted =
