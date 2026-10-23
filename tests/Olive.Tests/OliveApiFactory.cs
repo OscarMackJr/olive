@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -111,6 +112,7 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
             services.AddSingleton<IUserIdentityResolver>(UserIdentity);
             services.AddScoped<IProposalStore>(sp =>
                 new RecordingProposalStore(ActivatorUtilities.CreateInstance<PostgresProposalStore>(sp), Events));
+            services.AddSingleton<IStartupFilter>(new ReviewerProbeStartupFilter());
             configureServices?.Invoke(services);
         });
     }
@@ -121,6 +123,56 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(AgentKeyHeader.Scheme, sessionKey);
         return client;
     }
+
+    public HttpClient CreateReviewerClient(string reviewerId)
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Add(Olive.Host.Auth.DevReviewerAuthenticationHandler.HeaderName, reviewerId);
+        return client;
+    }
+}
+
+// Test-only (never in src): GET /v1/queue/_probe enforces the same policy the real reviewer routes will use (DevReviewer scheme,
+// authenticated user) through IPolicyEvaluator, exactly as the authorization middleware does, and echoes the claims it saw.
+internal sealed class ReviewerProbeStartupFilter : IStartupFilter
+{
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+    {
+        app.Use(async (ctx, nxt) =>
+        {
+            if (!ctx.Request.Path.Equals("/v1/queue/_probe", StringComparison.OrdinalIgnoreCase))
+            {
+                await nxt();
+                return;
+            }
+
+            var policy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder(Olive.Host.Auth.DevReviewerAuthenticationHandler.SchemeName)
+                .RequireAuthenticatedUser().Build();
+            var evaluator = ctx.RequestServices.GetRequiredService<Microsoft.AspNetCore.Authorization.Policy.IPolicyEvaluator>();
+            var authn = await evaluator.AuthenticateAsync(policy, ctx);
+            var authz = await evaluator.AuthorizeAsync(policy, authn, ctx, null);
+            if (authz.Challenged)
+            {
+                foreach (var scheme in policy.AuthenticationSchemes) { await ctx.ChallengeAsync(scheme); }
+                return;
+            }
+
+            if (authz.Forbidden)
+            {
+                foreach (var scheme in policy.AuthenticationSchemes) { await ctx.ForbidAsync(scheme); }
+                return;
+            }
+
+            var user = authn.Principal!;
+            await ctx.Response.WriteAsJsonAsync(new
+            {
+                auth_source = user.FindFirst(Olive.Host.Auth.ReviewerClaims.AuthSource)?.Value,
+                tenant_id = user.FindFirst(Olive.Host.Auth.ReviewerClaims.TenantId)?.Value,
+                has_tenant = user.FindFirst(Olive.Host.Auth.ReviewerClaims.TenantId) is not null,
+            });
+        });
+        next(app);
+    };
 }
 
 // Test-only (never in src): before POST /v1/proposals reaches the endpoint, registers a matching fixture for the posted body so
