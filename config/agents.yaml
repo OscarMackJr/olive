@@ -2,3 +2,4 @@
 # Not overridable by environment variable or appsettings.
 agents:
   - agent_id: liam
+    entitlements: [ent:crm.case_note.write]

@@ -33,6 +33,8 @@ public sealed class AgentAllowlistTests
     [InlineData("agents:\n  - agent_id: liam\n    extra: x")]
     [InlineData("agents:\n  - agent_id: liam\nother: 1")]
     [InlineData("agents: [unclosed")]
+    [InlineData("agents:\n  - agent_id: liam\n    entitlements: [\"\"]")]
+    [InlineData("agents:\n  - agent_id: liam\n    entitlements: not-a-list")]
     [Trait("Category", "Unit")]
     public void IDN_02_invalid_documents_are_rejected(string yaml)
     {
@@ -47,5 +49,25 @@ public sealed class AgentAllowlistTests
         var a = AgentAllowlist.Parse("agents:\n  - agent_id: liam\n  - agent_id: noor-2\n");
         Assert.True(a.IsAllowed("noor-2"));
         Assert.True(a.IsAllowed("liam"));
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void POL_07_agent_entitlements_parse_and_embedded_liam_holds_crm_write()
+    {
+        var a = AgentAllowlist.Parse("agents:\n  - agent_id: liam\n    entitlements: [ent:crm.case_note.write]\n");
+        Assert.True(a.IsAllowed("liam"));
+        Assert.Contains("ent:crm.case_note.write", a.Entitlements("liam"));
+        Assert.Contains("ent:crm.case_note.write", AgentAllowlist.LoadEmbedded().Entitlements("liam"));
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void POL_07_missing_key_or_unknown_agent_yields_empty_entitlements()
+    {
+        var a = AgentAllowlist.Parse("agents:\n  - agent_id: liam\n");
+        Assert.Empty(a.Entitlements("liam"));
+        Assert.Empty(a.Entitlements("mallory"));
+        Assert.Empty(a.Entitlements(""));
     }
 }

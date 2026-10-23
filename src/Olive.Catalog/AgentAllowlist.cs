@@ -9,13 +9,15 @@ public sealed partial class AgentAllowlist : IAgentAllowlist
 {
     private const string Invalid = "Agent allowlist is invalid.";
 
-    private readonly HashSet<string> _ids;
+    private static readonly IReadOnlySet<string> None = new HashSet<string>(StringComparer.Ordinal);
 
-    private AgentAllowlist(HashSet<string> ids) => _ids = ids;
+    private readonly Dictionary<string, IReadOnlySet<string>> _agents;
+
+    private AgentAllowlist(Dictionary<string, IReadOnlySet<string>> agents) => _agents = agents;
 
     private sealed class AllowlistDocument { public List<AgentEntry>? Agents { get; set; } }
 
-    private sealed class AgentEntry { public string? AgentId { get; set; } }
+    private sealed class AgentEntry { public string? AgentId { get; set; } public List<string>? Entitlements { get; set; } }
 
     [GeneratedRegex("^[a-z][a-z0-9_-]{0,63}$")]
     private static partial Regex IdPattern();
@@ -39,16 +41,25 @@ public sealed partial class AgentAllowlist : IAgentAllowlist
             throw new InvalidOperationException(Invalid);
         }
 
-        var ids = new HashSet<string>(StringComparer.Ordinal);
+        var map = new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal);
         foreach (var entry in agents)
         {
-            if (entry?.AgentId is not { } id || !IdPattern().IsMatch(id) || !ids.Add(id))
+            if (entry?.AgentId is not { } id || !IdPattern().IsMatch(id) || map.ContainsKey(id))
             {
                 throw new InvalidOperationException(Invalid);
             }
+
+            // D-05: a missing entitlements key means none, which denies. It never grants.
+            var ents = entry.Entitlements ?? [];
+            if (ents.Any(string.IsNullOrWhiteSpace))
+            {
+                throw new InvalidOperationException(Invalid);
+            }
+
+            map[id] = new HashSet<string>(ents, StringComparer.Ordinal);
         }
 
-        return new AgentAllowlist(ids);
+        return new AgentAllowlist(map);
     }
 
     public static AgentAllowlist LoadEmbedded()
@@ -59,5 +70,8 @@ public sealed partial class AgentAllowlist : IAgentAllowlist
         return Parse(r.ReadToEnd());
     }
 
-    public bool IsAllowed(string agentId) => !string.IsNullOrWhiteSpace(agentId) && _ids.Contains(agentId);
+    public bool IsAllowed(string agentId) => !string.IsNullOrWhiteSpace(agentId) && _agents.ContainsKey(agentId);
+
+    public IReadOnlySet<string> Entitlements(string agentId) =>
+        !string.IsNullOrWhiteSpace(agentId) && _agents.TryGetValue(agentId, out var set) ? set : None;
 }
