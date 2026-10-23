@@ -33,6 +33,7 @@ public static class ProblemResults
         ProblemReasons.IntrospectionUnavailable => "Key introspection is unavailable.",
         ProblemReasons.TraceNotFound => "The trace was not found.",
         ProblemReasons.TraceVerificationUnavailable => "Trace verification is unavailable.",
+        ProblemReasons.DirectoryUnavailable => "Directory lookup is unavailable.",
         _ => "An internal error occurred.",
     };
 

@@ -25,8 +25,8 @@ public static class ProposalEndpoints
 
     // Order (Decision section 15.2): introspect (auth handler), principal checks, then the body: idempotency replay, envelope and
     // parameter schema (400, nothing stored), unknown action (stored not_in_catalog, no trace resolution), trace verification
-    // (trace refusal wins, D-18), then policy (purpose), then insert.
-    private static async Task<IResult> PostAsync(HttpContext http, IProposalStore store, IAgentAllowlist allowlist, SubmissionValidator validator, TraceVerifier verifier, TimeProvider timeProvider, ILoggerFactory loggerFactory, CancellationToken ct)
+    // (trace refusal wins, D-18), then policy (purpose, then entitlement via the directory), then insert.
+    private static async Task<IResult> PostAsync(HttpContext http, IProposalStore store, IAgentAllowlist allowlist, SubmissionValidator validator, TraceVerifier verifier, DirectoryVerifier directoryVerifier, TimeProvider timeProvider, ILoggerFactory loggerFactory, CancellationToken ct)
     {
         var key = http.User.ToActiveKey();
         if (key.PrincipalType != PrincipalTypes.Agent)
@@ -227,6 +227,29 @@ public static class ProposalEndpoints
                 return await StoreRefusalAsync(proposal, policy);
             }
 
+            // D-05/D-18: the directory is consulted only when the trace verified and the purpose passed, and never on replay (that
+            // path returned above). Tenant is the introspected tenant only (D-06); on_behalf_of is passed verbatim; no caching (D-07).
+            if (refusalReason is null)
+            {
+                var directory = await directoryVerifier.VerifyAsync(key.TenantId, key.OnBehalfOf, ct);
+                if (directory is DirectoryVerdict.Unavailable dirUnavailable)
+                {
+                    // Cause and exception type only: never on_behalf_of or group names.
+                    logger.LogWarning("Directory lookup unavailable tenant_id={TenantId} agent_id={AgentId} cause={Cause} exception_type={ExceptionType}",
+                        key.TenantId, key.AgentId, dirUnavailable.Cause, dirUnavailable.ExceptionType ?? "none");
+                    return DirectoryUnavailable();
+                }
+
+                var groups = directory is DirectoryVerdict.Groups g ? g.Names : null;
+                var entitlement = PolicyEvaluator.EvaluateEntitlement(policy, entry.RequiredEntitlement, allowlist.Entitlements(key.AgentId), groups);
+                if (!entitlement.Allowed)
+                {
+                    return await StoreRefusalAsync(proposal, entitlement);
+                }
+
+                policy = entitlement;
+            }
+
             // D-14/D-15: computed once, accepted proposals only, from the injected clock; the cap at the key's expiry is silent.
             if (refusalReason is null)
             {
@@ -269,6 +292,8 @@ public static class ProposalEndpoints
         PolicyEvaluator.EvaluateCatalogAndPurpose(true, entry.RequiredPurpose, purpose);
 
     private static string Short(string? hash) => hash is null ? "none" : hash[..Math.Min(12, hash.Length)];
+
+    private static IResult DirectoryUnavailable() => ProblemResults.Retryable(StatusCodes.Status503ServiceUnavailable, ProblemReasons.DirectoryUnavailable);
 
     private static IResult TraceUnavailable() => ProblemResults.Retryable(StatusCodes.Status503ServiceUnavailable, ProblemReasons.TraceVerificationUnavailable);
 
