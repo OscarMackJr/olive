@@ -13,6 +13,7 @@ public sealed class StartupGuardFilter(IConfiguration configuration, IServicePro
         StartupGuards.CheckMigratorUrlAbsent(configuration);
         StartupGuards.CheckVendoredVocabulary(Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml"));
         StartupGuards.CheckCatalog(provider);
+        StartupGuards.CheckQueueKinds(provider);
         StartupGuards.CheckNoNonProductionComponents(accessor.Services, provider, env);
         CheckDatabase();
         return next;
