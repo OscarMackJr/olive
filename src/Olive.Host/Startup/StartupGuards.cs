@@ -41,6 +41,37 @@ public static class StartupGuards
         }
     }
 
+    // QUE-02 / D-21: the kind registry and reviewer tenant map load, and every catalog required_approval equals the
+    // action_approval kind's required_role so the two sources of truth cannot drift.
+    public static void CheckQueueKinds(IServiceProvider provider)
+    {
+        try
+        {
+            var registry = provider.GetRequiredService<IQueueKindRegistry>();
+            _ = provider.GetRequiredService<IReviewerTenantMap>();
+            if (!registry.TryGet("action_approval", out var kind))
+            {
+                throw new InvalidOperationException();
+            }
+
+            foreach (var release in provider.GetRequiredService<Olive.Catalog.CatalogSet>().Releases)
+            {
+                foreach (var entry in release.Entries)
+                {
+                    if (entry.EntryJson.TryGetProperty("required_approval", out var ra) && ra.ValueKind == System.Text.Json.JsonValueKind.String
+                        && !string.Equals(ra.GetString(), kind.RequiredRole, StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException();
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            throw new StartupGuardException("QUE-02", "the review queue kind registry failed validation");
+        }
+    }
+
     // FND-05: in production no INonProductionOnly implementation may be registered or resolvable.
     public static void CheckNoNonProductionComponents(IServiceCollection services, IServiceProvider provider, OliveEnvironment env)
     {

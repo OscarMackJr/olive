@@ -461,7 +461,68 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
         StartupGuards.CheckVendoredVocabulary(real);
     }
 
-    private sealed class WrappingFactoryStub : IKeyIntrospector, INonProductionOnly
+    private const string DriftedRegistry = "kinds:\n  - kind: action_approval\n    subtypes: [proposal]\n    decisions: [approve, reject]\n    required_role: role:other_role\n    ref_schemes: [olive]\n    expires: true\n";
+    private const string NoActionApproval = "kinds:\n  - kind: identity_review\n    subtypes: [candidate_pair]\n    decisions: [accept]\n    required_role: role:identity_steward\n    ref_schemes: [bluto]\n";
+
+    private static IServiceProvider QueueKindProvider(Olive.Application.IQueueKindRegistry registry)
+    {
+        var s = new ServiceCollection();
+        s.AddSingleton(registry);
+        s.AddSingleton<Olive.Application.IReviewerTenantMap>(_ => Olive.Catalog.ReviewerTenantMap.LoadEmbedded());
+        s.AddSingleton(_ => Olive.Catalog.CatalogLoader.LoadEmbedded(Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml")));
+        return s.BuildServiceProvider();
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void QUE_02_shipped_registry_and_catalog_pass_the_guard() =>
+        StartupGuards.CheckQueueKinds(QueueKindProvider(Olive.Catalog.QueueKindRegistry.LoadEmbedded()));
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void QUE_02_role_drift_refuses_with_static_message()
+    {
+        var e = Assert.Throws<StartupGuardException>(() => StartupGuards.CheckQueueKinds(QueueKindProvider(Olive.Catalog.QueueKindRegistry.Parse(DriftedRegistry))));
+        Assert.Contains("QUE-02", e.Message);
+        Assert.DoesNotContain("role:other_role", e.Message);
+        Assert.DoesNotContain("role:case_supervisor", e.Message);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void QUE_02_missing_action_approval_kind_refuses() =>
+        Assert.Contains("QUE-02", Assert.Throws<StartupGuardException>(() =>
+            StartupGuards.CheckQueueKinds(QueueKindProvider(Olive.Catalog.QueueKindRegistry.Parse(NoActionApproval)))).Message);
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void QUE_02_unresolvable_registry_refuses() =>
+        Assert.Contains("QUE-02", Assert.Throws<StartupGuardException>(() =>
+            StartupGuards.CheckQueueKinds(new ServiceCollection().BuildServiceProvider())).Message);
+
+    [Fact]
+    public async Task QUE_02_host_starts_with_shipped_registry()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        Assert.Null(await TryStartAsync(factory));
+    }
+
+    [Fact]
+    public async Task QUE_02_host_refuses_start_on_role_drift()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, configureServices: s =>
+        {
+            s.RemoveAll<Olive.Application.IQueueKindRegistry>();
+            s.AddSingleton<Olive.Application.IQueueKindRegistry>(Olive.Catalog.QueueKindRegistry.Parse(DriftedRegistry));
+        });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Equal("QUE-02", guard.Rule);
+    }
+
+    private sealed class WrappingFactoryStub: IKeyIntrospector, INonProductionOnly
     {
         public Task<IntrospectionResult> IntrospectAsync(Olive.Domain.SessionKey key, CancellationToken ct) =>
             throw new NotSupportedException();
