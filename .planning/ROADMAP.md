@@ -23,7 +23,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Contract Integrity and Idempotent Submission** - Strict raw-byte validation, v1 schemas, in-house JCS, YamlDotNet catalog endpoint, and race-safe idempotency on (agent_id, run_id)
  (completed 2026-10-22)
 - [x] **Phase 3: Trace Verification** - Fixture-backed trace resolver with ordered checks 1-5, fail-closed 503s, popeye token stub and cache, and session-key capture (completed 2026-10-22)
-- [ ] **Phase 4: Policy, Expiry and Refusal** - Purpose, entitlement and rate-limit policy before any queueing, guarded lifecycle transitions, absolute expiry, and the asserted pipeline order
+- [x] **Phase 4: Policy, Expiry and Refusal** - Purpose, entitlement and rate-limit policy before any queueing, guarded lifecycle transitions, absolute expiry, and the asserted pipeline order (completed 2026-10-23)
 - [ ] **Phase 5: Generic Review Queue and Action Approval** - IR-1 queue with kind registry, claim/release/decide/audit, approval rules, lazy expiry withdrawal, and the beat 4 demo
 - [ ] **Phase 6: Simulated Execution and Audit Chain** - Exactly-once simulated execution, INSERT-only ledger, chain view, and the beat 2 demo through the API
 - [ ] **Phase 7: Reviewer UI and Entra OIDC** - Minimal Razor Pages reviewer UI with OIDC behind an interface, a dev IdP stub, and a role check at decision time
@@ -194,7 +194,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 04-07-PLAN.md — API-08 submission-order test, replay matrix, contract docs (API-08, POL-05, POL-06)
+- [x] 04-07-PLAN.md — API-08 submission-order test, replay matrix, contract docs (API-08, POL-05, POL-06)
 
 
 **Notes**: D§4 stop rule: the entitlement source must exist in POPEYE_v0.4.2 or vocabulary §3.2 (Q4). If it is in neither, stop. This phase fixes the scaffold defects from CONCERNS.md: an unknown action throwing, null grants failing open, refusals consuming the rate limit, no approval guard.
@@ -307,7 +307,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 1. Foundation and Walking Skeleton | 13/13 | Complete    | 2026-10-22 |
 | 2. Contract Integrity and Idempotent Submission | 7/7 | Complete    | 2026-10-22 |
 | 3. Trace Verification | 6/6 | Complete    | 2026-10-22 |
-| 4. Policy, Expiry and Refusal | 6/7 | In Progress|  |
+| 4. Policy, Expiry and Refusal | 7/7 | Complete   | 2026-10-23 |
 | 5. Generic Review Queue and Action Approval | 0/TBD | Not started | - |
 | 6. Simulated Execution and Audit Chain | 0/TBD | Not started | - |
 | 7. Reviewer UI and Entra OIDC | 0/TBD | Not started | - |
