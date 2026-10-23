@@ -282,7 +282,7 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         public Task<EvaluatedInsertResult?> InsertEvaluatedAsync(Guid tenantId, NewProposal proposal, int rateLimit, int windowSeconds, Olive.Domain.PolicyVerdict priorPassing, CancellationToken ct) =>
             throw new PostgresException("secret-parameter-value", "ERROR", "ERROR", sqlState);
 
-        public Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, CancellationToken ct, string? policyDetailJson = null) => throw new NotSupportedException();
+        public Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, RefusalKind kind, CancellationToken ct, string? policyDetailJson = null) => throw new NotSupportedException();
 
         public Task<ProposalRecord?> GetAsync(Guid tenantId, Guid proposalId, CancellationToken ct) => throw new NotSupportedException();
 

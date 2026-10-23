@@ -97,7 +97,7 @@ public static class ProposalEndpoints
                 Guid? refusedId;
                 try
                 {
-                    refusedId = await store.InsertRefusedAsync(key.TenantId, refused, verdict.Reason!, ct, verdict.ToDetailJson());
+                    refusedId = await store.InsertRefusedAsync(key.TenantId, refused, verdict.Reason!, RefusalKind.Policy, ct, verdict.ToDetailJson());
                 }
                 catch (PostgresException e) when (e.SqlState is PostgresErrorCodes.NumericValueOutOfRange
                                                      or PostgresErrorCodes.InvalidTextRepresentation
@@ -272,7 +272,7 @@ public static class ProposalEndpoints
                 }
                 else
                 {
-                    id = await store.InsertRefusedAsync(key.TenantId, proposal, refusalReason, ct);
+                    id = await store.InsertRefusedAsync(key.TenantId, proposal, refusalReason, RefusalKind.Trace, ct);
                 }
             }
             catch (PostgresException e) when (e.SqlState is PostgresErrorCodes.NumericValueOutOfRange

@@ -11,10 +11,11 @@ public interface IProposalStore
     Task<EvaluatedInsertResult?> InsertEvaluatedAsync(Guid tenantId, NewProposal proposal, int rateLimit, int windowSeconds, Olive.Domain.PolicyVerdict priorPassing, CancellationToken ct);
 
     // The single refusal-writing path, reused by Phase 4 policy refusals (D-05): insert then compare-and-set to refused_policy with
-    // the reason, plus "submitted" and "trace_refused" events, in one tenant transaction. Returns null on a duplicate (tenant, agent, run).
-    // When policyDetailJson is given the refusal is a policy refusal: a "policy_evaluated" event carries that static detail and the
-    // transition event is "policy_refused"; when null it is a trace refusal ("trace_refused").
-    Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, CancellationToken ct, string? policyDetailJson = null);
+    // the reason, plus the "submitted" event, in one tenant transaction. Returns null on a duplicate (tenant, agent, run).
+    // The kind is explicit (WR-02), never inferred: RefusalKind.Trace writes a "trace_refused" transition event and takes no detail;
+    // RefusalKind.Policy requires the static verdict detail, written as a "policy_evaluated" event, and a "policy_refused" transition.
+    // A kind/detail mismatch throws ArgumentException before any database work.
+    Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, RefusalKind kind, CancellationToken ct, string? policyDetailJson = null);
 
     // Cross-tenant lookup is indistinguishable from missing (D-11).
     Task<ProposalRecord?> GetAsync(Guid tenantId, Guid proposalId, CancellationToken ct);
@@ -28,6 +29,8 @@ public interface IProposalStore
     // Throws ArgumentException when either state is refused_policy: refusals go through InsertRefusedAsync only (WR-07).
     Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct);
 }
+
+public enum RefusalKind { Trace, Policy }
 
 public sealed record NewProposal(string AgentId, string KeyId, string OnBehalfOf, string Purpose, DateTimeOffset KeyExpiresAt, string? NonoSessionId, string RunId, string? ActionType, string? PartyRef, string? ParametersJson, string? Justification, string? TraceRef, string? CanonicalBody = null, string? BodySha256 = null, string? ProposalHash = null, string? TraceVerification = null, string? TraceSchemaVersion = null, DateTimeOffset? ExpiresAt = null);
 

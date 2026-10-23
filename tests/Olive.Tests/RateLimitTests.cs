@@ -102,7 +102,7 @@ public sealed class RateLimitTests(PostgresFixture fixture)
         // Refusals in the same (tenant, agent, action) scope, written through the refusal path.
         for (var i = 0; i < 5; i++)
         {
-            Assert.NotNull(await store.InsertRefusedAsync(Alpha, Sample("liam", "refused" + i), "purpose_not_permitted", Ct, "{}"));
+            Assert.NotNull(await store.InsertRefusedAsync(Alpha, Sample("liam", "refused" + i), "purpose_not_permitted", RefusalKind.Policy, Ct, "{}"));
         }
 
         // Unknown action refusals through the endpoint.

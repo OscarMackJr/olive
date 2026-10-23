@@ -33,13 +33,32 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
 
     private static DateTimeOffset Utc(DateTime d) => new(DateTime.SpecifyKind(d, DateTimeKind.Utc));
 
-    public Task<Guid?> InsertAsync(Guid tenantId, NewProposal p, CancellationToken ct) => InsertCoreAsync(tenantId, p, null, null, ct);
+    public Task<Guid?> InsertAsync(Guid tenantId, NewProposal p, CancellationToken ct) => InsertCoreAsync(tenantId, p, null, null, null, ct);
 
     // olive_app has no INSERT grant on state (migration 0003), so a refusal is insert then compare-and-set, atomically (D-05).
-    public Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal p, string refusalReason, CancellationToken ct, string? policyDetailJson = null) =>
-        InsertCoreAsync(tenantId, p, refusalReason, policyDetailJson, ct);
+    // WR-02: the audit event type follows the explicit kind. A policy refusal without its detail, or a trace refusal with one, is a
+    // caller bug and is rejected before any database work rather than recorded under the wrong event type.
+    public Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal p, string refusalReason, RefusalKind kind, CancellationToken ct, string? policyDetailJson = null)
+    {
+        if (kind is not (RefusalKind.Trace or RefusalKind.Policy))
+        {
+            throw new ArgumentException("TRC-03 / POL-04: unknown refusal kind.", nameof(kind));
+        }
 
-    private Task<Guid?> InsertCoreAsync(Guid tenantId, NewProposal p, string? refusalReason, string? policyDetailJson, CancellationToken ct) =>
+        if (kind == RefusalKind.Policy && policyDetailJson is null)
+        {
+            throw new ArgumentException("POL-04: a policy refusal requires the static verdict detail.", nameof(policyDetailJson));
+        }
+
+        if (kind == RefusalKind.Trace && policyDetailJson is not null)
+        {
+            throw new ArgumentException("TRC-03: a trace refusal carries no policy detail.", nameof(policyDetailJson));
+        }
+
+        return InsertCoreAsync(tenantId, p, refusalReason, kind, policyDetailJson, ct);
+    }
+
+    private Task<Guid?> InsertCoreAsync(Guid tenantId, NewProposal p, string? refusalReason, RefusalKind? kind, string? policyDetailJson, CancellationToken ct) =>
         uow.ExecuteAsync<Guid?>(tenantId, async (conn, tx) =>
         {
             var id = Guid.NewGuid();
@@ -83,7 +102,7 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
                 detail = (string?)null,
             }, tx, cancellationToken: ct));
 
-            if (refusalReason is not null && policyDetailJson is not null)
+            if (refusalReason is not null && kind == RefusalKind.Policy)
             {
                 await conn.ExecuteAsync(new CommandDefinition(ProposalSql.InsertEvent, new
                 {
@@ -112,7 +131,7 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
                     tenant_id = tenantId,
                     event_id = Guid.NewGuid(),
                     proposal_id = id,
-                    event_type = policyDetailJson is null ? "trace_refused" : "policy_refused",
+                    event_type = kind == RefusalKind.Policy ? "policy_refused" : "trace_refused",
                     from_state = "proposed",
                     to_state = "refused_policy",
                     actor = p.AgentId,

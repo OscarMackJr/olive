@@ -40,7 +40,7 @@ public sealed class ProposalStoreRefusalTests(PostgresFixture fixture)
     {
         await using var db = await fixture.CreateDatabaseAsync();
         var store = Store(db);
-        var id = await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample(), "trace_not_found", Ct);
+        var id = await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample(), "trace_not_found", RefusalKind.Trace, Ct);
         Assert.NotNull(id);
 
         var rec = await store.GetAsync(TestPaths.TenantAlpha, id!.Value, Ct);
@@ -74,7 +74,7 @@ public sealed class ProposalStoreRefusalTests(PostgresFixture fixture)
         await using var db = await fixture.CreateDatabaseAsync();
         var store = Store(db);
         var detail = "{\"outcome\":\"refused\",\"reason\":\"not_in_catalog\",\"checks\":[{\"name\":\"catalog\",\"result\":\"fail\"}]}";
-        var id = await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample(), "not_in_catalog", Ct, detail);
+        var id = await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample(), "not_in_catalog", RefusalKind.Policy, Ct, detail);
         Assert.NotNull(id);
 
         var events = await EventsAsync(db, id!.Value);
@@ -86,13 +86,25 @@ public sealed class ProposalStoreRefusalTests(PostgresFixture fixture)
         Assert.Equal("not_in_catalog", (await store.GetAsync(TestPaths.TenantAlpha, id.Value, Ct))!.RefusalReason);
     }
 
+    // WR-02: the event type comes from the explicit kind; a kind/detail mismatch is rejected before any database work.
+    [Fact]
+    public async Task POL_04_refusal_kind_and_detail_mismatch_is_rejected_and_nothing_is_stored()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        var store = Store(db);
+        await Assert.ThrowsAsync<ArgumentException>(() => store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample("run-p"), "purpose_not_permitted", RefusalKind.Policy, Ct));
+        await Assert.ThrowsAsync<ArgumentException>(() => store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample("run-t"), "trace_not_found", RefusalKind.Trace, Ct, "{}"));
+        Assert.Null(await store.FindByRunAsync(TestPaths.TenantAlpha, "agent-1", "run-p", Ct));
+        Assert.Null(await store.FindByRunAsync(TestPaths.TenantAlpha, "agent-1", "run-t", Ct));
+    }
+
     [Fact]
     public async Task TRC_03_transition_into_or_out_of_refused_policy_is_rejected_before_the_database()
     {
         await using var db = await fixture.CreateDatabaseAsync();
         var store = Store(db);
         var accepted = await store.InsertAsync(TestPaths.TenantAlpha, Sample("run-ok"), Ct);
-        var refused = await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample("run-refused"), "trace_not_found", Ct);
+        var refused = await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample("run-refused"), "trace_not_found", RefusalKind.Trace, Ct);
 
         await Assert.ThrowsAsync<ArgumentException>(() => store.TransitionAsync(TestPaths.TenantAlpha, accepted!.Value, "proposed", "refused_policy", "sys", Ct));
         await Assert.ThrowsAsync<ArgumentException>(() => store.TransitionAsync(TestPaths.TenantAlpha, refused!.Value, "refused_policy", "proposed", "sys", Ct));
@@ -110,9 +122,9 @@ public sealed class ProposalStoreRefusalTests(PostgresFixture fixture)
     {
         await using var db = await fixture.CreateDatabaseAsync();
         var store = Store(db);
-        var first = await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample(), "trace_not_found", Ct);
+        var first = await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample(), "trace_not_found", RefusalKind.Trace, Ct);
         Assert.NotNull(first);
-        Assert.Null(await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample(), "trace_not_found", Ct));
+        Assert.Null(await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample(), "trace_not_found", RefusalKind.Trace, Ct));
         Assert.Null(await store.InsertAsync(TestPaths.TenantAlpha, Sample(), Ct));
         Assert.Equal(2, (await EventsAsync(db, first!.Value)).Count);
     }
@@ -122,7 +134,7 @@ public sealed class ProposalStoreRefusalTests(PostgresFixture fixture)
     {
         await using var db = await fixture.CreateDatabaseAsync();
         var store = Store(db);
-        await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample("run-refused"), "trace_not_found", Ct);
+        await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample("run-refused"), "trace_not_found", RefusalKind.Trace, Ct);
         await store.InsertAsync(TestPaths.TenantAlpha, Sample("run-ok"), Ct);
 
         var refused = await store.FindByRunAsync(TestPaths.TenantAlpha, "agent-1", "run-refused", Ct);
@@ -151,7 +163,7 @@ public sealed class ProposalStoreRefusalTests(PostgresFixture fixture)
     {
         await using var db = await fixture.CreateDatabaseAsync();
         var store = Store(db);
-        var id = await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample(), "trace_not_found", Ct);
+        var id = await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample(), "trace_not_found", RefusalKind.Trace, Ct);
         Assert.Null(await store.GetAsync(TestPaths.TenantBeta, id!.Value, Ct));
         Assert.Null(await store.FindByRunAsync(TestPaths.TenantBeta, "agent-1", "run-1", Ct));
     }
