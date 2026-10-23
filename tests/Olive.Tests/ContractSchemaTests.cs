@@ -57,6 +57,22 @@ public sealed class ContractSchemaTests
 
     [Fact]
     [Trait("Category", "Unit")]
+    public void POL_02_directory_fixtures_validate_and_a_missing_tenant_id_is_rejected()
+    {
+        const string schema = "contracts/directory/directory-groups.schema.json";
+        var files = JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(TestPaths.Root, "contracts/directory/index.json")))!;
+        Assert.NotEmpty(files);
+        foreach (var f in files)
+        {
+            Assert.Null(Check(schema, File.ReadAllText(Path.Combine(TestPaths.Root, "contracts/directory", f))));
+        }
+
+        Assert.NotNull(Check(schema, "{\"on_behalf_of\":\"u@example.test\",\"groups\":[]}"));
+        Assert.NotNull(Check(schema, "{\"tenant_id\":\"5325ffe9-5727-4d88-9832-aebabb8d0538\",\"on_behalf_of\":\"u\",\"groups\":[],\"x\":1}"));
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public void TRC_03_reason_and_trace_fields_are_optional_in_the_schemas()
     {
         foreach (var schema in new[] { "proposal-submit-response", "proposal" })

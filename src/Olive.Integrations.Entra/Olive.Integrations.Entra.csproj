@@ -3,4 +3,7 @@
     <ProjectReference Include="..\Olive.Application\Olive.Application.csproj" />
     <ProjectReference Include="..\Olive.Domain\Olive.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\contracts\directory\*.json" LogicalName="directory/%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>
