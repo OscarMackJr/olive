@@ -6,6 +6,7 @@ using Olive.Host.Auth;
 using Olive.Host.Endpoints;
 using Olive.Host.Problems;
 using Olive.Host.Startup;
+using Olive.Integrations.Entra;
 using Olive.Integrations.Hometown;
 using Olive.Integrations.Popeye;
 using Olive.Persistence;
@@ -54,6 +55,9 @@ if (!string.IsNullOrWhiteSpace(traceTimeoutText))
 
 builder.Services.AddSingleton(traceOptions);
 builder.Services.AddSingleton<TraceVerifier>();
+// D-02/D-07: read-only directory lookup, fixture-backed and barred in production by the startup guard; deliberately not cached.
+builder.Services.AddSingleton<IDirectoryGroupResolver>(_ => FixtureDirectoryGroupResolver.CreateDefault());
+builder.Services.AddSingleton<DirectoryVerifier>();
 builder.Services.AddSingleton<IAgentAllowlist>(_ => AgentAllowlist.LoadEmbedded());
 builder.Services.AddSingleton(_ => CatalogLoader.LoadEmbedded(Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml")));
 builder.Services.AddAuthentication(AgentKeyAuthenticationHandler.SchemeName)

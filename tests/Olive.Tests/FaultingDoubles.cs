@@ -81,3 +81,24 @@ public sealed class FaultingKeyIntrospector(int status) : IKeyIntrospector
     public Task<IntrospectionResult> IntrospectAsync(SessionKey key, CancellationToken ct) =>
         throw new IntrospectionCallerRejectedException(status);
 }
+
+public sealed class FaultingDirectoryResolver(IDirectoryGroupResolver healthy, ResolverFault mode = ResolverFault.None) : IDirectoryGroupResolver
+{
+    public ResolverFault Mode { get; set; } = mode;
+
+    public async Task<DirectoryLookup> ResolveAsync(Guid tenantId, string onBehalfOf, CancellationToken ct)
+    {
+        switch (Mode)
+        {
+            case ResolverFault.Unavailable: return new DirectoryLookup.Unavailable();
+            case ResolverFault.Throw: throw new HttpRequestException("directory-fault-secret-detail");
+            case ResolverFault.Hang:
+                await Task.Delay(Timeout.Infinite, ct);
+                return new DirectoryLookup.Unavailable();
+            case ResolverFault.CallerRejected401: return new DirectoryLookup.CallerRejected(401);
+            case ResolverFault.CallerRejected403: return new DirectoryLookup.CallerRejected(403);
+            case ResolverFault.Malformed: return new DirectoryLookup.Malformed();
+            default: return await healthy.ResolveAsync(tenantId, onBehalfOf, ct);
+        }
+    }
+}

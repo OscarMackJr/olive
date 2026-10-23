@@ -77,14 +77,14 @@ public sealed class TraceVerifiedEndpointTests(PostgresFixture fixture)
     }
 
     [Fact]
-    public async Task TRC_ORDER_events_show_introspect_then_idempotency_then_token_then_resolve_then_insert()
+    public async Task TRC_ORDER_events_show_introspect_then_idempotency_then_token_then_resolve_then_directory_then_insert()
     {
         await using var db = await fixture.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db, traceMode: TraceMode.Explicit);
         SeedMatch(factory);
         using var client = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
         Assert.Equal(HttpStatusCode.Created, (await Post(client, MatchProposal)).StatusCode);
-        Assert.Equal(["introspect", "FindByRun", "token", "resolve", "insert"], factory.Events);
+        Assert.Equal(["introspect", "FindByRun", "token", "resolve", "directory", "insert"], factory.Events);
     }
 
     [Fact]
