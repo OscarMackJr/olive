@@ -176,6 +176,16 @@ public sealed class RateLimitTests(PostgresFixture fixture)
         Assert.Equal("awaiting_approval", (await store.InsertEvaluatedAsync(Beta, Sample("agent-a", "r1"), 1, 3600, Passing(), Ct))!.State);
     }
 
+    // WR-04: the evaluated path refuses a proposal with no computed expiry before any database work.
+    [Fact]
+    public async Task POL_07_evaluated_insert_without_expiry_is_rejected_and_nothing_stored()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        var store = Store(db);
+        await Assert.ThrowsAsync<ArgumentException>(() => store.InsertEvaluatedAsync(Alpha, Sample("agent-a", "no-expiry") with { ExpiresAt = null }, 5, 3600, Passing(), Ct));
+        Assert.Equal(0, await CountAsync(db, Alpha, "true"));
+    }
+
     [Fact]
     public async Task POL_03_duplicate_run_returns_null_and_does_not_count()
     {

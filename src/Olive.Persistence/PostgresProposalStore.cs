@@ -146,9 +146,16 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
     public Task<EvaluatedInsertResult?> InsertEvaluatedAsync(Guid tenantId, NewProposal p, int rateLimit, int windowSeconds, Olive.Domain.PolicyVerdict priorPassing, CancellationToken ct) =>
         uow.ExecuteAsync<EvaluatedInsertResult?>(tenantId, async (conn, tx) =>
         {
+            // Invariant guards (WR-04): the endpoint always supplies both, so these fire only on a caller bug, and fail closed before
+            // any statement runs. An accepted row without an expiry would never expire.
             if (p.ActionType is null)
             {
                 throw new ArgumentException("POL-03: an action type is required for the rate scope.", nameof(p));
+            }
+
+            if (p.ExpiresAt is null)
+            {
+                throw new ArgumentException("POL-07: an evaluated proposal requires a computed expiry.", nameof(p));
             }
 
             await conn.ExecuteScalarAsync(new CommandDefinition(ProposalSql.LockRate,

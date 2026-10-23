@@ -253,7 +253,16 @@ public static class ProposalEndpoints
             // D-14/D-15: computed once, accepted proposals only, from the injected clock; the cap at the key's expiry is silent.
             if (refusalReason is null)
             {
-                var requestedExpiry = timeProvider.GetUtcNow().AddSeconds(Math.Min(expiresIn ?? DefaultExpirySeconds, entry.MaxExpirySeconds));
+                var now = timeProvider.GetUtcNow();
+                // WR-04: the key was active at authentication, but trace and directory calls take time. A key that has expired by now
+                // would give an accepted proposal expires_at <= created_at; fail closed exactly as the auth handler does, storing nothing.
+                if (key.ExpiresAt <= now)
+                {
+                    http.Response.Headers.WWWAuthenticate = AgentKeyHeader.Scheme;
+                    return ProblemResults.Result(StatusCodes.Status401Unauthorized, ProblemReasons.KeyInactive);
+                }
+
+                var requestedExpiry = now.AddSeconds(Math.Min(expiresIn ?? DefaultExpirySeconds, entry.MaxExpirySeconds));
                 proposal = proposal with { ExpiresAt = requestedExpiry < key.ExpiresAt ? requestedExpiry : key.ExpiresAt };
             }
 

@@ -30,6 +30,25 @@ public sealed class ExpiryTests(PostgresFixture fixture)
         return new OliveApiFactory(db, introspector, configureServices: s => s.AddSingleton<TimeProvider>(clock));
     }
 
+    // Advances the clock while the request is in flight (after authentication), as slow trace or directory calls would.
+    private sealed class AdvancingDirectory(IDirectoryGroupResolver inner, ManualTimeProvider clock, TimeSpan by) : IDirectoryGroupResolver
+    {
+        public Task<DirectoryLookup> ResolveAsync(Guid tenantId, string onBehalfOf, CancellationToken ct)
+        {
+            clock.Advance(by);
+            return inner.ResolveAsync(tenantId, onBehalfOf, ct);
+        }
+    }
+
+    private static OliveApiFactory AdvancingFactory(TestDatabase db, ManualTimeProvider clock, TimeSpan keyLife, TimeSpan advanceBy)
+    {
+        var json = File.ReadAllText(Path.Combine(TestPaths.Root, "contracts", "introspection", "liam-alpha.json"))
+            .Replace("2099-01-01T00:00:00Z", (clock.GetUtcNow() + keyLife).ToString("yyyy-MM-ddTHH:mm:ssZ"));
+        var introspector = new StubKeyIntrospector(new Dictionary<string, string> { [ApiProposalTests.AlphaKey] = json }, clock);
+        var directory = new AdvancingDirectory(Olive.Integrations.Entra.FixtureDirectoryGroupResolver.CreateDefault(), clock, advanceBy);
+        return new OliveApiFactory(db, introspector, configureServices: s => s.AddSingleton<TimeProvider>(clock), innerDirectory: directory);
+    }
+
     private static string Body(string run, string? extra = null) =>
         ApiProposalTests.BodyFor(run).TrimEnd('}') + (extra is null ? "" : "," + extra) + "}";
 
@@ -115,6 +134,32 @@ public sealed class ExpiryTests(PostgresFixture fixture)
         await using var factory = Factory(db, clock, TimeSpan.FromSeconds(100));
         using var alpha = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
         Assert.Equal(clock.GetUtcNow().AddSeconds(100), await SubmitAndGetExpiryAsync(alpha, Body("k1", "\"expires_in_seconds\":600")));
+    }
+
+    // WR-04: a key that expires while the request is in flight never yields an accepted proposal with expires_at <= now.
+    [Fact]
+    public async Task POL_07_key_expired_during_request_is_401_key_inactive_and_nothing_stored()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        var clock = new ManualTimeProvider(NewStart());
+        await using var factory = AdvancingFactory(db, clock, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(100));
+        using var alpha = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", ApiProposalTests.Json(Body("late")), Ct);
+        Assert.Equal(HttpStatusCode.Unauthorized, r.StatusCode);
+        Assert.Equal("key_inactive", (await JsonOf(r)).GetProperty("reason").GetString());
+        Assert.Equal(0, await ApiProposalTests.CountRowsAsync(db, ApiProposalTests.Alpha));
+    }
+
+    // Positive control: the same seam with a key still live by one second is accepted and capped at the key expiry.
+    [Fact]
+    public async Task POL_07_key_still_live_after_in_flight_delay_is_accepted_and_capped()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        var start = NewStart();
+        var clock = new ManualTimeProvider(start);
+        await using var factory = AdvancingFactory(db, clock, TimeSpan.FromSeconds(100), TimeSpan.FromSeconds(99));
+        using var alpha = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
+        Assert.Equal(start.AddSeconds(100), await SubmitAndGetExpiryAsync(alpha, Body("ontime")));
     }
 
     [Fact]
