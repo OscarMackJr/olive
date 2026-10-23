@@ -23,8 +23,8 @@ public interface IProposalStore
     Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct);
 }
 
-public sealed record NewProposal(string AgentId, string KeyId, string OnBehalfOf, string Purpose, DateTimeOffset KeyExpiresAt, string? NonoSessionId, string RunId, string? ActionType, string? PartyRef, string? ParametersJson, string? Justification, string? TraceRef, string? CanonicalBody = null, string? BodySha256 = null, string? ProposalHash = null, string? TraceVerification = null, string? TraceSchemaVersion = null);
+public sealed record NewProposal(string AgentId, string KeyId, string OnBehalfOf, string Purpose, DateTimeOffset KeyExpiresAt, string? NonoSessionId, string RunId, string? ActionType, string? PartyRef, string? ParametersJson, string? Justification, string? TraceRef, string? CanonicalBody = null, string? BodySha256 = null, string? ProposalHash = null, string? TraceVerification = null, string? TraceSchemaVersion = null, DateTimeOffset? ExpiresAt = null);
 
 public sealed record ProposalRunRecord(Guid ProposalId, string State, string? BodySha256, string OnBehalfOf, string Purpose, string? RefusalReason = null);
 
-public sealed record ProposalRecord(Guid ProposalId, Guid TenantId, string State, string AgentId, string KeyId, string OnBehalfOf, string Purpose, DateTimeOffset KeyExpiresAt, string? NonoSessionId, string RunId, string? ActionType, string? PartyRef, string? ParametersJson, string? Justification, string? TraceRef, DateTimeOffset CreatedAt, string? RefusalReason = null, string? TraceVerification = null, string? TraceSchemaVersion = null);
+public sealed record ProposalRecord(Guid ProposalId, Guid TenantId, string State, string AgentId, string KeyId, string OnBehalfOf, string Purpose, DateTimeOffset KeyExpiresAt, string? NonoSessionId, string RunId, string? ActionType, string? PartyRef, string? ParametersJson, string? Justification, string? TraceRef, DateTimeOffset CreatedAt, string? RefusalReason = null, string? TraceVerification = null, string? TraceSchemaVersion = null, DateTimeOffset? ExpiresAt = null);

@@ -4,8 +4,8 @@ namespace Olive.Persistence;
 public static class ProposalSql
 {
     public const string Insert =
-        "insert into proposal (tenant_id, proposal_id, agent_id, key_id, on_behalf_of, purpose, key_expires_at, nono_session_id, run_id, action_type, party_ref, parameters, justification, trace_ref, canonical_body, body_sha256, proposal_hash, trace_verification, trace_schema_version) " +
-        "values (@tenant_id, @proposal_id, @agent_id, @key_id, @on_behalf_of, @purpose, @key_expires_at, @nono_session_id, @run_id, @action_type, @party_ref, @parameters::jsonb, @justification, @trace_ref, @canonical_body, @body_sha256, @proposal_hash, @trace_verification, @trace_schema_version) " +
+        "insert into proposal (tenant_id, proposal_id, agent_id, key_id, on_behalf_of, purpose, key_expires_at, nono_session_id, run_id, action_type, party_ref, parameters, justification, trace_ref, canonical_body, body_sha256, proposal_hash, trace_verification, trace_schema_version, expires_at) " +
+        "values (@tenant_id, @proposal_id, @agent_id, @key_id, @on_behalf_of, @purpose, @key_expires_at, @nono_session_id, @run_id, @action_type, @party_ref, @parameters::jsonb, @justification, @trace_ref, @canonical_body, @body_sha256, @proposal_hash, @trace_verification, @trace_schema_version, @expires_at) " +
         "on conflict on constraint proposal_run_unique do nothing returning proposal_id";
 
     public const string InsertEvent =
@@ -13,7 +13,7 @@ public static class ProposalSql
         "values (@tenant_id, @event_id, @proposal_id, @event_type, @from_state, @to_state, @actor, @detail::jsonb)";
 
     public const string Get =
-        "select proposal_id, tenant_id, state, agent_id, key_id, on_behalf_of, purpose, key_expires_at, nono_session_id, run_id, action_type, party_ref, parameters::text as parameters_json, justification, trace_ref, created_at, refusal_reason, trace_verification, trace_schema_version " +
+        "select proposal_id, tenant_id, state, agent_id, key_id, on_behalf_of, purpose, key_expires_at, nono_session_id, run_id, action_type, party_ref, parameters::text as parameters_json, justification, trace_ref, created_at, refusal_reason, trace_verification, trace_schema_version, expires_at " +
         "from proposal where tenant_id = @tenant_id and proposal_id = @proposal_id";
 
     public const string FindByRun =

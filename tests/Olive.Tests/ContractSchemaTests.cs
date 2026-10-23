@@ -97,6 +97,26 @@ public sealed class ContractSchemaTests
         Assert.Equal(["proposal-request.schema.json", "proposal-submit-response.schema.json", "proposal.schema.json"], names);
     }
 
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("28800", true)]
+    [InlineData("1.0", true)]
+    [InlineData("0", false)]
+    [InlineData("-5", false)]
+    [InlineData("1.5", false)]
+    [InlineData("\"10\"", false)]
+    [Trait("Category", "Unit")]
+    public void POL_07_request_schema_expires_in_seconds_is_integer_minimum_1(string value, bool ok)
+    {
+        var body = $$"""{"run_id":"r","action_type":"crm.case_note@1","party_ref":"p","parameters":{},"justification":"j","trace_ref":"t","expires_in_seconds":{{value}}}""";
+        Assert.Equal(ok, Check("contracts/proposal/v1/proposal-request.schema.json", body) is null);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void POL_07_proposal_schema_accepts_optional_expires_at() =>
+        Assert.Null(Check("contracts/proposal/v1/proposal.schema.json", File.ReadAllText(Path.Combine(TestPaths.Root, "contracts/proposal/v1/proposal.valid.json"))));
+
     [Fact]
     [Trait("Category", "Unit")]
     public void API_05_full_phase1_body_validates_against_request_schema() =>

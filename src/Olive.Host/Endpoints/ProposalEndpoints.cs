@@ -291,6 +291,6 @@ public static class ProposalEndpoints
         }
 
         return Results.Ok(new ProposalResponse(r.ProposalId, r.State, r.TenantId, r.AgentId, r.KeyId, r.OnBehalfOf, r.Purpose,
-            r.KeyExpiresAt, r.NonoSessionId, r.RunId, r.ActionType, r.PartyRef, parameters, r.Justification, r.TraceRef, r.CreatedAt, r.RefusalReason, r.TraceVerification, r.TraceSchemaVersion));
+            r.KeyExpiresAt, r.NonoSessionId, r.RunId, r.ActionType, r.PartyRef, parameters, r.Justification, r.TraceRef, r.CreatedAt, r.RefusalReason, r.TraceVerification, r.TraceSchemaVersion, r.ExpiresAt));
     }
 }

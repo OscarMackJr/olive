@@ -28,6 +28,7 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
         public string? RefusalReason { get; set; }
         public string? TraceVerification { get; set; }
         public string? TraceSchemaVersion { get; set; }
+        public DateTime? ExpiresAt { get; set; }
     }
 
     private static DateTimeOffset Utc(DateTime d) => new(DateTime.SpecifyKind(d, DateTimeKind.Utc));
@@ -63,6 +64,7 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
                 proposal_hash = p.ProposalHash,
                 trace_verification = p.TraceVerification,
                 trace_schema_version = p.TraceSchemaVersion,
+                expires_at = p.ExpiresAt?.UtcDateTime,
             }, tx, cancellationToken: ct));
             if (inserted is null)
             {
@@ -128,7 +130,7 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
                 new { tenant_id = tenantId, proposal_id = proposalId }, tx, cancellationToken: ct));
             return r is null ? null : new ProposalRecord(r.ProposalId, r.TenantId, r.State, r.AgentId, r.KeyId, r.OnBehalfOf, r.Purpose,
                 Utc(r.KeyExpiresAt), r.NonoSessionId, r.RunId, r.ActionType, r.PartyRef, r.ParametersJson, r.Justification, r.TraceRef, Utc(r.CreatedAt),
-                r.RefusalReason, r.TraceVerification, r.TraceSchemaVersion);
+                r.RefusalReason, r.TraceVerification, r.TraceSchemaVersion, r.ExpiresAt is { } e ? Utc(e) : null);
         }, ct);
 
     private sealed class RunRow

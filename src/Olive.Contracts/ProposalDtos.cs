@@ -27,4 +27,5 @@ public sealed record ProposalResponse(
     [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt,
     [property: JsonPropertyName("refusal_reason"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RefusalReason = null,
     [property: JsonPropertyName("trace_verification"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TraceVerification = null,
-    [property: JsonPropertyName("trace_schema_version"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TraceSchemaVersion = null);
+    [property: JsonPropertyName("trace_schema_version"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TraceSchemaVersion = null,
+    [property: JsonPropertyName("expires_at"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? ExpiresAt = null);
