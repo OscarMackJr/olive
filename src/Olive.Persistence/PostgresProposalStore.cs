@@ -161,6 +161,12 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
             throw new ArgumentException("REQ TRC-03 / D-05: refused_policy is written only by InsertRefusedAsync and is terminal.", nameof(toState));
         }
 
+        // POL-06: illegal edges are rejected before any database work.
+        if (!Olive.Domain.ProposalStates.CanTransition(fromState, toState))
+        {
+            throw new ArgumentException("POL-06: transition is not permitted by the lifecycle table.", nameof(toState));
+        }
+
         return uow.ExecuteAsync(tenantId, async (conn, tx) =>
         {
             var n = await conn.ExecuteAsync(new CommandDefinition(ProposalSql.UpdateState,

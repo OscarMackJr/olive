@@ -19,6 +19,7 @@ public interface IProposalStore
     Task<ProposalRunRecord?> FindByRunAsync(Guid tenantId, string agentId, string runId, CancellationToken ct);
 
     // Compare-and-set on state; false when from_state does not match or the row is not in this tenant.
+    // Guarded by ProposalStates.CanTransition (POL-06): an edge outside the table throws ArgumentException before any database work.
     // Throws ArgumentException when either state is refused_policy: refusals go through InsertRefusedAsync only (WR-07).
     Task<bool> TransitionAsync(Guid tenantId, Guid proposalId, string fromState, string toState, string actor, CancellationToken ct);
 }

@@ -39,13 +39,13 @@ public sealed class IdempotencyTests(PostgresFixture fixture)
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         var j = await ReadAsync(second);
         Assert.Equal(id, j.GetProperty("proposal_id").GetGuid());
-        Assert.Equal("proposed", j.GetProperty("state").GetString());
+        Assert.Equal("awaiting_approval", j.GetProperty("state").GetString());
         Assert.Equal($"/v1/proposals/{id}", second.Headers.Location!.OriginalString);
 
         using (var scope = factory.Services.CreateScope())
         {
             var store = scope.ServiceProvider.GetRequiredService<IProposalStore>();
-            Assert.True(await store.TransitionAsync(ApiProposalTests.Alpha, id, "proposed", "approved", "reviewer", Ct));
+            Assert.True(await store.TransitionAsync(ApiProposalTests.Alpha, id, "awaiting_approval", "approved", "reviewer", Ct));
         }
 
         var third = await Post(alpha, body);

@@ -72,8 +72,8 @@ public sealed class ProposalStoreHashTests(PostgresFixture fixture)
         await using var db = await fixture.CreateDatabaseAsync();
         var store = Store(db);
         var id = await store.InsertAsync(TestPaths.TenantAlpha, Sample(), Ct);
-        Assert.True(await store.TransitionAsync(TestPaths.TenantAlpha, id!.Value, "proposed", "approved", "reviewer", Ct));
-        Assert.Equal("approved", (await store.FindByRunAsync(TestPaths.TenantAlpha, "agent-1", "run-1", Ct))!.State);
+        Assert.True(await store.TransitionAsync(TestPaths.TenantAlpha, id!.Value, "proposed", "awaiting_approval", "reviewer", Ct));
+        Assert.Equal("awaiting_approval", (await store.FindByRunAsync(TestPaths.TenantAlpha, "agent-1", "run-1", Ct))!.State);
     }
 
     [Fact]
