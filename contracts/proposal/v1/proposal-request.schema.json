@@ -12,6 +12,7 @@
     "parameters": { "type": "object" },
     "justification": { "type": "string", "minLength": 1 },
     "trace_ref": { "type": "string", "minLength": 1 },
-    "nono_session_id": { "type": "string", "minLength": 1 }
+    "nono_session_id": { "type": "string", "minLength": 1 },
+    "expires_in_seconds": { "type": "integer", "minimum": 1 }
   }
 }

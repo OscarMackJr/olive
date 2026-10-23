@@ -13,6 +13,7 @@ namespace Olive.Host.Endpoints;
 public static class ProposalEndpoints
 {
     public const int MaxBodyBytes = 1_048_576;
+    private const long DefaultExpirySeconds = 28800;
     private const string LogCategory = "Olive.Host.Endpoints.ProposalEndpoints";
 
     public static IEndpointRouteBuilder MapProposalEndpoints(this IEndpointRouteBuilder app)
@@ -25,7 +26,7 @@ public static class ProposalEndpoints
     // Order (Decision section 15.2): introspect (auth handler), principal checks, then the body: idempotency replay, envelope and
     // parameter schema (400, nothing stored), unknown action (stored not_in_catalog, no trace resolution), trace verification
     // (trace refusal wins, D-18), then policy (purpose), then insert.
-    private static async Task<IResult> PostAsync(HttpContext http, IProposalStore store, IAgentAllowlist allowlist, SubmissionValidator validator, TraceVerifier verifier, ILoggerFactory loggerFactory, CancellationToken ct)
+    private static async Task<IResult> PostAsync(HttpContext http, IProposalStore store, IAgentAllowlist allowlist, SubmissionValidator validator, TraceVerifier verifier, TimeProvider timeProvider, ILoggerFactory loggerFactory, CancellationToken ct)
     {
         var key = http.User.ToActiveKey();
         if (key.PrincipalType != PrincipalTypes.Agent)
@@ -152,6 +153,29 @@ public static class ProposalEndpoints
 
             var entry = ((SubmissionOutcome.Ok)outcome).Entry;
 
+            // D-16 / Q3: expires_in_seconds is optional; present means an integer in [1, max_expiry_seconds]. TryGetInt64, never
+            // GetInt32: the schema's "integer" admits 1.0 and 1e0, which must be a 400, not a 500 (pitfall 7). Nothing is stored.
+            long? expiresIn = null;
+            if (root.TryGetProperty("expires_in_seconds", out var expiresInElement))
+            {
+                if (expiresInElement.ValueKind != JsonValueKind.Number || !expiresInElement.TryGetInt64(out var requested))
+                {
+                    return ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.SchemaViolation, "/expires_in_seconds", "type");
+                }
+
+                if (requested < 1)
+                {
+                    return ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.SchemaViolation, "/expires_in_seconds", "minimum");
+                }
+
+                if (requested > entry.MaxExpirySeconds)
+                {
+                    return ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.SchemaViolation, "/expires_in_seconds", "maximum");
+                }
+
+                expiresIn = requested;
+            }
+
             // Trace verification (D-11, D15.2): after idempotency and schema/catalog validation, before anything is stored.
             // The session key goes only to the verifier, which hands it only to the token issuer (D17.1).
             var sessionKey = AgentKeyHeader.TryRead(http.Request.Headers[AgentKeyHeader.Name].ToString());
@@ -201,6 +225,13 @@ public static class ProposalEndpoints
             if (refusalReason is null && !policy.Allowed)
             {
                 return await StoreRefusalAsync(proposal, policy);
+            }
+
+            // D-14/D-15: computed once, accepted proposals only, from the injected clock; the cap at the key's expiry is silent.
+            if (refusalReason is null)
+            {
+                var requestedExpiry = timeProvider.GetUtcNow().AddSeconds(Math.Min(expiresIn ?? DefaultExpirySeconds, entry.MaxExpirySeconds));
+                proposal = proposal with { ExpiresAt = requestedExpiry < key.ExpiresAt ? requestedExpiry : key.ExpiresAt };
             }
 
             Guid? id;
@@ -291,6 +322,6 @@ public static class ProposalEndpoints
         }
 
         return Results.Ok(new ProposalResponse(r.ProposalId, r.State, r.TenantId, r.AgentId, r.KeyId, r.OnBehalfOf, r.Purpose,
-            r.KeyExpiresAt, r.NonoSessionId, r.RunId, r.ActionType, r.PartyRef, parameters, r.Justification, r.TraceRef, r.CreatedAt, r.RefusalReason, r.TraceVerification, r.TraceSchemaVersion));
+            r.KeyExpiresAt, r.NonoSessionId, r.RunId, r.ActionType, r.PartyRef, parameters, r.Justification, r.TraceRef, r.CreatedAt, r.RefusalReason, r.TraceVerification, r.TraceSchemaVersion, r.ExpiresAt));
     }
 }

@@ -131,7 +131,7 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
     }
 
     private static readonly string[] InsertableColumns =
-        ["tenant_id", "proposal_id", "agent_id", "key_id", "on_behalf_of", "purpose", "key_expires_at", "nono_session_id", "run_id", "action_type", "party_ref", "parameters", "justification", "trace_ref", "canonical_body", "body_sha256", "proposal_hash", "trace_verification", "trace_schema_version"];
+        ["tenant_id", "proposal_id", "agent_id", "key_id", "on_behalf_of", "purpose", "key_expires_at", "nono_session_id", "run_id", "action_type", "party_ref", "parameters", "justification", "trace_ref", "canonical_body", "body_sha256", "proposal_hash", "trace_verification", "trace_schema_version", "expires_at"];
 
     private static string InsertSql(string extraCol, string extraVal) =>
         $"insert into proposal (tenant_id, proposal_id, agent_id, key_id, on_behalf_of, purpose, key_expires_at, run_id{extraCol}) " +
@@ -220,6 +220,14 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
         await db.SeedProposalAsync(TestPaths.TenantAlpha, "agent-1", "run-1");
         Assert.Equal("42501", await SqlStateAsync(db.AppConnectionString, "update proposal set trace_verification = 'fixture'"));
         Assert.Equal("42501", await SqlStateAsync(db.AppConnectionString, "update proposal set trace_schema_version = 'ate/1.0'"));
+    }
+
+    [Fact]
+    public async Task POL_07_app_cannot_update_expires_at()
+    {
+        await using var db = await fx.CreateDatabaseAsync();
+        await db.SeedProposalAsync(TestPaths.TenantAlpha, "agent-1", "run-1");
+        Assert.Equal("42501", await SqlStateAsync(db.AppConnectionString, "update proposal set expires_at = now()"));
     }
 
     [Fact]

@@ -24,6 +24,7 @@
     "created_at": { "type": "string", "format": "date-time" },
     "refusal_reason": { "type": "string", "pattern": "^[a-z][a-z_]{0,63}$" },
     "trace_verification": { "enum": ["fixture", "hometown"] },
-    "trace_schema_version": { "type": "string", "pattern": "^ate/[0-9]+\\.[0-9]+$" }
+    "trace_schema_version": { "type": "string", "pattern": "^ate/[0-9]+\\.[0-9]+$" },
+    "expires_at": { "type": "string", "format": "date-time" }
   }
 }

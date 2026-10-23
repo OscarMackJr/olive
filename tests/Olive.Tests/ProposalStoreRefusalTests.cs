@@ -57,6 +57,18 @@ public sealed class ProposalStoreRefusalTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task POL_07_expires_at_round_trips_as_the_same_utc_instant_and_legacy_is_null()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        var store = Store(db);
+        var at = new DateTimeOffset(2030, 1, 2, 11, 4, 5, TimeSpan.Zero);
+        var withExpiry = await store.InsertAsync(TestPaths.TenantAlpha, Sample("run-e") with { ExpiresAt = at }, Ct);
+        var without = await store.InsertAsync(TestPaths.TenantAlpha, Sample("run-n"), Ct);
+        Assert.Equal(at, (await store.GetAsync(TestPaths.TenantAlpha, withExpiry!.Value, Ct))!.ExpiresAt);
+        Assert.Null((await store.GetAsync(TestPaths.TenantAlpha, without!.Value, Ct))!.ExpiresAt);
+    }
+
+    [Fact]
     public async Task POL_04_policy_refusal_writes_policy_evaluated_and_policy_refused_events()
     {
         await using var db = await fixture.CreateDatabaseAsync();
