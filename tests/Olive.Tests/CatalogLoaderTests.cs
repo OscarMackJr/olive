@@ -22,6 +22,8 @@ public sealed class CatalogLoaderTests
         required_purpose: [servicing]
         required_approval: role:case_supervisor
         reversible: true
+        required_entitlement: ent:crm.case_note.write
+        max_expiry_seconds: 28800
         max_rate:
           limit: 10
           window_seconds: 3600
@@ -50,6 +52,31 @@ public sealed class CatalogLoaderTests
         Assert.Equal(JsonValueKind.Number, json.GetProperty("max_rate").GetProperty("limit").ValueKind);
         Assert.Equal("nexus_crm", json.GetProperty("target_system").GetString());
         Assert.Equal("object", json.GetProperty("parameters").GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public void POL_02_real_catalog_exposes_typed_policy_fields()
+    {
+        var entry = Assert.Single(CatalogLoader.LoadEmbedded(RealVocabulary).Current.Entries);
+        Assert.Equal("ent:crm.case_note.write", entry.RequiredEntitlement);
+        Assert.Equal(28800, entry.MaxExpirySeconds);
+        Assert.Equal(10, entry.MaxRateLimit);
+        Assert.Equal(3600, entry.MaxRateWindowSeconds);
+        Assert.Equal(["servicing", "collections"], entry.RequiredPurpose);
+    }
+
+    [Theory]
+    [InlineData("required_entitlement: ent:crm.case_note.write", "")]
+    [InlineData("required_entitlement: ent:crm.case_note.write", "required_entitlement: QQQQ")]
+    [InlineData("required_entitlement: ent:crm.case_note.write", "required_entitlement: QQ  QQ")]
+    [InlineData("max_expiry_seconds: 28800", "")]
+    [InlineData("max_expiry_seconds: 28800", "max_expiry_seconds: 0")]
+    [InlineData("max_expiry_seconds: 28800", "max_expiry_seconds: -5")]
+    public void POL_02_entry_without_valid_entitlement_or_expiry_ceiling_fails(string remove, string replacement)
+    {
+        var entry = Entry.Replace(remove, replacement.Replace("QQ", "\""));
+        var e = Assert.Throws<InvalidOperationException>(() => Load(Manifest, Files(entry)));
+        Assert.Equal("Catalog is invalid.", e.Message);
     }
 
     [Fact]

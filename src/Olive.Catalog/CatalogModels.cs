@@ -2,7 +2,10 @@ using System.Text.Json;
 
 namespace Olive.Catalog;
 
-public sealed record CatalogEntry(string ActionId, JsonElement EntryJson, SchemaValidator ParametersSchema);
+public sealed record CatalogEntry(
+    string ActionId, JsonElement EntryJson, SchemaValidator ParametersSchema,
+    IReadOnlyList<string>? RequiredPurpose = null, int MaxRateLimit = 0, int MaxRateWindowSeconds = 0,
+    string? RequiredEntitlement = null, int MaxExpirySeconds = 0);
 
 public sealed record CatalogRelease(int Version, IReadOnlyList<CatalogEntry> Entries);
 
