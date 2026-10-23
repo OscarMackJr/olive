@@ -31,8 +31,8 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         var any = Olive.Catalog.SchemaValidator.Compile("{\"type\":\"object\"}");
         return new([new Olive.Catalog.CatalogRelease(1,
         [
-            new Olive.Catalog.CatalogEntry("test.open@1", JsonDocument.Parse("{}").RootElement, any),
-            new Olive.Catalog.CatalogEntry("crm.case_note@1", JsonDocument.Parse("{}").RootElement, any),
+            new Olive.Catalog.CatalogEntry("test.open@1", JsonDocument.Parse("{}").RootElement, any, RequiredPurpose: ["servicing"]),
+            new Olive.Catalog.CatalogEntry("crm.case_note@1", JsonDocument.Parse("{}").RootElement, any, RequiredPurpose: ["servicing"]),
         ])]);
     }
 
@@ -279,7 +279,7 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         public Task<Guid?> InsertAsync(Guid tenantId, NewProposal proposal, CancellationToken ct) =>
             throw new PostgresException("secret-parameter-value", "ERROR", "ERROR", sqlState);
 
-        public Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, CancellationToken ct) => throw new NotSupportedException();
+        public Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, CancellationToken ct, string? policyDetailJson = null) => throw new NotSupportedException();
 
         public Task<ProposalRecord?> GetAsync(Guid tenantId, Guid proposalId, CancellationToken ct) => throw new NotSupportedException();
 

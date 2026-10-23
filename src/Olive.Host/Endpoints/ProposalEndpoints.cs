@@ -22,7 +22,9 @@ public static class ProposalEndpoints
         return app;
     }
 
-    // Order (Decision section 15.2): introspect (auth handler), principal checks, then the body.
+    // Order (Decision section 15.2): introspect (auth handler), principal checks, then the body: idempotency replay, envelope and
+    // parameter schema (400, nothing stored), unknown action (stored not_in_catalog, no trace resolution), trace verification
+    // (trace refusal wins, D-18), then policy (purpose), then insert.
     private static async Task<IResult> PostAsync(HttpContext http, IProposalStore store, IAgentAllowlist allowlist, SubmissionValidator validator, TraceVerifier verifier, ILoggerFactory loggerFactory, CancellationToken ct)
     {
         var key = http.User.ToActiveKey();
@@ -86,6 +88,34 @@ public static class ProposalEndpoints
                 return ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.IdempotencyConflict);
             }
 
+            // Stores a policy refusal (state refused_policy, policy_evaluated + policy_refused events) and answers 201; a lost insert
+            // race falls through to the winner's replay or conflict decision exactly like the trace refusal path. The detail is the
+            // static verdict JSON only (D-20).
+            async Task<IResult> StoreRefusalAsync(NewProposal refused, PolicyVerdict verdict)
+            {
+                Guid? refusedId;
+                try
+                {
+                    refusedId = await store.InsertRefusedAsync(key.TenantId, refused, verdict.Reason!, ct, verdict.ToDetailJson());
+                }
+                catch (PostgresException e) when (e.SqlState is PostgresErrorCodes.NumericValueOutOfRange
+                                                     or PostgresErrorCodes.InvalidTextRepresentation
+                                                     or PostgresErrorCodes.UntranslatableCharacter
+                                                     or PostgresErrorCodes.CharacterNotInRepertoire)
+                {
+                    logger.LogWarning("Proposal insert refused by database data check {SqlState}", e.SqlState);
+                    return Invalid();
+                }
+
+                if (refusedId is null)
+                {
+                    return await DecideExistingAsync() ?? ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.IdempotencyConflict);
+                }
+
+                logger.LogTrace("Policy refused tenant_id={TenantId} agent_id={AgentId} reason={Reason}", key.TenantId, key.AgentId, verdict.Reason);
+                return Results.Created($"/v1/proposals/{refusedId}", new ProposalCreatedResponse(refusedId.Value, ProposalStates.RefusedPolicy, verdict.Reason));
+            }
+
             var replay = await DecideExistingAsync();
             if (replay is not null)
             {
@@ -93,12 +123,10 @@ public static class ProposalEndpoints
             }
 
             // Envelope schema, current-release catalog lookup, then catalog parameter schema (D-13). Nothing is stored on failure.
-            switch (validator.Validate(root))
+            var outcome = validator.Validate(root);
+            if (outcome is SubmissionOutcome.Violation v)
             {
-                case SubmissionOutcome.Violation v:
-                    return ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.SchemaViolation, v.Detail.Pointer, v.Detail.Keyword);
-                case SubmissionOutcome.NotInCatalog:
-                    return ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.NotInCatalog);
+                return ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.SchemaViolation, v.Detail.Pointer, v.Detail.Keyword);
             }
 
             // The envelope schema has typed every field; the gate has proven the strings clean.
@@ -109,6 +137,21 @@ public static class ProposalEndpoints
             var nonoSessionId = root.TryGetProperty("nono_session_id", out var nono) ? nono.GetString() : null;
             var parametersJson = root.GetProperty("parameters").GetRawText();
 
+            // The proposal_hash_columns_all_or_none constraint (0004) requires the hash whenever the canonical body is stored.
+            var proposalHash = Jcs.ProposalHash(root);
+
+            // D-19: an unknown action is a stored policy refusal. No trace resolution and no further policy run.
+            if (outcome is SubmissionOutcome.NotInCatalog)
+            {
+                var unknown = PolicyEvaluator.EvaluateCatalogAndPurpose(false, null, key.Purpose);
+                var unknownProposal = new NewProposal(key.AgentId, key.KeyId, key.OnBehalfOf, key.Purpose, key.ExpiresAt,
+                    nonoSessionId, runId, actionType, partyRef, parametersJson, justification, traceRef,
+                    Encoding.UTF8.GetString(canonical), bodySha, proposalHash);
+                return await StoreRefusalAsync(unknownProposal, unknown);
+            }
+
+            var entry = ((SubmissionOutcome.Ok)outcome).Entry;
+
             // Trace verification (D-11, D15.2): after idempotency and schema/catalog validation, before anything is stored.
             // The session key goes only to the verifier, which hands it only to the token issuer (D17.1).
             var sessionKey = AgentKeyHeader.TryRead(http.Request.Headers[AgentKeyHeader.Name].ToString());
@@ -117,7 +160,6 @@ public static class ProposalEndpoints
                 return TraceUnavailable();
             }
 
-            var proposalHash = Jcs.ProposalHash(root);
             var verdict = await verifier.VerifyAsync(sessionKey, key, runId, traceRef!, proposalHash, ct);
             string source, schemaVersion;
             string? refusalReason = null;
@@ -149,10 +191,18 @@ public static class ProposalEndpoints
                     return TraceUnavailable();
             }
 
+            // Policy (D-17/D-18): only after a verified trace, so a trace refusal is always preferred. Plans 05 and 06 extend this seam.
+            var policy = EvaluatePolicy(entry, key.Purpose);
+
             // Tenant comes only from the introspected key, never from the body (IDN-04).
             var proposal = new NewProposal(key.AgentId, key.KeyId, key.OnBehalfOf, key.Purpose, key.ExpiresAt,
                 nonoSessionId, runId, actionType, partyRef, parametersJson, justification, traceRef,
                 Encoding.UTF8.GetString(canonical), bodySha, proposalHash, source, schemaVersion);
+            if (refusalReason is null && !policy.Allowed)
+            {
+                return await StoreRefusalAsync(proposal, policy);
+            }
+
             Guid? id;
             try
             {
@@ -182,6 +232,10 @@ public static class ProposalEndpoints
                 : new ProposalCreatedResponse(id.Value, ProposalStates.RefusedPolicy, refusalReason));
         }
     }
+
+    // Single seam for the policy chain after a verified trace; later plans append entitlement and rate checks here.
+    private static PolicyVerdict EvaluatePolicy(CatalogEntry entry, string purpose) =>
+        PolicyEvaluator.EvaluateCatalogAndPurpose(true, entry.RequiredPurpose, purpose);
 
     private static string Short(string? hash) => hash is null ? "none" : hash[..Math.Min(12, hash.Length)];
 

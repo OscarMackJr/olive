@@ -7,7 +7,9 @@ public interface IProposalStore
 
     // The single refusal-writing path, reused by Phase 4 policy refusals (D-05): insert then compare-and-set to refused_policy with
     // the reason, plus "submitted" and "trace_refused" events, in one tenant transaction. Returns null on a duplicate (tenant, agent, run).
-    Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, CancellationToken ct);
+    // When policyDetailJson is given the refusal is a policy refusal: a "policy_evaluated" event carries that static detail and the
+    // transition event is "policy_refused"; when null it is a trace refusal ("trace_refused").
+    Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, CancellationToken ct, string? policyDetailJson = null);
 
     // Cross-tenant lookup is indistinguishable from missing (D-11).
     Task<ProposalRecord?> GetAsync(Guid tenantId, Guid proposalId, CancellationToken ct);

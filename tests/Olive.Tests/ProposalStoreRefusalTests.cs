@@ -57,6 +57,24 @@ public sealed class ProposalStoreRefusalTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task POL_04_policy_refusal_writes_policy_evaluated_and_policy_refused_events()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        var store = Store(db);
+        var detail = "{\"outcome\":\"refused\",\"reason\":\"not_in_catalog\",\"checks\":[{\"name\":\"catalog\",\"result\":\"fail\"}]}";
+        var id = await store.InsertRefusedAsync(TestPaths.TenantAlpha, Sample(), "not_in_catalog", Ct, detail);
+        Assert.NotNull(id);
+
+        var events = await EventsAsync(db, id!.Value);
+        Assert.Equal(3, events.Count);
+        Assert.Contains(("submitted", (string?)null, "proposed"), events);
+        Assert.Contains(("policy_evaluated", (string?)null, "proposed"), events);
+        Assert.Contains(("policy_refused", (string?)"proposed", "refused_policy"), events);
+        Assert.DoesNotContain(events, e => e.Type == "trace_refused");
+        Assert.Equal("not_in_catalog", (await store.GetAsync(TestPaths.TenantAlpha, id.Value, Ct))!.RefusalReason);
+    }
+
+    [Fact]
     public async Task TRC_03_transition_into_or_out_of_refused_policy_is_rejected_before_the_database()
     {
         await using var db = await fixture.CreateDatabaseAsync();
