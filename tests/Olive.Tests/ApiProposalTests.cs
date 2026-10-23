@@ -78,17 +78,17 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
         var props = created.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
         Assert.Equal(["proposal_id", "state"], props);
         var id = created.GetProperty("proposal_id").GetGuid();
-        Assert.Equal("proposed", created.GetProperty("state").GetString());
+        Assert.Equal("awaiting_approval", created.GetProperty("state").GetString());
         Assert.Equal($"/v1/proposals/{id}", post.Headers.Location!.OriginalString);
 
         // The row is really in Postgres, read back as olive_reader under RLS.
-        Assert.Equal("proposed", await ReaderScalarAsync<string>(db, Alpha, "select state from proposal where proposal_id = @p", ("p", id)));
+        Assert.Equal("awaiting_approval", await ReaderScalarAsync<string>(db, Alpha, "select state from proposal where proposal_id = @p", ("p", id)));
 
         var get = await alpha.GetAsync($"/v1/proposals/{id}", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
         var body = JsonDocument.Parse(await get.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).RootElement;
         Assert.Equal(id, body.GetProperty("proposal_id").GetGuid());
-        Assert.Equal("proposed", body.GetProperty("state").GetString());
+        Assert.Equal("awaiting_approval", body.GetProperty("state").GetString());
         Assert.Equal("run-1", body.GetProperty("run_id").GetString());
         Assert.Equal("liam", body.GetProperty("agent_id").GetString());
         Assert.Equal(Alpha, body.GetProperty("tenant_id").GetGuid());
@@ -277,6 +277,9 @@ public sealed class ApiProposalTests(PostgresFixture fixture)
     private sealed class ThrowingStore(string sqlState) : IProposalStore
     {
         public Task<Guid?> InsertAsync(Guid tenantId, NewProposal proposal, CancellationToken ct) =>
+            throw new PostgresException("secret-parameter-value", "ERROR", "ERROR", sqlState);
+
+        public Task<EvaluatedInsertResult?> InsertEvaluatedAsync(Guid tenantId, NewProposal proposal, int rateLimit, int windowSeconds, Olive.Domain.PolicyVerdict priorPassing, CancellationToken ct) =>
             throw new PostgresException("secret-parameter-value", "ERROR", "ERROR", sqlState);
 
         public Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, CancellationToken ct, string? policyDetailJson = null) => throw new NotSupportedException();

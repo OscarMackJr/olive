@@ -126,7 +126,7 @@ public sealed class TenantIsolationAblationTests(PostgresFixture fixture)
         await using var _d = db;
         await using var _s = ds;
         var store = new PostgresProposalStore(new TenantUnitOfWork(ds));
-        Assert.False(await store.TransitionAsync(TestPaths.TenantAlpha, betaId, "proposed", "expired", "sys", Ct));
+        Assert.False(await store.TransitionAsync(TestPaths.TenantAlpha, betaId, "proposed", "awaiting_approval", "sys", Ct));
         Assert.Equal("proposed", await As<string>(ds, TestPaths.TenantBeta, "select state from proposal where proposal_id = @p", ("p", betaId)));
     }
 

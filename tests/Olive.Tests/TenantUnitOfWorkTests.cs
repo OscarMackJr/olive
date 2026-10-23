@@ -148,12 +148,12 @@ public sealed class TenantUnitOfWorkTests(PostgresFixture fixture)
         var betaId = (await store.InsertAsync(TestPaths.TenantBeta, Sample(), Ct))!.Value;
 
         Assert.False(await store.TransitionAsync(TestPaths.TenantAlpha, id, "approved", "executed", "sys", Ct));
-        Assert.False(await store.TransitionAsync(TestPaths.TenantAlpha, betaId, "proposed", "expired", "sys", Ct));
-        Assert.True(await store.TransitionAsync(TestPaths.TenantAlpha, id, "proposed", "expired", "sys", Ct));
-        Assert.False(await store.TransitionAsync(TestPaths.TenantAlpha, id, "proposed", "expired", "sys", Ct));
-        Assert.Equal("expired", (await store.GetAsync(TestPaths.TenantAlpha, id, Ct))!.State);
+        Assert.False(await store.TransitionAsync(TestPaths.TenantAlpha, betaId, "proposed", "awaiting_approval", "sys", Ct));
+        Assert.True(await store.TransitionAsync(TestPaths.TenantAlpha, id, "proposed", "awaiting_approval", "sys", Ct));
+        Assert.False(await store.TransitionAsync(TestPaths.TenantAlpha, id, "proposed", "awaiting_approval", "sys", Ct));
+        Assert.Equal("awaiting_approval", (await store.GetAsync(TestPaths.TenantAlpha, id, Ct))!.State);
         Assert.Equal("proposed", (await store.GetAsync(TestPaths.TenantBeta, betaId, Ct))!.State);
-        Assert.Equal(1L, await Scalar<long>(ds, TestPaths.TenantAlpha, "select count(*) from proposal_event where tenant_id = @t and proposal_id = @p and event_type = 'transition' and from_state = 'proposed' and to_state = 'expired' and actor = 'sys'", ("t", TestPaths.TenantAlpha), ("p", id)));
+        Assert.Equal(1L, await Scalar<long>(ds, TestPaths.TenantAlpha, "select count(*) from proposal_event where tenant_id = @t and proposal_id = @p and event_type = 'transition' and from_state = 'proposed' and to_state = 'awaiting_approval' and actor = 'sys'", ("t", TestPaths.TenantAlpha), ("p", id)));
     }
 
     [Fact]

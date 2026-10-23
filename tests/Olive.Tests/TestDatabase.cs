@@ -69,6 +69,15 @@ public sealed class TestDatabase(PostgresFixture fixture, string name) : IAsyncD
         return proposalId;
     }
 
+    // Test-only: runs SQL as the container superuser (bypasses RLS and column grants), e.g. to backdate created_at.
+    public async Task<int> AdminExecAsync(string sql)
+    {
+        await using var conn = new NpgsqlConnection(fixture.AdminConnectionString(Name));
+        await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        return await cmd.ExecuteNonQueryAsync();
+    }
+
     public async ValueTask DisposeAsync()
     {
         NpgsqlConnection.ClearAllPools();

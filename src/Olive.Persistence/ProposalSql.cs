@@ -12,6 +12,15 @@ public static class ProposalSql
         "insert into proposal_event (tenant_id, event_id, proposal_id, event_type, from_state, to_state, actor, detail) " +
         "values (@tenant_id, @event_id, @proposal_id, @event_type, @from_state, @to_state, @actor, @detail::jsonb)";
 
+    // D-08: the lock key hashes tenant|agent|action; held to the end of the transaction. Taken only after catalog, purpose and entitlement passed.
+    public const string LockRate =
+        "select pg_advisory_xact_lock(hashtextextended(@tenant_id::text || '|' || @agent_id || '|' || @action_type, 0))";
+
+    // D-09/D-10: refused proposals never count; created_at is database time so the window uses now() in SQL.
+    public const string CountAccepted =
+        "select count(*) from proposal where tenant_id = @tenant_id and agent_id = @agent_id and action_type = @action_type " +
+        "and state <> 'refused_policy' and created_at > now() - make_interval(secs => @window_seconds)";
+
     public const string Get =
         "select proposal_id, tenant_id, state, agent_id, key_id, on_behalf_of, purpose, key_expires_at, nono_session_id, run_id, action_type, party_ref, parameters::text as parameters_json, justification, trace_ref, created_at, refusal_reason, trace_verification, trace_schema_version, expires_at " +
         "from proposal where tenant_id = @tenant_id and proposal_id = @proposal_id";

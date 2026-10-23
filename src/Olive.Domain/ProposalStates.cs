@@ -1,6 +1,6 @@
 namespace Olive.Domain;
 
-// Matches vocabulary action_outcomes in order. Phase 1 writes only Proposed (D-06).
+// Matches vocabulary action_outcomes in order. Accepted proposals reach AwaitingApproval (Phase 4).
 public static class ProposalStates
 {
     public const string Proposed = "proposed";
@@ -14,4 +14,15 @@ public static class ProposalStates
 
     public static readonly IReadOnlyList<string> All =
         [Proposed, RefusedPolicy, AwaitingApproval, Approved, Rejected, Executed, ExecutionFailed, Expired];
+
+    // POL-06: the full lifecycle. Terminal states (refused_policy, rejected, executed, execution_failed, expired) have no edges.
+    private static readonly Dictionary<string, HashSet<string>> Edges = new(StringComparer.Ordinal)
+    {
+        [Proposed] = new(StringComparer.Ordinal) { RefusedPolicy, AwaitingApproval },
+        [AwaitingApproval] = new(StringComparer.Ordinal) { Approved, Rejected, Expired },
+        [Approved] = new(StringComparer.Ordinal) { Executed, ExecutionFailed, Expired },
+    };
+
+    public static bool CanTransition(string from, string to) =>
+        from is not null && to is not null && Edges.TryGetValue(from, out var next) && next.Contains(to);
 }

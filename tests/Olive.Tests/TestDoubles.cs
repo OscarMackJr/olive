@@ -40,6 +40,12 @@ public sealed class RecordingProposalStore(IProposalStore inner, List<string> ev
         return inner.InsertAsync(tenantId, proposal, ct);
     }
 
+    public Task<EvaluatedInsertResult?> InsertEvaluatedAsync(Guid tenantId, NewProposal proposal, int rateLimit, int windowSeconds, Olive.Domain.PolicyVerdict priorPassing, CancellationToken ct)
+    {
+        lock (events) { events.Add("insert"); }
+        return inner.InsertEvaluatedAsync(tenantId, proposal, rateLimit, windowSeconds, priorPassing, ct);
+    }
+
     public Task<Guid?> InsertRefusedAsync(Guid tenantId, NewProposal proposal, string refusalReason, CancellationToken ct, string? policyDetailJson = null)
     {
         lock (events) { events.Add("insert_refused"); }

@@ -22,6 +22,18 @@ public enum TraceMode { AutoFixture, Explicit }
 public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null, string? environment = "ci", Action<IServiceCollection>? configureServices = null, bool replaceIntrospector = true, TraceMode traceMode = TraceMode.AutoFixture, ITraceResolver? innerResolver = null, ITokenIssuer? innerIssuer = null, IDirectoryGroupResolver? innerDirectory = null)
     : WebApplicationFactory<Program>
 {
+    private static readonly IReadOnlySet<string> CatalogPurposes = new HashSet<string> { "servicing", "origination", "collections", "analytics", "marketing", "compliance-review", "internal-support" };
+
+    // The real crm.case_note@1 entry with an overridden max_rate; the production catalog keeps limit 10 per 3600.
+    public static Olive.Catalog.CatalogSet CatalogWithRate(int limit, int windowSeconds, string requiredPurpose = "[servicing, collections]")
+    {
+        var entry = File.ReadAllText(Path.Combine(TestPaths.Root, "catalog", "crm.case_note@1.yaml"))
+            .Replace("limit: 10", "limit: " + limit).Replace("window_seconds: 3600", "window_seconds: " + windowSeconds)
+            .Replace("required_purpose: [servicing, collections]", "required_purpose: " + requiredPurpose);
+        return Olive.Catalog.CatalogLoader.Parse("catalog_version: 1\nentries:\n  - crm.case_note@1\n",
+            new Dictionary<string, string> { ["crm.case_note@1.yaml"] = entry }, CatalogPurposes);
+    }
+
     public InMemoryLogCapture Logs { get; } = new();
 
     public List<string> Events { get; } = [];
