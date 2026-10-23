@@ -17,5 +17,9 @@ public static class ProblemReasons
     public const string TraceNotFound = "trace_not_found";
     public const string TraceVerificationUnavailable = "trace_verification_unavailable";
     public const string DirectoryUnavailable = "directory_unavailable";
+    public const string ReviewerUnauthenticated = "reviewer_unauthenticated";
+    public const string ReviewerTenantUnresolved = "reviewer_tenant_unresolved";
+    public const string RoleNotPermitted = "role_not_permitted";
+    public const string ItemNotFound = "item_not_found";
     public const string InternalError = "internal_error";
 }

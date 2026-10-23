@@ -72,6 +72,22 @@ public static class StartupGuards
         }
     }
 
+    // Q17 / T-05-20: the dev reviewer scheme must not exist in production, whatever identity source is registered.
+    public static void CheckDevReviewerNotInProduction(IServiceProvider provider, OliveEnvironment env)
+    {
+        if (!env.IsProduction)
+        {
+            return;
+        }
+
+        var scheme = provider.GetRequiredService<Microsoft.AspNetCore.Authentication.IAuthenticationSchemeProvider>()
+            .GetSchemeAsync(Auth.DevReviewerAuthenticationHandler.SchemeName).GetAwaiter().GetResult();
+        if (scheme is not null)
+        {
+            throw new StartupGuardException("Q17", "the dev reviewer authentication scheme is registered in production");
+        }
+    }
+
     // FND-05: in production no INonProductionOnly implementation may be registered or resolvable.
     public static void CheckNoNonProductionComponents(IServiceCollection services, IServiceProvider provider, OliveEnvironment env)
     {

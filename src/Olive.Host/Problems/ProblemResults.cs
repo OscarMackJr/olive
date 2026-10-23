@@ -34,6 +34,10 @@ public static class ProblemResults
         ProblemReasons.TraceNotFound => "The trace was not found.",
         ProblemReasons.TraceVerificationUnavailable => "Trace verification is unavailable.",
         ProblemReasons.DirectoryUnavailable => "Directory lookup is unavailable.",
+        ProblemReasons.ReviewerUnauthenticated => "The reviewer is not authenticated.",
+        ProblemReasons.ReviewerTenantUnresolved => "The reviewer tenant could not be resolved.",
+        ProblemReasons.RoleNotPermitted => "The reviewer role does not permit this action.",
+        ProblemReasons.ItemNotFound => "The queue item was not found.",
         _ => "An internal error occurred.",
     };
 
