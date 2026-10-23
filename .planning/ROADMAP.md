@@ -22,7 +22,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation and Walking Skeleton** - Restructured solution, guards, both tenant-isolation layers, migrator, and an agent can submit and read a proposal through the introspection stub (completed 2026-10-21)
 - [x] **Phase 2: Contract Integrity and Idempotent Submission** - Strict raw-byte validation, v1 schemas, in-house JCS, YamlDotNet catalog endpoint, and race-safe idempotency on (agent_id, run_id)
  (completed 2026-10-22)
-- [x] **Phase 3: Trace Verification** - Fixture-backed trace resolver with ordered checks 1-5, fail-closed 503s, popeye token stub and cache, and session-key capture (completed 2026-10-22)
+- [x] **Phase 3: Trace Verification** - Fixture-backed trace resolver with ordered checks 1-5, fail-closed 503s, popeye token stub and cache, and session-key capture
+ (completed 2026-10-22)
 - [ ] **Phase 4: Policy, Expiry and Refusal** - Purpose, entitlement and rate-limit policy before any queueing, guarded lifecycle transitions, absolute expiry, and the asserted pipeline order
 - [ ] **Phase 5: Generic Review Queue and Action Approval** - IR-1 queue with kind registry, claim/release/decide/audit, approval rules, lazy expiry withdrawal, and the beat 4 demo
 - [ ] **Phase 6: Simulated Execution and Audit Chain** - Exactly-once simulated execution, INSERT-only ledger, chain view, and the beat 2 demo through the API
@@ -167,7 +168,31 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Every lifecycle transition is a compare-and-set paired with a `proposal_event` row, and illegal transitions are rejected. `expires_at` is stored as an absolute time: 8 hours by default, shortened only by `expires_in_seconds`, capped at the per-action maximum and the key's `expires_at`. An out-of-range `expires_in_seconds` gets 400 (Q3).
   5. A test asserts the fixed order (introspect → principal → idempotency → schema/catalog → trace → policy → persist), and a request with several faults gets the first failure's outcome.
 
-**Plans**: TBD
+**Plans**: 6 plans
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — Q4 ruling recorded; catalog required_entitlement/max_expiry_seconds and agent entitlements (POL-02, POL-07)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 04-02-PLAN.md — Slice: unknown-action and wrong-purpose stored refusals with policy_evaluated events (POL-01, POL-04, POL-05)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 04-03-PLAN.md — Slice: migration 0007, expires_in_seconds, absolute expires_at, GET exposes it (POL-07)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 04-04-PLAN.md — Slice: directory-group resolver stub, entitlement intersection, fail-closed 503 (POL-02)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 04-05-PLAN.md — Slice: transition table, advisory-lock rate limit, accept to awaiting_approval (POL-03, POL-04, POL-06)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 04-06-PLAN.md — API-08 submission-order test, replay matrix, contract docs (API-08, POL-05, POL-06)
+
 **Notes**: D§4 stop rule: the entitlement source must exist in POPEYE_v0.4.2 or vocabulary §3.2 (Q4). If it is in neither, stop. This phase fixes the scaffold defects from CONCERNS.md: an unknown action throwing, null grants failing open, refusals consuming the rate limit, no approval guard.
 
 ### Phase 5: Generic Review Queue and Action Approval
