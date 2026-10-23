@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Olive.Contracts;
@@ -24,3 +25,24 @@ public sealed record QueueItemDto(
     [property: JsonPropertyName("withdrawn_reason"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? WithdrawnReason = null);
 
 public sealed record QueueItemListResponse([property: JsonPropertyName("items")] IReadOnlyList<QueueItemDto> Items);
+
+// D-05: the only place proposal content leaves the system for a reviewer. Exactly these members.
+public sealed record ReviewerPayloadResponse(
+    [property: JsonPropertyName("action_type")] string? ActionType,
+    [property: JsonPropertyName("parameters")] JsonElement? Parameters,
+    [property: JsonPropertyName("justification")] string? Justification,
+    [property: JsonPropertyName("on_behalf_of")] string OnBehalfOf,
+    [property: JsonPropertyName("expires_at"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? ExpiresAt,
+    [property: JsonPropertyName("trace_ref"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? TraceRef);
+
+// QUE-09: no rationale member exists on the history DTO.
+public sealed record QueueItemEventDto(
+    [property: JsonPropertyName("seq")] long Seq,
+    [property: JsonPropertyName("event_type")] string EventType,
+    [property: JsonPropertyName("from_state")] string? FromState,
+    [property: JsonPropertyName("to_state")] string ToState,
+    [property: JsonPropertyName("actor")] string Actor,
+    [property: JsonPropertyName("created_at")] DateTimeOffset CreatedAt,
+    [property: JsonPropertyName("detail"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Detail = null);
+
+public sealed record QueueItemEventsResponse([property: JsonPropertyName("events")] IReadOnlyList<QueueItemEventDto> Events);
