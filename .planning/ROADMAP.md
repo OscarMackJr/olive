@@ -24,7 +24,7 @@ Decimal phases appear between their surrounding integers in numeric order.
  (completed 2026-10-22)
 - [x] **Phase 3: Trace Verification** - Fixture-backed trace resolver with ordered checks 1-5, fail-closed 503s, popeye token stub and cache, and session-key capture (completed 2026-10-22)
 - [x] **Phase 4: Policy, Expiry and Refusal** - Purpose, entitlement and rate-limit policy before any queueing, guarded lifecycle transitions, absolute expiry, and the asserted pipeline order (completed 2026-10-23)
-- [ ] **Phase 5: Generic Review Queue and Action Approval** - IR-1 queue with kind registry, claim/release/decide/audit, approval rules, lazy expiry withdrawal, and the beat 4 demo
+- [x] **Phase 5: Generic Review Queue and Action Approval** - IR-1 queue with kind registry, claim/release/decide/audit, approval rules, lazy expiry withdrawal, and the beat 4 demo (completed 2026-10-23)
 - [ ] **Phase 6: Simulated Execution and Audit Chain** - Exactly-once simulated execution, INSERT-only ledger, chain view, and the beat 2 demo through the API
 - [ ] **Phase 7: Reviewer UI and Entra OIDC** - Minimal Razor Pages reviewer UI with OIDC behind an interface, a dev IdP stub, and a role check at decision time
 - [ ] **Phase 8: Identity Review Queue Kind** - The identity_review / candidate_pair kind on stub bluto traffic, with a service-token inbound path and IR-1 polling
@@ -246,7 +246,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 8**
 
-- [ ] 05-10-PLAN.md — Beat 4 demo (EVD-03) and surface invariant tests
+- [x] 05-10-PLAN.md — Beat 4 demo (EVD-03) and surface invariant tests
 
 **Research flag**: Run `/gsd-plan-phase 5 --research-phase`. Topics: how action_approval maps onto IR-1 states and decisions (Q10), and the `queue_item_event` grants.
 **Notes**: Rulings Q7 (claimant-only release), Q9 (`queue_item_event` INSERT-only, five tables), Q11 (lazy `withdrawn`/`proposal_expired`) and Q13 (server-side group-to-tenant map) are settled and shape migration 0002. Q8, Q10 and Q14 working defaults apply. Migration 0002 must follow the Phase 1 RLS/grant pattern and extend the privilege-matrix test. The decision-time role check (APR-03) arrives with the real IdP in Phase 7.
@@ -342,7 +342,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 2. Contract Integrity and Idempotent Submission | 7/7 | Complete    | 2026-10-22 |
 | 3. Trace Verification | 6/6 | Complete    | 2026-10-22 |
 | 4. Policy, Expiry and Refusal | 7/7 | Complete    | 2026-10-23 |
-| 5. Generic Review Queue and Action Approval | 9/10 | In Progress|  |
+| 5. Generic Review Queue and Action Approval | 10/10 | Complete   | 2026-10-23 |
 | 6. Simulated Execution and Audit Chain | 0/TBD | Not started | - |
 | 7. Reviewer UI and Entra OIDC | 0/TBD | Not started | - |
 | 8. Identity Review Queue Kind | 0/TBD | Not started | - |
