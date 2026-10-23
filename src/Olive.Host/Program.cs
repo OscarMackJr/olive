@@ -41,21 +41,13 @@ builder.Services.AddSingleton<ITraceResolver>(_ => new CachingTraceResolver(Fixt
 builder.Services.AddSingleton<ServiceTokenProvider>(sp => new ServiceTokenProvider(
     sp.GetRequiredService<ITokenIssuer>(), sp.GetRequiredService<IOperationalAlarm>(), sp.GetRequiredService<TimeProvider>()));
 // D-12: validated eagerly so a bad value stops startup rather than the first request.
-var traceTimeoutText = builder.Configuration["OLIVE_TRACE_TIMEOUT_MS"];
-var traceOptions = new TraceVerifierOptions();
-if (!string.IsNullOrWhiteSpace(traceTimeoutText))
-{
-    if (!int.TryParse(traceTimeoutText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var traceTimeoutMs) || traceTimeoutMs <= 0)
-    {
-        throw new InvalidOperationException("OLIVE_TRACE_TIMEOUT_MS must be a positive integer.");
-    }
-
-    traceOptions = new TraceVerifierOptions(TimeSpan.FromMilliseconds(traceTimeoutMs));
-}
-
-builder.Services.AddSingleton(traceOptions);
+var traceTimeout = ReadTimeoutMs(builder.Configuration, "OLIVE_TRACE_TIMEOUT_MS");
+builder.Services.AddSingleton(traceTimeout is { } t ? new TraceVerifierOptions(t) : new TraceVerifierOptions());
 builder.Services.AddSingleton<TraceVerifier>();
 // D-02/D-07: read-only directory lookup, fixture-backed and barred in production by the startup guard; deliberately not cached.
+// WR-03: its timeout is its own setting, so tuning the trace timeout never changes directory fail-closed behaviour.
+var directoryTimeout = ReadTimeoutMs(builder.Configuration, "OLIVE_DIRECTORY_TIMEOUT_MS");
+builder.Services.AddSingleton(directoryTimeout is { } d ? new DirectoryVerifierOptions(d) : new DirectoryVerifierOptions());
 builder.Services.AddSingleton<IDirectoryGroupResolver>(_ => FixtureDirectoryGroupResolver.CreateDefault());
 builder.Services.AddSingleton<DirectoryVerifier>();
 builder.Services.AddSingleton<IAgentAllowlist>(_ => AgentAllowlist.LoadEmbedded());
@@ -73,5 +65,22 @@ app.UseAuthorization();
 app.MapProposalEndpoints();
 app.MapCatalogEndpoints();
 app.Run();
+
+// Absent means the default; present must be a positive integer of milliseconds. The message names the setting, never the value.
+static TimeSpan? ReadTimeoutMs(IConfiguration configuration, string name)
+{
+    var text = configuration[name];
+    if (string.IsNullOrWhiteSpace(text))
+    {
+        return null;
+    }
+
+    if (!int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var ms) || ms <= 0)
+    {
+        throw new InvalidOperationException(name + " must be a positive integer.");
+    }
+
+    return TimeSpan.FromMilliseconds(ms);
+}
 
 public partial class Program;

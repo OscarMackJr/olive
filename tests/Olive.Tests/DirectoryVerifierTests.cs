@@ -12,9 +12,18 @@ public sealed class DirectoryVerifierTests
     }
 
     private static DirectoryVerifier Make(Func<CancellationToken, Task<DirectoryLookup>> f, RecordingAlarm alarm, TimeSpan? timeout = null) =>
-        new(new Fake(f), alarm, new TraceVerifierOptions(timeout ?? TimeSpan.FromSeconds(5)));
+        new(new Fake(f), alarm, new DirectoryVerifierOptions(timeout ?? TimeSpan.FromSeconds(5)));
 
     private static Task<DirectoryLookup> Ok(DirectoryLookup l) => Task.FromResult(l);
+
+    // WR-03: the directory timeout is its own option with the trace verifier's default, not a shared setting.
+    [Fact]
+    public void POL_02_directory_timeout_is_independent_and_defaults_to_5s()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(5), new DirectoryVerifierOptions().Timeout);
+        Assert.Equal(new TraceVerifierOptions().Timeout, new DirectoryVerifierOptions().Timeout);
+        Assert.DoesNotContain(typeof(DirectoryVerifier).GetConstructors().Single().GetParameters(), p => p.ParameterType == typeof(TraceVerifierOptions));
+    }
 
     [Fact]
     public async Task POL_02_found_returns_groups()

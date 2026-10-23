@@ -333,14 +333,14 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
 
     // OLIVE_TRACE_TIMEOUT_MS is read from builder.Configuration before Build(); OliveApiFactory's extraConfig (ConfigureAppConfiguration)
     // only lands after Build(), so the value is passed through UseSetting, which reaches the entry point as host configuration.
-    private sealed class TraceTimeoutFactory(TestDatabase db, string value) : Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program>
+    private sealed class TraceTimeoutFactory(TestDatabase db, string value, string setting = "OLIVE_TRACE_TIMEOUT_MS") : Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program>
     {
         protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
         {
             NoSharedPostgres.Assert(Olive.Persistence.PostgresUrl.ToNpgsql(db.AppUrl));
             builder.UseSetting("OLIVE_ENVIRONMENT", "ci");
             builder.UseSetting("OLIVE_POSTGRES_URL", db.AppUrl);
-            builder.UseSetting("OLIVE_TRACE_TIMEOUT_MS", value);
+            builder.UseSetting(setting, value);
         }
     }
 
@@ -384,6 +384,49 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
         await using var factory = new TraceTimeoutFactory(db, "250");
         using var client = factory.CreateClient();
         Assert.Equal(TimeSpan.FromMilliseconds(250), factory.Services.GetRequiredService<TraceVerifierOptions>().Timeout);
+        // WR-03: tuning the trace timeout leaves the directory timeout at its own default.
+        Assert.Equal(TimeSpan.FromSeconds(5), factory.Services.GetRequiredService<DirectoryVerifierOptions>().Timeout);
+    }
+
+    [Fact]
+    public async Task POL_02_valid_directory_timeout_is_applied_at_start_and_leaves_trace_timeout_alone()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new TraceTimeoutFactory(db, "750", "OLIVE_DIRECTORY_TIMEOUT_MS");
+        using var client = factory.CreateClient();
+        Assert.Equal(TimeSpan.FromMilliseconds(750), factory.Services.GetRequiredService<DirectoryVerifierOptions>().Timeout);
+        Assert.Equal(TimeSpan.FromSeconds(5), factory.Services.GetRequiredService<TraceVerifierOptions>().Timeout);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("abc")]
+    public async Task POL_02_invalid_directory_timeout_refuses_start(string value)
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new TraceTimeoutFactory(db, value, "OLIVE_DIRECTORY_TIMEOUT_MS");
+        Exception? failure = null;
+        try
+        {
+            using var client = factory.CreateClient();
+            await client.GetAsync("/v1/proposals/" + Guid.NewGuid(), TestContext.Current.CancellationToken);
+        }
+        catch (Exception e)
+        {
+            failure = e;
+        }
+
+        Assert.NotNull(failure);
+        Assert.Null(FindGuard(failure));
+        InvalidOperationException? refusal = null;
+        for (var e = failure; e is not null && refusal is null; e = e.InnerException)
+        {
+            if (e is InvalidOperationException ioe && ioe.Message == "OLIVE_DIRECTORY_TIMEOUT_MS must be a positive integer.") { refusal = ioe; }
+        }
+
+        Assert.NotNull(refusal);
+        Assert.DoesNotContain(value, refusal.Message);
     }
 
     [Fact]

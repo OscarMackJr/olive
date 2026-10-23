@@ -140,7 +140,7 @@ public sealed class PolicyEndpointTests(PostgresFixture fixture)
     private const string AlphaUser = "analyst.alpha@example.test";
     private const string Entitlement = "ent:crm.case_note.write";
 
-    private static readonly Dictionary<string, string?> ShortTimeout = new() { ["OLIVE_TRACE_TIMEOUT_MS"] = "100" };
+    private static readonly Dictionary<string, string?> ShortTimeout = new() { ["OLIVE_DIRECTORY_TIMEOUT_MS"] = "100" };
 
     private static async Task<HttpResponseMessage> PostEnv(OliveApiFactory factory, string? body = null)
     {

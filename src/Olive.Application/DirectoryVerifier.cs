@@ -8,8 +8,14 @@ public abstract record DirectoryVerdict
     public sealed record Unavailable(string Cause, string? ExceptionType = null) : DirectoryVerdict;
 }
 
+// WR-03: the directory has its own timeout, independent of the trace verifier's, with the same default.
+public sealed record DirectoryVerifierOptions(TimeSpan Timeout)
+{
+    public DirectoryVerifierOptions() : this(TimeSpan.FromSeconds(5)) { }
+}
+
 // D-05: fail closed. Every non-answer is Unavailable; credential rejection and malformed responses raise an alarm. No caching (D-07).
-public sealed class DirectoryVerifier(IDirectoryGroupResolver resolver, IOperationalAlarm alarm, TraceVerifierOptions options)
+public sealed class DirectoryVerifier(IDirectoryGroupResolver resolver, IOperationalAlarm alarm, DirectoryVerifierOptions options)
 {
     private const string Component = "directory";
 
