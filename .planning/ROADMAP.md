@@ -190,7 +190,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 04-06-PLAN.md — Slice: transition table, advisory-lock rate limit, accept to awaiting_approval (POL-03, POL-04, POL-06)
+- [x] 04-06-PLAN.md — Slice: transition table, advisory-lock rate limit, accept to awaiting_approval (POL-03, POL-04, POL-06)
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
@@ -307,7 +307,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 1. Foundation and Walking Skeleton | 13/13 | Complete    | 2026-10-22 |
 | 2. Contract Integrity and Idempotent Submission | 7/7 | Complete    | 2026-10-22 |
 | 3. Trace Verification | 6/6 | Complete    | 2026-10-22 |
-| 4. Policy, Expiry and Refusal | 5/7 | In Progress|  |
+| 4. Policy, Expiry and Refusal | 6/7 | In Progress|  |
 | 5. Generic Review Queue and Action Approval | 0/TBD | Not started | - |
 | 6. Simulated Execution and Audit Chain | 0/TBD | Not started | - |
 | 7. Reviewer UI and Entra OIDC | 0/TBD | Not started | - |
