@@ -26,5 +26,10 @@ public static class ProblemReasons
     public const string ItemNotClaimed = "item_not_claimed";
     public const string ItemClosed = "item_closed";
     public const string ProposalExpired = "proposal_expired";
+    public const string DecisionConflict = "decision_conflict";
+    public const string SelfApprovalForbidden = "self_approval_forbidden";
+    public const string ApprovalIdentityUnresolved = "approval_identity_unresolved";
+    public const string IdentityResolutionUnavailable = "identity_resolution_unavailable";
+    public const string KindNotSupported = "kind_not_supported";
     public const string InternalError = "internal_error";
 }

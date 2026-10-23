@@ -122,7 +122,7 @@ public sealed class ReviewerTenantTests(PostgresFixture fixture)
         {
             var methods = route.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? [];
             var raw = route.RoutePattern.RawText!;
-            if (!raw.EndsWith("/claim", StringComparison.OrdinalIgnoreCase) && !raw.EndsWith("/release", StringComparison.OrdinalIgnoreCase))
+            if (!raw.EndsWith("/claim", StringComparison.OrdinalIgnoreCase) && !raw.EndsWith("/release", StringComparison.OrdinalIgnoreCase) && !raw.EndsWith("/decision", StringComparison.OrdinalIgnoreCase))
             {
                 Assert.DoesNotContain("POST", methods);
             }

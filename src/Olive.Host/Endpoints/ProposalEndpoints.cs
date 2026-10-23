@@ -320,7 +320,7 @@ public static class ProposalEndpoints
     private static IResult Invalid() => ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.InvalidRequest);
 
     // Reads at most MaxBodyBytes; null means the body is larger.
-    private static async Task<byte[]?> ReadBoundedAsync(HttpRequest request, CancellationToken ct)
+    internal static async Task<byte[]?> ReadBoundedAsync(HttpRequest request, CancellationToken ct)
     {
         if (request.ContentLength > MaxBodyBytes)
         {

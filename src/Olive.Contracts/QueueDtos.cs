@@ -24,6 +24,11 @@ public sealed record QueueItemDto(
     [property: JsonPropertyName("auth_source"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AuthSource = null,
     [property: JsonPropertyName("withdrawn_reason"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? WithdrawnReason = null);
 
+// Request body for the decision route. Only these two members are accepted; the rationale is write-only (never echoed).
+public sealed record DecisionRequest(
+    [property: JsonPropertyName("decision")] string Decision,
+    [property: JsonPropertyName("rationale")] string Rationale);
+
 public sealed record QueueItemListResponse([property: JsonPropertyName("items")] IReadOnlyList<QueueItemDto> Items);
 
 // D-05: the only place proposal content leaves the system for a reviewer. Exactly these members.
