@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olive.invalid/contracts/reviewer/reviewer-identity.schema.json",
+  "title": "dev reviewer identity fixture (Olive-proposed; D-07)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reviewer_id", "oid", "tid", "upn", "groups"],
+  "properties": {
+    "reviewer_id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+    "oid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "tid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "upn": { "type": "string", "minLength": 1 },
+    "groups": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}

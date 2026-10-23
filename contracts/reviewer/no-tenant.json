@@ -1,0 +1,7 @@
+{
+  "reviewer_id": "no-tenant",
+  "oid": "aaaaaaaa-0000-4000-8000-000000000007",
+  "tid": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+  "upn": "no.tenant@example.test",
+  "groups": ["role:case_supervisor"]
+}

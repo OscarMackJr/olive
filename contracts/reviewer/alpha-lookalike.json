@@ -1,0 +1,7 @@
+{
+  "reviewer_id": "alpha-lookalike",
+  "oid": "aaaaaaaa-0000-4000-8000-000000000008",
+  "tid": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+  "upn": "analyst.alpha@example.test",
+  "groups": ["tenant-alpha-reviewers", "role:case_supervisor"]
+}
