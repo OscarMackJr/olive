@@ -286,6 +286,7 @@ public sealed class ArchitectureTests
         {
             [nameof(Olive.Application.IComponentDecorator)] = "wiring marker that exposes a wrapped component",
             [nameof(Olive.Application.INonProductionOnly)] = "wiring marker for the FND-05 production guard",
+            [nameof(Olive.Application.IReviewerIdentitySource)] = "in-process fixture lookup behind the dev reviewer scheme; makes no outbound call",
         };
         Assembly[] integrations =
         [
