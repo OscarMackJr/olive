@@ -72,7 +72,7 @@
 - [x] **API-05**: The v1 payload JSON Schemas (2020-12) live under `contracts/proposal/v1/` and are validated with format assertion on.
 - [x] **API-06**: Submission is idempotent on `(agent_id, run_id)`, using a `body_sha256` computed with RFC 8785 JCS. An identical body returns 200 with the original `proposal_id` and its current state. A different body returns `409 idempotency_conflict`, is not stored, and is logged.
 - [x] **API-07**: Two concurrent first submissions with the same key resolve to one proposal (unique constraint plus re-lookup).
-- [ ] **API-08**: The submission steps run in a fixed order: introspect → principal checks → idempotency → schema and catalog → trace resolution → policy → persist and enqueue. A test asserts the order, and the first failure wins.
+- [x] **API-08**: The submission steps run in a fixed order: introspect → principal checks → idempotency → schema and catalog → trace resolution → policy → persist and enqueue. A test asserts the order, and the first failure wins.
 - [x] **API-09**: The in-house JCS implementation passes the RFC 8785 and cyberphone test vectors. Shared golden vectors are committed under `contracts/` for hometown to run.
 - [x] **API-10**: The catalog is loaded from YAML at startup with YamlDotNet and validated against the action-type schema. The hand-rolled parser is removed, and runtime registration stays impossible. (Charter REQ-ACT-06)
 
@@ -101,13 +101,13 @@
 
 ### Policy and lifecycle (POL)
 
-- [ ] **POL-01**: A proposal whose `purpose` is not in the action's `required_purpose` is stored as `refused_policy` and never queued. (Charter REQ-ACT-02)
-- [ ] **POL-02**: Authorization uses the intersection of the agent's and the `on_behalf_of` user's entitlements. Missing entitlement data fails closed.
-- [ ] **POL-03**: Rate limits are per agent, per action, per window. They count accepted proposals only and are enforced in the database under an advisory lock.
-- [ ] **POL-04**: Each policy evaluation appends a `policy_evaluated` event recording the outcome and reasons.
-- [ ] **POL-05**: Retrying a stored refusal under the same key returns the same refusal without re-evaluating it.
-- [ ] **POL-06**: Every lifecycle transition is a compare-and-set update paired with a `proposal_event` row. Illegal transitions are rejected. (`proposed` → `refused_policy` | `awaiting_approval` → `approved` | `rejected` → `executed` | `execution_failed` | `expired`)
-- [ ] **POL-07**: Expiry defaults to 8 hours, with a maximum per action type. `expires_in_seconds` can only shorten it (Q3), and it is capped at the key's `expires_at`. `expires_at` is stored as an absolute time.
+- [x] **POL-01**: A proposal whose `purpose` is not in the action's `required_purpose` is stored as `refused_policy` and never queued. (Charter REQ-ACT-02)
+- [x] **POL-02**: Authorization uses the intersection of the agent's and the `on_behalf_of` user's entitlements. Missing entitlement data fails closed.
+- [x] **POL-03**: Rate limits are per agent, per action, per window. They count accepted proposals only and are enforced in the database under an advisory lock.
+- [x] **POL-04**: Each policy evaluation appends a `policy_evaluated` event recording the outcome and reasons.
+- [x] **POL-05**: Retrying a stored refusal under the same key returns the same refusal without re-evaluating it.
+- [x] **POL-06**: Every lifecycle transition is a compare-and-set update paired with a `proposal_event` row. Illegal transitions are rejected. (`proposed` → `refused_policy` | `awaiting_approval` → `approved` | `rejected` → `executed` | `execution_failed` | `expired`)
+- [x] **POL-07**: Expiry defaults to 8 hours, with a maximum per action type. `expires_in_seconds` can only shorten it (Q3), and it is capped at the key's `expires_at`. `expires_at` is stored as an absolute time.
 - [ ] **POL-08**: An expired proposal can't be approved or executed. It returns a distinct `proposal_expired` error, and the expiry transition is committed before the error is returned. (Charter REQ-ACT-05)
 
 ### Review queue (QUE)
@@ -225,7 +225,7 @@ Deferred. Tracked but not in the current roadmap.
 | API-05 | Phase 2 | Complete |
 | API-06 | Phase 2 | Complete |
 | API-07 | Phase 2 | Complete |
-| API-08 | Phase 4 | Pending |
+| API-08 | Phase 4 | Complete |
 | API-09 | Phase 2 | Complete |
 | API-10 | Phase 2 | Complete |
 | IDN-01 | Phase 1 | Complete |
@@ -245,13 +245,13 @@ Deferred. Tracked but not in the current roadmap.
 | TRC-07 | Phase 3 | Complete |
 | TRC-08 | Phase 3 | Complete |
 | TRC-09 | Phase 3 | Complete |
-| POL-01 | Phase 4 | Pending |
-| POL-02 | Phase 4 | Pending |
-| POL-03 | Phase 4 | Pending |
-| POL-04 | Phase 4 | Pending |
-| POL-05 | Phase 4 | Pending |
-| POL-06 | Phase 4 | Pending |
-| POL-07 | Phase 4 | Pending |
+| POL-01 | Phase 4 | Complete |
+| POL-02 | Phase 4 | Complete |
+| POL-03 | Phase 4 | Complete |
+| POL-04 | Phase 4 | Complete |
+| POL-05 | Phase 4 | Complete |
+| POL-06 | Phase 4 | Complete |
+| POL-07 | Phase 4 | Complete |
 | POL-08 | Phase 5 | Pending |
 | QUE-01 | Phase 5 | Pending |
 | QUE-02 | Phase 5 | Pending |
