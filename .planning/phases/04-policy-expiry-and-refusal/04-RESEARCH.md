@@ -243,11 +243,14 @@ Not applicable (no external ecosystem change). Postgres advisory transaction loc
 | A3 | `CatalogEndpointTests` do not assert exact entry JSON | Pitfall 13 | Tests need updating |
 | A4 | Upstream spec section numbers (POPEYE_v0.4.2 §2.5/§5, vocab §3.2) as cited by CONTEXT; line 55 of POPEYE_v0.4.2.md and vocab line 76 confirmed present in ~/fiskroad/specs | D-01 | A newer POPEYE_v0.4.3.md exists in the same directory; confirm it does not move entitlement resolution before closing Q4 |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **POPEYE_v0.4.3 vs v0.4.2.** The specs folder contains a v0.4.3. Not read. Recommendation: planner includes a quick check task that §2.5 still says "the calling service resolves groups" before recording the Q4 closure.
+   RESOLVED: plan 04-01 Task 1 performs the v0.4.3 check; the planner already verified v0.4.3 has no contrary entitlement or group text.
 2. **Reason enum in submit-response schema.** The `proposal-submit-response.schema.json` may list allowed `refusal_reason` values (a `badreason` invalid example exists). Needs update for the four new codes. Not inspected in detail.
+   RESOLVED: the schema constrains refusal_reason by regex, not an enum, so no schema change; only docs and examples change, in the final plan (04-07).
 3. **Whether `trace_refused` events for existing rows should stay as is.** Recommended yes; only new reasons use `policy_refused`.
+   RESOLVED: keep `trace_refused` for existing trace refusals; the new policy reasons use `policy_refused` (plan 04-02).
 
 ## Environment Availability
 

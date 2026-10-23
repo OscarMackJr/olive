@@ -129,6 +129,85 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Service tokens from the popeye stub are cached by `(tenant_id, delegated_agent_id, key_id)` and never outlive the session key. A token whose claims disagree with Olive's introspection is discarded, and the request fails with 503 and an alarm.
   5. Recording decorators on every outbound port show the session key going only to popeye. A sentinel-key search at Trace log level, over JSONL output and stored rows, finds no session key or token.
 
+**Plans**: 7 plans
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — Q4 ruling recorded; catalog required_entitlement/max_expiry_seconds and agent entitlements (POL-02, POL-07)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 04-02-PLAN.md — Slice: unknown-action and wrong-purpose stored refusals with policy_evaluated events (POL-01, POL-04, POL-05)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 04-03-PLAN.md — Slice: migration 0007, expires_in_seconds, absolute expires_at, GET exposes it (POL-07)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 04-04-PLAN.md — Directory-group resolver port, fail-closed verifier, entitlement intersection, fixture stub and contracts/directory (POL-02)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 04-05-PLAN.md — Slice: directory DI and production guard, endpoint entitlement step, fail-closed 503 (POL-02)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 04-06-PLAN.md — Slice: transition table, advisory-lock rate limit, accept to awaiting_approval (POL-03, POL-04, POL-06)
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 04-07-PLAN.md — API-08 submission-order test, replay matrix, contract docs (API-08, POL-05, POL-06)
+
+**Notes**: D§4 stop rule: confirm POPEYE_v0.4.2 is present before shaping the introspection stub (and the Q4 entitlement claim shape). Reconcile `db/migrations/` to `sql/migrations/` before a second migration exists. Add `.gitattributes` before any hashed fixture is committed. Spike: Postgres major version of `deploy-postgres-1` (15+ required), Npgsql URI connection strings. Requirements DB-03 and DB-04 name all five tables. This phase establishes the RLS/grant pattern and its tests, and Phases 5 and 6 must apply the same pattern to their migrations.
+
+### Phase 2: Contract Integrity and Idempotent Submission
+
+**Goal**: A submitted body is validated exactly as received and never mutated. Resubmissions converge on one proposal through a canonical JCS hash, and the source-controlled catalog is served from YAML.
+**Depends on**: Phase 1
+**Requirements**: API-03, API-04, API-05, API-06, API-07, API-09, API-10
+**Success Criteria** (what must be TRUE):
+
+  1. Resubmitting an identical body under the same `(agent_id, run_id)` returns 200 with the original `proposal_id` and current state. A different body returns `409 idempotency_conflict`, is not stored, and is logged. Two concurrent first submissions produce exactly one proposal.
+  2. A body with duplicate keys, a null optional field, or a value that would need coercion, defaults, stripping or trimming to validate is rejected with 400, and nothing is stored. Per Q1, an unparseable or non-I-JSON body, or a missing or invalid `run_id`, gets 400 before the idempotency check.
+  3. `GET /v1/catalog/{version}` returns the `crm.case_note@1` entry with its parameter JSON Schema, loaded via YamlDotNet and validated at startup. The hand-rolled parser is gone, and no runtime registration path exists.
+  4. The in-house JCS passes the RFC 8785 and cyberphone vectors. A shared golden-vector set is committed under `contracts/` for hometown to run (Q20).
+
+**Plans**: 7 plans
+**Wave 1**
+
+- [x] 02-01-PLAN.md — In-house RFC 8785 JCS, lossless-number rule, golden vectors in contracts/jcs/v1 (API-09)
+- [x] 02-02-PLAN.md — JsonSchema.Net 8.0.5, SchemaValidator, versioned contracts and v1 proposal schemas (API-05)
+- [x] 02-03-PLAN.md — Migration 0004 (canonical_body, body_sha256, proposal_hash) and tenant-scoped FindByRun (API-06, API-07)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 02-04-PLAN.md — Whole-body I-JSON gate: duplicate keys, lossy numbers, surrogate-name safety (API-04)
+- [x] 02-05-PLAN.md — YamlStream catalog loader, manifest, D-02 vetting, GET /v1/catalog/{version} (API-03, API-10)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 02-06-PLAN.md — Envelope, catalog and parameter schema validation on POST; Phase 1 fixtures updated (API-04, API-05, API-10)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [x] 02-07-PLAN.md — Idempotent submission: replay 200, conflict 409, race-safe, stored hashes (API-06, API-07)
+
+**Notes**: Working defaults Q1 and Q2 apply (envelope, then catalog lookup, then parameter schema). The `not_in_catalog` stored refusal is delivered in Phase 4 with the refusal machinery. Spikes: `JsonDocumentOptions.AllowDuplicateProperties`, lone surrogates, the privileges `ON CONFLICT DO NOTHING` needs.
+
+### Phase 3: Trace Verification
+
+**Goal**: Only a proposal whose trace resolves to the same tenant, agent, run and content hash can proceed. Every resolver or auth failure fails closed, and the session key provably reaches only popeye.
+**Mode:** mvp
+**Depends on**: Phase 2
+**Requirements**: TRC-01, TRC-02, TRC-03, TRC-04, TRC-05, TRC-06, TRC-07, TRC-08, TRC-09, IDN-05, IDN-06, IDN-07, IDN-08
+**Success Criteria** (what must be TRUE):
+
+  1. A proposal whose fixture trace matches on `run_id`, tenant, agent and `proposal_hash` is accepted and records `trace_verification = fixture` and `trace_schema_version`. A run_id, tenant, agent or hash mismatch is stored as `refused_policy` with the matching reason code (`trace_unresolved`, `trace_tenant_mismatch`, `trace_agent_mismatch`, `trace_proposal_mismatch`), checked in that order.
+  2. An unknown trace returns `422 trace_not_found` with `retryable: true` and stores nothing. A retry under the same `run_id` after the fixture appears is accepted, because the not-found result was never cached. Positive resolutions are served from the `(tenant_id, trace_id)` cache.
+  3. A resolver that is unavailable or times out yields 503 with nothing stored. A 401 or 403 from the hometown or popeye stub yields 503 plus an alarm a test can assert on.
+  4. Service tokens from the popeye stub are cached by `(tenant_id, delegated_agent_id, key_id)` and never outlive the session key. A token whose claims disagree with Olive's introspection is discarded, and the request fails with 503 and an alarm.
+  5. Recording decorators on every outbound port show the session key going only to popeye. A sentinel-key search at Trace log level, over JSONL output and stored rows, finds no session key or token.
+
 **Plans**: 6 plans
 **Wave 1**
 
