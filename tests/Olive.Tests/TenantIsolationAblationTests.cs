@@ -131,6 +131,43 @@ public sealed class TenantIsolationAblationTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task QUE_09_predicate_removed_rls_blocks_cross_tenant_queue_access()
+    {
+        var (db, ds, alphaP, betaP) = await Setup();
+        await using var _d = db;
+        await using var _s = ds;
+        var betaItem = await db.SeedQueueItemAsync(TestPaths.TenantBeta, betaP);
+        await db.SeedQueueItemAsync(TestPaths.TenantAlpha, alphaP);
+        Assert.Equal(0L, await As<long>(ds, TestPaths.TenantAlpha, "select count(*) from queue_item where item_id = @i", ("i", betaItem)));
+        Assert.Equal(0L, await As<long>(ds, TestPaths.TenantAlpha, "select count(*) from queue_item_event where item_id = @i", ("i", betaItem)));
+        Assert.Equal(0, await NonQueryAs(ds, TestPaths.TenantAlpha,
+            "update queue_item set state = 'withdrawn', withdrawn_reason = 'proposal_expired' where item_id = @i", ("i", betaItem)));
+        Assert.Equal("open", await As<string>(ds, TestPaths.TenantBeta, "select state from queue_item where item_id = @i", ("i", betaItem)));
+        var ex = await Assert.ThrowsAsync<PostgresException>(() => NonQueryAs(ds, TestPaths.TenantAlpha,
+            "insert into queue_item_event (tenant_id, event_id, item_id, event_type, to_state, actor) values (@t, @e, @i, 'created', 'open', 'a')",
+            ("t", TestPaths.TenantBeta), ("e", Guid.NewGuid()), ("i", betaItem)));
+        Assert.Equal("42501", ex.SqlState);
+    }
+
+    [Fact]
+    public async Task QUE_09_rls_disabled_ablation_is_real_and_sql_predicate_blocks_cross_tenant()
+    {
+        var (db, ds, _, betaP) = await Setup("queue_item", "queue_item_event");
+        await using var _d = db;
+        await using var _s = ds;
+        var betaItem = await db.SeedQueueItemAsync(TestPaths.TenantBeta, betaP);
+        // Without RLS the unfiltered query leaks the beta row, proving the ablation took effect.
+        Assert.Equal(1L, await As<long>(ds, TestPaths.TenantAlpha, "select count(*) from queue_item where item_id = @i", ("i", betaItem)));
+        Assert.Equal(1L, await As<long>(ds, TestPaths.TenantAlpha, "select count(*) from queue_item_event where item_id = @i", ("i", betaItem)));
+        // The application predicate (tenant_id = @t) still blocks.
+        Assert.Equal(0L, await As<long>(ds, TestPaths.TenantAlpha, "select count(*) from queue_item where item_id = @i and tenant_id = @t", ("i", betaItem), ("t", TestPaths.TenantAlpha)));
+        Assert.Equal(0L, await As<long>(ds, TestPaths.TenantAlpha, "select count(*) from queue_item_event where item_id = @i and tenant_id = @t", ("i", betaItem), ("t", TestPaths.TenantAlpha)));
+        Assert.Equal(0, await NonQueryAs(ds, TestPaths.TenantAlpha,
+            "update queue_item set state = 'withdrawn', withdrawn_reason = 'proposal_expired' where item_id = @i and tenant_id = @t", ("i", betaItem), ("t", TestPaths.TenantAlpha)));
+        Assert.Equal("open", await As<string>(ds, TestPaths.TenantBeta, "select state from queue_item where item_id = @i and tenant_id = @t", ("i", betaItem), ("t", TestPaths.TenantBeta)));
+    }
+
+    [Fact]
     public async Task DB_06_app_role_cannot_disable_rls()
     {
         var (db, ds, _, _) = await Setup();
