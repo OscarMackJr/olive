@@ -232,6 +232,35 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
             }
 
             await Event("transition", "proposed", "awaiting_approval", null);
+
+            // QUE-03 / D-10: the review item is created in this same transaction, so a fault here leaves neither proposal nor item.
+            var itemId = Guid.NewGuid();
+            var itemRef = "olive:proposal/" + id.ToString("D");
+            await conn.ExecuteAsync(new CommandDefinition(QueueSql.InsertItem, new
+            {
+                tenant_id = tenantId,
+                item_id = itemId,
+                kind = Olive.Domain.QueueStates.ActionApproval,
+                subtype = Olive.Domain.QueueStates.ProposalSubtype,
+                producer = Olive.Domain.QueueStates.Olive,
+                producer_ref = id,
+                subject_ref = itemRef,
+                payload_ref = itemRef,
+                proposal_id = id,
+                expires_at = p.ExpiresAt.Value.UtcDateTime,
+            }, tx, cancellationToken: ct));
+            await conn.ExecuteAsync(new CommandDefinition(QueueSql.InsertEvent, new
+            {
+                tenant_id = tenantId,
+                event_id = Guid.NewGuid(),
+                item_id = itemId,
+                event_type = Olive.Domain.QueueStates.EventCreated,
+                from_state = (string?)null,
+                to_state = Olive.Domain.QueueStates.Open,
+                actor = p.AgentId,
+                detail = (string?)null,
+            }, tx, cancellationToken: ct));
+
             return new EvaluatedInsertResult(id, Olive.Domain.ProposalStates.AwaitingApproval, null);
         }, ct);
 
