@@ -1,6 +1,6 @@
 namespace Olive.Application;
 
-public enum OutboundDestination { Popeye, Hometown }
+public enum OutboundDestination { Popeye, Hometown, Directory }
 
 // Marks an interface as an outbound port and names the only system it may talk to (D17.1).
 [AttributeUsage(AttributeTargets.Interface)]

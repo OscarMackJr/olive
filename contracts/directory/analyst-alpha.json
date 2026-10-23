@@ -1,0 +1,5 @@
+{
+  "tenant_id": "5325ffe9-5727-4d88-9832-aebabb8d0538",
+  "on_behalf_of": "analyst.alpha@example.test",
+  "groups": ["ent:crm.case_note.write"]
+}

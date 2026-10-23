@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olive.invalid/contracts/directory/directory-groups.schema.json",
+  "title": "directory group membership fixture (Olive-proposed; Q14 open)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tenant_id", "on_behalf_of", "groups"],
+  "properties": {
+    "tenant_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "on_behalf_of": { "type": "string", "minLength": 1 },
+    "groups": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}

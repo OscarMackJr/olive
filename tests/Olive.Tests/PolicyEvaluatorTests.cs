@@ -70,4 +70,70 @@ public sealed class PolicyEvaluatorTests
         Assert.Equal(PolicyRefusalReasons.EntitlementMissing, after.Reason);
         Assert.Equal(3, after.Checks.Count);
     }
+
+    private const string Ent = "ent:crm.case_note.write";
+    private static PolicyVerdict Prior() => PolicyEvaluator.EvaluateCatalogAndPurpose(true, Required, "servicing");
+
+    [Theory]
+    [InlineData(true, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, false)]
+    public void POL_02_entitlement_requires_both_sides(bool user, bool agent, bool allowed)
+    {
+        string[] groups = user ? [Ent, "other"] : ["other"];
+        var agentSet = agent ? new HashSet<string> { Ent } : new HashSet<string> { "other" };
+        var v = PolicyEvaluator.EvaluateEntitlement(Prior(), Ent, agentSet, groups);
+        Assert.Equal(allowed, v.Allowed);
+        if (!allowed)
+        {
+            Assert.Equal(PolicyRefusalReasons.EntitlementMissing, v.Reason);
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void POL_02_blank_required_entitlement_is_refused(string? required)
+    {
+        Assert.False(PolicyEvaluator.EvaluateEntitlement(Prior(), required, new HashSet<string> { "" , Ent }, ["", Ent]).Allowed);
+    }
+
+    [Fact]
+    public void POL_02_null_or_empty_groups_and_empty_agent_entitlements_are_refused()
+    {
+        var agent = new HashSet<string> { Ent };
+        Assert.False(PolicyEvaluator.EvaluateEntitlement(Prior(), Ent, agent, null).Allowed);
+        Assert.False(PolicyEvaluator.EvaluateEntitlement(Prior(), Ent, agent, []).Allowed);
+        Assert.False(PolicyEvaluator.EvaluateEntitlement(Prior(), Ent, new HashSet<string>(), [Ent]).Allowed);
+        Assert.False(PolicyEvaluator.EvaluateEntitlement(Prior(), Ent, null, [Ent]).Allowed);
+    }
+
+    [Fact]
+    public void POL_02_group_names_compare_ordinal_case_sensitive()
+    {
+        Assert.False(PolicyEvaluator.EvaluateEntitlement(Prior(), Ent, new HashSet<string> { Ent }, [Ent.ToUpperInvariant()]).Allowed);
+    }
+
+    [Fact]
+    public void POL_02_detail_checks_pass_and_fail_stops_before_rate()
+    {
+        var pass = PolicyEvaluator.EvaluateEntitlement(Prior(), Ent, new HashSet<string> { Ent }, [Ent]);
+        Assert.Equal("pass", pass.Checks[^1].Result);
+        Assert.Equal("entitlement", pass.Checks[^1].Name);
+        var fail = PolicyEvaluator.EvaluateEntitlement(Prior(), Ent, new HashSet<string> { Ent }, ["x"]);
+        Assert.Equal("fail", fail.Checks[^1].Result);
+        Assert.DoesNotContain("rate", fail.ToDetailJson());
+        Assert.DoesNotContain(Ent, fail.ToDetailJson());
+    }
+
+    [Fact]
+    public void POL_02_failed_prior_verdict_is_not_overridden()
+    {
+        var refused = PolicyEvaluator.EvaluateCatalogAndPurpose(true, Required, "marketing");
+        var v = PolicyEvaluator.EvaluateEntitlement(refused, Ent, new HashSet<string> { Ent }, [Ent]);
+        Assert.False(v.Allowed);
+        Assert.Equal(PolicyRefusalReasons.PurposeNotPermitted, v.Reason);
+    }
 }
