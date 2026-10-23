@@ -63,7 +63,7 @@ public sealed class SubmissionValidator(CatalogSet catalog)
         return new SubmissionOutcome.Ok(entry);
     }
 
-    // Phase 4 replaces this seam with a stored refused_policy not_in_catalog. Until then an unknown action is a non-stored 400.
+    // An unknown action is reported as NotInCatalog; the endpoint turns it into a stored refused_policy refusal (D-19).
     // Current release only: older releases are GET-only (D-13).
     private CatalogEntry? LookupAction(string actionType) =>
         catalog.TryFindAction(actionType, out var entry) ? entry : null;

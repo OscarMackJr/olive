@@ -81,10 +81,18 @@ public sealed class ApiIntegrityTests(PostgresFixture fixture)
     }
 
     [Fact]
-    public async Task API_05_unknown_action_type_gives_non_stored_400_not_in_catalog()
+    public async Task API_05_POL_01_unknown_action_type_is_a_stored_201_refusal_not_a_400()
     {
-        var (_, rows) = await PostRefusedAsync(Env(action: "nope@1"), ProblemReasons.NotInCatalog);
-        Assert.Equal(0, rows);
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        using var alpha = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
+        var r = await alpha.PostAsync("/v1/proposals", ApiProposalTests.Json(Env(action: "nope@1")), TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, r.StatusCode);
+        var body = JsonDocument.Parse(await r.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).RootElement;
+        Assert.Equal("refused_policy", body.GetProperty("state").GetString());
+        Assert.Equal("not_in_catalog", body.GetProperty("refusal_reason").GetString());
+        Assert.Equal(1, await ApiProposalTests.CountRowsAsync(db, ApiProposalTests.Alpha));
+        Assert.False(factory.Logs.HasErrorOrAbove);
     }
 
     [Fact]

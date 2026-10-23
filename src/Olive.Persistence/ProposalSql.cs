@@ -9,8 +9,8 @@ public static class ProposalSql
         "on conflict on constraint proposal_run_unique do nothing returning proposal_id";
 
     public const string InsertEvent =
-        "insert into proposal_event (tenant_id, event_id, proposal_id, event_type, from_state, to_state, actor) " +
-        "values (@tenant_id, @event_id, @proposal_id, @event_type, @from_state, @to_state, @actor)";
+        "insert into proposal_event (tenant_id, event_id, proposal_id, event_type, from_state, to_state, actor, detail) " +
+        "values (@tenant_id, @event_id, @proposal_id, @event_type, @from_state, @to_state, @actor, @detail::jsonb)";
 
     public const string Get =
         "select proposal_id, tenant_id, state, agent_id, key_id, on_behalf_of, purpose, key_expires_at, nono_session_id, run_id, action_type, party_ref, parameters::text as parameters_json, justification, trace_ref, created_at, refusal_reason, trace_verification, trace_schema_version " +
