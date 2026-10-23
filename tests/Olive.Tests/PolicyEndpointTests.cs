@@ -197,7 +197,7 @@ public sealed class PolicyEndpointTests(PostgresFixture fixture)
         await using var factory = new OliveApiFactory(db);
         var r = await PostEnv(factory);
         Assert.Equal(HttpStatusCode.Created, r.StatusCode);
-        Assert.Equal("proposed", JsonDocument.Parse(await r.Content.ReadAsStringAsync(Ct)).RootElement.GetProperty("state").GetString());
+        Assert.Equal("awaiting_approval", JsonDocument.Parse(await r.Content.ReadAsStringAsync(Ct)).RootElement.GetProperty("state").GetString());
         var call = Assert.Single(factory.Directory.Requests);
         Assert.Equal(TestPaths.TenantAlpha, call.Tenant);
         Assert.Equal(AlphaUser, call.OnBehalfOf);

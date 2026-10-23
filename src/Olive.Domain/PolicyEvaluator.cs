@@ -78,4 +78,8 @@ public static class PolicyEvaluator
             && agentEntitlements is { Count: > 0 } && agentEntitlements.Contains(requiredEntitlement!);
         return priorPassing.Then(Entitlement, ok, PolicyRefusalReasons.EntitlementMissing);
     }
+
+    // D-12: rate is the last check. withinLimit is decided by the store under the advisory lock; the verdict only records it.
+    public static PolicyVerdict AppendRate(PolicyVerdict priorPassing, bool withinLimit) =>
+        priorPassing.Then(Rate, withinLimit, PolicyRefusalReasons.RateLimited);
 }

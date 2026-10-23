@@ -258,11 +258,22 @@ public static class ProposalEndpoints
             }
 
             Guid? id;
+            var state = ProposalStates.RefusedPolicy;
+            var reason = refusalReason;
             try
             {
-                id = refusalReason is null
-                    ? await store.InsertAsync(key.TenantId, proposal, ct)
-                    : await store.InsertRefusedAsync(key.TenantId, proposal, refusalReason, ct);
+                if (refusalReason is null)
+                {
+                    // D-12: rate is the last check, taken under the advisory lock only after entitlement allowed.
+                    var evaluated = await store.InsertEvaluatedAsync(key.TenantId, proposal, entry.MaxRateLimit, entry.MaxRateWindowSeconds, policy, ct);
+                    id = evaluated?.ProposalId;
+                    state = evaluated?.State ?? state;
+                    reason = evaluated?.RefusalReason;
+                }
+                else
+                {
+                    id = await store.InsertRefusedAsync(key.TenantId, proposal, refusalReason, ct);
+                }
             }
             catch (PostgresException e) when (e.SqlState is PostgresErrorCodes.NumericValueOutOfRange
                                                  or PostgresErrorCodes.InvalidTextRepresentation
@@ -281,9 +292,9 @@ public static class ProposalEndpoints
                 return await DecideExistingAsync() ?? ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.IdempotencyConflict);
             }
 
-            return Results.Created($"/v1/proposals/{id}", refusalReason is null
-                ? new ProposalCreatedResponse(id.Value, ProposalStates.Proposed)
-                : new ProposalCreatedResponse(id.Value, ProposalStates.RefusedPolicy, refusalReason));
+            return Results.Created($"/v1/proposals/{id}", state == ProposalStates.RefusedPolicy
+                ? new ProposalCreatedResponse(id.Value, ProposalStates.RefusedPolicy, reason)
+                : new ProposalCreatedResponse(id.Value, state));
         }
     }
 

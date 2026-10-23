@@ -123,6 +123,92 @@ public sealed class PostgresProposalStore(TenantUnitOfWork uow) : IProposalStore
             return id;
         }, ct);
 
+    // D-08..D-12, D-20: lock, count (before insert), insert, then accept-by-CAS or rate-refuse, all in one transaction.
+    public Task<EvaluatedInsertResult?> InsertEvaluatedAsync(Guid tenantId, NewProposal p, int rateLimit, int windowSeconds, Olive.Domain.PolicyVerdict priorPassing, CancellationToken ct) =>
+        uow.ExecuteAsync<EvaluatedInsertResult?>(tenantId, async (conn, tx) =>
+        {
+            if (p.ActionType is null)
+            {
+                throw new ArgumentException("POL-03: an action type is required for the rate scope.", nameof(p));
+            }
+
+            await conn.ExecuteScalarAsync(new CommandDefinition(ProposalSql.LockRate,
+                new { tenant_id = tenantId, agent_id = p.AgentId, action_type = p.ActionType }, tx, cancellationToken: ct));
+            var count = await conn.ExecuteScalarAsync<long>(new CommandDefinition(ProposalSql.CountAccepted,
+                new { tenant_id = tenantId, agent_id = p.AgentId, action_type = p.ActionType, window_seconds = (double)windowSeconds }, tx, cancellationToken: ct));
+            var within = count < rateLimit;
+            var verdict = Olive.Domain.PolicyEvaluator.AppendRate(priorPassing, within);
+
+            // Refused rows carry no expiry: decide before inserting, never insert then update.
+            var row = within ? p : p with { ExpiresAt = null };
+            var id = Guid.NewGuid();
+            var inserted = await conn.ExecuteScalarAsync<Guid?>(new CommandDefinition(ProposalSql.Insert, new
+            {
+                tenant_id = tenantId,
+                proposal_id = id,
+                agent_id = row.AgentId,
+                key_id = row.KeyId,
+                on_behalf_of = row.OnBehalfOf,
+                purpose = row.Purpose,
+                key_expires_at = row.KeyExpiresAt.UtcDateTime,
+                nono_session_id = row.NonoSessionId,
+                run_id = row.RunId,
+                action_type = row.ActionType,
+                party_ref = row.PartyRef,
+                parameters = row.ParametersJson,
+                justification = row.Justification,
+                trace_ref = row.TraceRef,
+                canonical_body = row.CanonicalBody,
+                body_sha256 = row.BodySha256,
+                proposal_hash = row.ProposalHash,
+                trace_verification = row.TraceVerification,
+                trace_schema_version = row.TraceSchemaVersion,
+                expires_at = row.ExpiresAt?.UtcDateTime,
+            }, tx, cancellationToken: ct));
+            if (inserted is null)
+            {
+                return null;
+            }
+
+            Task Event(string type, string? from, string to, string? detail) => conn.ExecuteAsync(new CommandDefinition(ProposalSql.InsertEvent, new
+            {
+                tenant_id = tenantId,
+                event_id = Guid.NewGuid(),
+                proposal_id = id,
+                event_type = type,
+                from_state = from,
+                to_state = to,
+                actor = p.AgentId,
+                detail,
+            }, tx, cancellationToken: ct));
+
+            await Event("submitted", null, "proposed", null);
+            await Event("policy_evaluated", null, "proposed", verdict.ToDetailJson());
+
+            if (!within)
+            {
+                var n = await conn.ExecuteAsync(new CommandDefinition(ProposalSql.RefuseWithReason,
+                    new { tenant_id = tenantId, proposal_id = id, reason = verdict.Reason }, tx, cancellationToken: ct));
+                if (n != 1)
+                {
+                    throw new InvalidOperationException("Refusal compare-and-set did not affect exactly one row.");
+                }
+
+                await Event("policy_refused", "proposed", "refused_policy", null);
+                return new EvaluatedInsertResult(id, Olive.Domain.ProposalStates.RefusedPolicy, verdict.Reason);
+            }
+
+            var accepted = await conn.ExecuteAsync(new CommandDefinition(ProposalSql.UpdateState,
+                new { tenant_id = tenantId, proposal_id = id, from_state = Olive.Domain.ProposalStates.Proposed, to_state = Olive.Domain.ProposalStates.AwaitingApproval }, tx, cancellationToken: ct));
+            if (accepted != 1)
+            {
+                throw new InvalidOperationException("Accept compare-and-set did not affect exactly one row.");
+            }
+
+            await Event("transition", "proposed", "awaiting_approval", null);
+            return new EvaluatedInsertResult(id, Olive.Domain.ProposalStates.AwaitingApproval, null);
+        }, ct);
+
     public Task<ProposalRecord?> GetAsync(Guid tenantId, Guid proposalId, CancellationToken ct) =>
         uow.ExecuteAsync<ProposalRecord?>(tenantId, async (conn, tx) =>
         {
