@@ -37,6 +37,29 @@ public sealed class RecordingTokenIssuer(ITokenIssuer inner, List<string> events
     }
 }
 
+public sealed class RecordingUserIdentityResolver(IUserIdentityResolver inner, List<string> events, List<OutboundCall> calls) : IUserIdentityResolver, IComponentDecorator
+{
+    private static readonly OutboundDestination Destination =
+        typeof(IUserIdentityResolver).GetCustomAttribute<OutboundPortAttribute>()!.Destination;
+
+    private int _count;
+    private Guid _lastTenant;
+
+    public object Inner => inner;
+
+    public int CallCount => Volatile.Read(ref _count);
+
+    public Guid LastTenant { get { lock (calls) { return _lastTenant; } } }
+
+    public Task<UserIdentityLookup> ResolveAsync(Guid tenantId, string onBehalfOf, CancellationToken ct)
+    {
+        Interlocked.Increment(ref _count);
+        lock (events) { events.Add("identity"); }
+        lock (calls) { _lastTenant = tenantId; calls.Add(new OutboundCall(nameof(IUserIdentityResolver), Destination, false, false)); }
+        return inner.ResolveAsync(tenantId, onBehalfOf, ct);
+    }
+}
+
 public sealed class RecordingDirectoryResolver(IDirectoryGroupResolver inner, List<string> events, List<OutboundCall> calls) : IDirectoryGroupResolver, IComponentDecorator
 {
     private static readonly OutboundDestination Destination =

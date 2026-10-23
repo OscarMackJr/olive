@@ -50,6 +50,12 @@ var directoryTimeout = ReadTimeoutMs(builder.Configuration, "OLIVE_DIRECTORY_TIM
 builder.Services.AddSingleton(directoryTimeout is { } d ? new DirectoryVerifierOptions(d) : new DirectoryVerifierOptions());
 builder.Services.AddSingleton<IDirectoryGroupResolver>(_ => FixtureDirectoryGroupResolver.CreateDefault());
 builder.Services.AddSingleton<DirectoryVerifier>();
+// D-06 (Q14 ruling): read-only (oid, tid) resolution for the approve-path self-approval check; fixture-backed, barred in production, own timeout.
+var identityTimeout = ReadTimeoutMs(builder.Configuration, "OLIVE_IDENTITY_RESOLVER_TIMEOUT_MS");
+builder.Services.AddSingleton(identityTimeout is { } it ? new UserIdentityVerifierOptions(it) : new UserIdentityVerifierOptions());
+builder.Services.AddSingleton<IUserIdentityResolver>(_ => FixtureUserIdentityResolver.CreateDefault());
+builder.Services.AddSingleton<UserIdentityVerifier>();
+builder.Services.AddSingleton<ApprovalIdentityCheck>();
 builder.Services.AddSingleton<IAgentAllowlist>(_ => AgentAllowlist.LoadEmbedded());
 builder.Services.AddSingleton<IQueueKindRegistry>(_ => QueueKindRegistry.LoadEmbedded());
 builder.Services.AddSingleton<IReviewerTenantMap>(_ => ReviewerTenantMap.LoadEmbedded());

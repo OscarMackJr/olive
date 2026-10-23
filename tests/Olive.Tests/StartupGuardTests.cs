@@ -201,6 +201,13 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
         s.AddSingleton<ITraceResolver>(new FakeTraceResolver());
         s.RemoveAll<IDirectoryGroupResolver>();
         s.AddSingleton<IDirectoryGroupResolver>(new FaultingDirectoryResolver(new ProductionDirectoryStub(), ResolverFault.Unavailable));
+        s.RemoveAll<IUserIdentityResolver>();
+        s.AddSingleton<IUserIdentityResolver>(new FaultingUserIdentityResolver(new ProductionIdentityStub(), ResolverFault.Unavailable));
+    }
+
+    private sealed class ProductionIdentityStub : IUserIdentityResolver
+    {
+        public Task<UserIdentityLookup> ResolveAsync(Guid tenantId, string onBehalfOf, CancellationToken ct) => Task.FromResult<UserIdentityLookup>(new UserIdentityLookup.NotFound());
     }
 
     private sealed class ProductionDirectoryStub : IDirectoryGroupResolver
@@ -245,6 +252,24 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
         Assert.Null(await TryStartAsync(factory));
         Assert.NotNull(factory.Services.GetService<IDirectoryGroupResolver>());
         Assert.NotNull(factory.Services.GetService<DirectoryVerifier>());
+    }
+
+    [Fact]
+    public async Task APR_02_production_with_fixture_user_identity_resolver_refuses()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s =>
+            {
+                ProductionSafePorts(s);
+                s.RemoveAll<IKeyIntrospector>();
+                s.AddSingleton<IKeyIntrospector>(_ => new DecoratingIntrospector(new ThrowingKeyIntrospector()));
+                s.RemoveAll<IUserIdentityResolver>();
+                s.AddSingleton<IUserIdentityResolver>(_ => Olive.Integrations.Entra.FixtureUserIdentityResolver.CreateDefault());
+            });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
     }
 
     [Fact]

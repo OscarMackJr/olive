@@ -82,6 +82,25 @@ public sealed class FaultingKeyIntrospector(int status) : IKeyIntrospector
         throw new IntrospectionCallerRejectedException(status);
 }
 
+public sealed class FaultingUserIdentityResolver(IUserIdentityResolver healthy, ResolverFault mode = ResolverFault.None) : IUserIdentityResolver
+{
+    public ResolverFault Mode { get; set; } = mode;
+
+    public async Task<UserIdentityLookup> ResolveAsync(Guid tenantId, string onBehalfOf, CancellationToken ct)
+    {
+        switch (Mode)
+        {
+            case ResolverFault.Unavailable: return new UserIdentityLookup.Unavailable();
+            case ResolverFault.Throw: throw new HttpRequestException("identity-fault-secret-detail");
+            case ResolverFault.Hang:
+                await Task.Delay(Timeout.Infinite, ct);
+                return new UserIdentityLookup.Unavailable();
+            case ResolverFault.Malformed: return new UserIdentityLookup.Malformed();
+            default: return await healthy.ResolveAsync(tenantId, onBehalfOf, ct);
+        }
+    }
+}
+
 public sealed class FaultingDirectoryResolver(IDirectoryGroupResolver healthy, ResolverFault mode = ResolverFault.None) : IDirectoryGroupResolver
 {
     public ResolverFault Mode { get; set; } = mode;
