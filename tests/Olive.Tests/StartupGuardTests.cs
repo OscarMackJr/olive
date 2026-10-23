@@ -193,7 +193,7 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
     }
 
     // The factory wires the recording stubs for the Phase 3 ports; production positive controls swap in non-stub doubles.
-    private static void ProductionSafePorts(IServiceCollection s)
+    private static void ProductionSafePorts(IServiceCollection s, bool keepDevReviewerScheme = false)
     {
         s.RemoveAll<ITokenIssuer>();
         s.AddSingleton<ITokenIssuer>(new FakeTokenIssuer());
@@ -203,6 +203,65 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
         s.AddSingleton<IDirectoryGroupResolver>(new FaultingDirectoryResolver(new ProductionDirectoryStub(), ResolverFault.Unavailable));
         s.RemoveAll<IUserIdentityResolver>();
         s.AddSingleton<IUserIdentityResolver>(new FaultingUserIdentityResolver(new ProductionIdentityStub(), ResolverFault.Unavailable));
+        s.RemoveAll<IReviewerIdentitySource>();
+        s.AddSingleton<IReviewerIdentitySource>(new ProductionReviewerStub());
+        if (!keepDevReviewerScheme)
+        {
+            // Positive controls model a production host that has no dev reviewer scheme (Q17).
+            s.PostConfigure<Microsoft.AspNetCore.Authentication.AuthenticationOptions>(o =>
+            {
+                o.SchemeMap.Remove(Olive.Host.Auth.DevReviewerAuthenticationHandler.SchemeName);
+                ((ICollection<Microsoft.AspNetCore.Authentication.AuthenticationSchemeBuilder>)o.Schemes)
+                    .Remove(o.Schemes.First(b => b.Name == Olive.Host.Auth.DevReviewerAuthenticationHandler.SchemeName));
+            });
+        }
+    }
+
+    private sealed class ProductionReviewerStub : IReviewerIdentitySource
+    {
+        public ReviewerIdentity? Find(string reviewerId) => null;
+    }
+
+    [Fact]
+    public async Task FND_05_production_with_fixture_reviewer_source_refuses()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s =>
+            {
+                ProductionSafePorts(s);
+                s.RemoveAll<IKeyIntrospector>();
+                s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>();
+                s.RemoveAll<IReviewerIdentitySource>();
+                s.AddSingleton<IReviewerIdentitySource>(_ => Olive.Integrations.Entra.FixtureReviewerIdentitySource.CreateDefault());
+            });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("FND-05", guard.Message);
+    }
+
+    [Fact]
+    public async Task FND_05_production_refuses_while_the_dev_reviewer_scheme_exists()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s =>
+            {
+                ProductionSafePorts(s, keepDevReviewerScheme: true);
+                s.RemoveAll<IKeyIntrospector>();
+                s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>();
+            });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Contains("Q17", guard.Message);
+    }
+
+    [Fact]
+    public async Task FND_05_development_start_with_dev_reviewer_scheme_succeeds()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "ci");
+        Assert.Null(await TryStartAsync(factory));
     }
 
     private sealed class ProductionIdentityStub : IUserIdentityResolver

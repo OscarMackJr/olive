@@ -19,6 +19,12 @@ public sealed class AgentKeyAuthenticationHandler(
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        // D-02: reviewer routes belong to the DevReviewer scheme; an agent key there is never introspected (T-05-23).
+        if (Request.Path.StartsWithSegments("/v1/queue", StringComparison.OrdinalIgnoreCase))
+        {
+            return AuthenticateResult.NoResult();
+        }
+
         var key = AgentKeyHeader.TryRead(Request.Headers[AgentKeyHeader.Name].ToString());
         if (key is null)
         {
@@ -38,6 +44,13 @@ public sealed class AgentKeyAuthenticationHandler(
 
     protected override async Task HandleChallengeAsync(AuthenticationProperties properties)
     {
+        // D-02: a reviewer identity with no agent credential on an agent route is a wrong-caller case.
+        if (Request.Headers.ContainsKey(DevReviewerAuthenticationHandler.HeaderName) && !Request.Headers.ContainsKey(AgentKeyHeader.Name))
+        {
+            await ProblemResults.WriteAsync(Context, StatusCodes.Status403Forbidden, ProblemReasons.PrincipalNotPermitted);
+            return;
+        }
+
         Response.Headers.WWWAuthenticate = AgentKeyHeader.Scheme;
         await ProblemResults.WriteAsync(Context, StatusCodes.Status401Unauthorized, ProblemReasons.KeyInactive);
     }

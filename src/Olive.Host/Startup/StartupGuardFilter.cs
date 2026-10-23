@@ -15,6 +15,7 @@ public sealed class StartupGuardFilter(IConfiguration configuration, IServicePro
         StartupGuards.CheckCatalog(provider);
         StartupGuards.CheckQueueKinds(provider);
         StartupGuards.CheckNoNonProductionComponents(accessor.Services, provider, env);
+        StartupGuards.CheckDevReviewerNotInProduction(provider, env);
         CheckDatabase();
         return next;
     }

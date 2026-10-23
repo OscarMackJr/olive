@@ -61,7 +61,10 @@ builder.Services.AddSingleton<IQueueKindRegistry>(_ => QueueKindRegistry.LoadEmb
 builder.Services.AddSingleton<IReviewerTenantMap>(_ => ReviewerTenantMap.LoadEmbedded());
 builder.Services.AddSingleton(_ => CatalogLoader.LoadEmbedded(Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml")));
 builder.Services.AddAuthentication(AgentKeyAuthenticationHandler.SchemeName)
-    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, AgentKeyAuthenticationHandler>(AgentKeyAuthenticationHandler.SchemeName, _ => { });
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, AgentKeyAuthenticationHandler>(AgentKeyAuthenticationHandler.SchemeName, _ => { })
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DevReviewerAuthenticationHandler>(DevReviewerAuthenticationHandler.SchemeName, _ => { });
+// D-07: dev reviewer identities from a source-controlled fixture (INonProductionOnly, so FND-05 bars it in production).
+builder.Services.AddSingleton<IReviewerIdentitySource>(_ => FixtureReviewerIdentitySource.CreateDefault());
 builder.Services.AddAuthorization();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ProblemExceptionHandler>();

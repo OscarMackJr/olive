@@ -6,5 +6,6 @@
   <ItemGroup>
     <EmbeddedResource Include="..\..\contracts\directory\*.json" LogicalName="directory/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\..\contracts\identity\*.json" LogicalName="identity/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="..\..\contracts\reviewer\*.json" LogicalName="reviewer/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
