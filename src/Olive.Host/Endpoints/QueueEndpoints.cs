@@ -25,6 +25,8 @@ public static class QueueEndpoints
             });
         group.MapGet("", ListAsync);
         group.MapGet("/{id:guid}", GetAsync);
+        group.MapGet("/{id:guid}/payload", PayloadAsync);
+        group.MapGet("/{id:guid}/events", EventsAsync);
         return app;
     }
 
@@ -56,6 +58,38 @@ public static class QueueEndpoints
         return item is null
             ? ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound)
             : Results.Ok(ToDto(item));
+    }
+
+    // The result hierarchies are closed by construction (sealed cases, no other subclasses); CS8509 cannot see that.
+#pragma warning disable CS8509
+    private static async Task<IResult> PayloadAsync(Guid id, HttpContext http, QueueService service, CancellationToken ct)
+    {
+        var result = await service.GetPayloadAsync(http.User.ToReviewerContext()!, id, ct);
+        return result switch
+        {
+            PayloadResult.Found f => Results.Ok(new ReviewerPayloadResponse(f.Payload.ActionType, ParseJson(f.Payload.ParametersJson), f.Payload.Justification, f.Payload.OnBehalfOf, f.Payload.ExpiresAt, f.Payload.TraceRef)),
+            PayloadResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
+            PayloadResult.RoleNotPermitted => ProblemResults.Result(StatusCodes.Status403Forbidden, ProblemReasons.RoleNotPermitted),
+        };
+    }
+
+    private static async Task<IResult> EventsAsync(Guid id, HttpContext http, QueueService service, CancellationToken ct)
+    {
+        var result = await service.EventsAsync(http.User.ToReviewerContext()!, id, ct);
+        return result switch
+        {
+            EventsResult.Found f => Results.Ok(new QueueItemEventsResponse(f.Events.Select(e => new QueueItemEventDto(e.Seq, e.EventType, e.FromState, e.ToState, e.Actor, e.CreatedAt, ParseJson(e.DetailJson))).ToList())),
+            EventsResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
+        };
+    }
+
+#pragma warning restore CS8509
+
+    private static System.Text.Json.JsonElement? ParseJson(string? json)
+    {
+        if (json is null) { return null; }
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
     }
 
     private static QueueItemDto ToDto(QueueItemView v) => new(v.TenantId, v.ItemId, v.Kind, v.Subtype, v.Producer, v.ProducerRef, v.State,

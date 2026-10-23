@@ -30,6 +30,26 @@ public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry,
         return new QueueItemView(d.TenantId, d.ItemId, d.Kind, d.Subtype, d.Producer, d.ProducerRef, d.State, d.SubjectRef, d.PayloadRef, d.ClaimedBy, d.CreatedAt, AgeSeconds(d.CreatedAt, time.GetUtcNow()), d.ExpiresAt, d.Decision, d.DecidedBy, d.DecidedAt, d.AuthSource, d.WithdrawnReason);
     }
 
+    // D-19: the required role is read from the kind definition in the registry, never written in code.
+    public async Task<PayloadResult> GetPayloadAsync(ReviewerContext reviewer, Guid itemId, CancellationToken ct)
+    {
+        var item = await store.GetAsync(reviewer.TenantId, itemId, ct);
+        if (item is null) { return new PayloadResult.NotFound(); }
+        if (!registry.TryGet(item.Kind, out var definition) || !reviewer.Groups.Contains(definition.RequiredRole, StringComparer.Ordinal))
+        {
+            return new PayloadResult.RoleNotPermitted();
+        }
+
+        var payload = await store.GetPayloadAsync(reviewer.TenantId, itemId, ct);
+        return payload is null ? new PayloadResult.NotFound() : new PayloadResult.Found(payload);
+    }
+
+    public async Task<EventsResult> EventsAsync(ReviewerContext reviewer, Guid itemId, CancellationToken ct)
+    {
+        var events = await store.EventsAsync(reviewer.TenantId, itemId, ct);
+        return events is null ? new EventsResult.NotFound() : new EventsResult.Found(events);
+    }
+
     private static long AgeSeconds(DateTimeOffset created, DateTimeOffset now) => Math.Max(0, (long)(now - created).TotalSeconds);
 }
 
@@ -42,3 +62,19 @@ public abstract record QueueListResult
 
 // Reference-only view; no rationale, parameters, justification or on_behalf_of member exists.
 public sealed record QueueItemView(Guid TenantId, Guid ItemId, string Kind, string Subtype, string Producer, Guid ProducerRef, string State, string SubjectRef, string PayloadRef, string? ClaimedBy, DateTimeOffset CreatedAt, long AgeSeconds, DateTimeOffset? ExpiresAt, string? Decision, string? DecidedBy, DateTimeOffset? DecidedAt, string? AuthSource, string? WithdrawnReason);
+
+public abstract record PayloadResult
+{
+    public sealed record Found(ReviewerPayload Payload) : PayloadResult;
+
+    public sealed record NotFound : PayloadResult;
+
+    public sealed record RoleNotPermitted : PayloadResult;
+}
+
+public abstract record EventsResult
+{
+    public sealed record Found(IReadOnlyList<QueueItemEventRecord> Events) : EventsResult;
+
+    public sealed record NotFound : EventsResult;
+}
