@@ -312,6 +312,16 @@ public sealed class ArchitectureTests
 
     [Fact]
     [Trait("Category", "Architecture")]
+    public void POL_02_directory_port_carries_no_session_key_or_service_token()
+    {
+        var port = typeof(Olive.Application.IDirectoryGroupResolver);
+        Assert.Equal(Olive.Application.OutboundDestination.Directory, DestinationOf(port));
+        var types = SignatureTypes(port).ToArray();
+        Assert.DoesNotContain(types, t => SessionKeyTypes.Contains(t) || ServiceTokenTypes.Contains(t));
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
     public void IDN_08_hometown_project_sources_never_reference_session_key()
     {
         var files = Directory.GetFiles(Path.Combine(TestPaths.Root, "src", "Olive.Integrations.Hometown"), "*.cs", SearchOption.AllDirectories)

@@ -68,4 +68,14 @@ public static class PolicyEvaluator
         var permitted = requiredPurposes is { Count: > 0 } && requiredPurposes.Any(p => string.Equals(p, purpose, StringComparison.Ordinal));
         return verdict.Then(Purpose, permitted, PolicyRefusalReasons.PurposeNotPermitted);
     }
+
+    // D-03: both sides must hold the entitlement (intersection, never union). D-05: null/blank/empty fails closed.
+    // Names are compared ordinal and are never copied into the verdict.
+    public static PolicyVerdict EvaluateEntitlement(PolicyVerdict priorPassing, string? requiredEntitlement, IReadOnlySet<string>? agentEntitlements, IReadOnlyCollection<string>? userGroups)
+    {
+        var ok = !string.IsNullOrWhiteSpace(requiredEntitlement)
+            && userGroups is { Count: > 0 } && userGroups.Any(g => string.Equals(g, requiredEntitlement, StringComparison.Ordinal))
+            && agentEntitlements is { Count: > 0 } && agentEntitlements.Contains(requiredEntitlement!);
+        return priorPassing.Then(Entitlement, ok, PolicyRefusalReasons.EntitlementMissing);
+    }
 }
