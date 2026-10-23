@@ -40,4 +40,17 @@ public static class QueueSql
         "select q.item_id, q.kind, p.action_type, p.parameters::text as parameters_json, p.justification, p.on_behalf_of, p.expires_at, p.trace_ref " +
         "from queue_item q join proposal p on p.tenant_id = q.tenant_id and p.proposal_id = q.proposal_id " +
         "where q.tenant_id = @tenant_id and q.item_id = @item_id";
+
+    // QUE-05: guarded by state so the row lock plus this predicate leave exactly one winner.
+    public const string Claim =
+        "update queue_item set state = 'claimed', claimed_by = @actor, claimed_at = @now " +
+        "where tenant_id = @tenant_id and item_id = @item_id and state = 'open'";
+
+    public const string Release =
+        "update queue_item set state = 'open', claimed_by = null, claimed_at = null " +
+        "where tenant_id = @tenant_id and item_id = @item_id and state = 'claimed' and claimed_by = @actor";
+
+    public const string Withdraw =
+        "update queue_item set state = 'withdrawn', withdrawn_reason = @reason " +
+        "where tenant_id = @tenant_id and item_id = @item_id and state in ('open','claimed')";
 }

@@ -38,6 +38,11 @@ public static class ProblemResults
         ProblemReasons.ReviewerTenantUnresolved => "The reviewer tenant could not be resolved.",
         ProblemReasons.RoleNotPermitted => "The reviewer role does not permit this action.",
         ProblemReasons.ItemNotFound => "The queue item was not found.",
+        ProblemReasons.AlreadyClaimed => "The queue item is already claimed.",
+        ProblemReasons.NotClaimant => "Only the claimant may release this queue item.",
+        ProblemReasons.ItemNotClaimed => "The queue item is not claimed.",
+        ProblemReasons.ItemClosed => "The queue item is closed.",
+        ProblemReasons.ProposalExpired => "The proposal has expired.",
         _ => "An internal error occurred.",
     };
 

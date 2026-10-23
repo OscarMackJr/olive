@@ -50,6 +50,15 @@ public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry,
         return events is null ? new EventsResult.NotFound() : new EventsResult.Found(events);
     }
 
+    // claimed_by holds the Entra oid (A4). Role is deliberately not required to claim or release.
+    public Task<ClaimResult> ClaimAsync(ReviewerContext reviewer, Guid itemId, CancellationToken ct) =>
+        store.ClaimAsync(reviewer.TenantId, itemId, reviewer.Oid, time.GetUtcNow(), ct);
+
+    public Task<ReleaseResult> ReleaseAsync(ReviewerContext reviewer, Guid itemId, CancellationToken ct) =>
+        store.ReleaseAsync(reviewer.TenantId, itemId, reviewer.Oid, time.GetUtcNow(), ct);
+
+    public QueueItemView ToView(QueueItemDetail d) => new(d.TenantId, d.ItemId, d.Kind, d.Subtype, d.Producer, d.ProducerRef, d.State, d.SubjectRef, d.PayloadRef, d.ClaimedBy, d.CreatedAt, AgeSeconds(d.CreatedAt, time.GetUtcNow()), d.ExpiresAt, d.Decision, d.DecidedBy, d.DecidedAt, d.AuthSource, d.WithdrawnReason);
+
     private static long AgeSeconds(DateTimeOffset created, DateTimeOffset now) => Math.Max(0, (long)(now - created).TotalSeconds);
 }
 

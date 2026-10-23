@@ -8,7 +8,7 @@ namespace Olive.Host.Endpoints;
 
 public static class QueueEndpoints
 {
-    // D-01/D-03: reviewer list and get only. There is deliberately no create and no withdraw route in Phase 5.
+    // D-01/D-03: reviewer list, get, claim and release. There is deliberately no create and no withdraw route in Phase 5.
     public static IEndpointRouteBuilder MapQueueEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/v1/queue/items")
@@ -27,6 +27,8 @@ public static class QueueEndpoints
         group.MapGet("/{id:guid}", GetAsync);
         group.MapGet("/{id:guid}/payload", PayloadAsync);
         group.MapGet("/{id:guid}/events", EventsAsync);
+        group.MapPost("/{id:guid}/claim", ClaimAsync);
+        group.MapPost("/{id:guid}/release", ReleaseAsync);
         return app;
     }
 
@@ -80,6 +82,33 @@ public static class QueueEndpoints
         {
             EventsResult.Found f => Results.Ok(new QueueItemEventsResponse(f.Events.Select(e => new QueueItemEventDto(e.Seq, e.EventType, e.FromState, e.ToState, e.Actor, e.CreatedAt, ParseJson(e.DetailJson))).ToList())),
             EventsResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
+        };
+    }
+
+    private static async Task<IResult> ClaimAsync(Guid id, HttpContext http, QueueService service, CancellationToken ct)
+    {
+        var result = await service.ClaimAsync(http.User.ToReviewerContext()!, id, ct);
+        return result switch
+        {
+            ClaimResult.Claimed c => Results.Ok(ToDto(service.ToView(c.Item))),
+            ClaimResult.AlreadyClaimed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.AlreadyClaimed),
+            ClaimResult.ProposalExpired => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ProposalExpired),
+            ClaimResult.Closed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemClosed),
+            ClaimResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
+        };
+    }
+
+    private static async Task<IResult> ReleaseAsync(Guid id, HttpContext http, QueueService service, CancellationToken ct)
+    {
+        var result = await service.ReleaseAsync(http.User.ToReviewerContext()!, id, ct);
+        return result switch
+        {
+            ReleaseResult.Released r => Results.Ok(ToDto(service.ToView(r.Item))),
+            ReleaseResult.NotClaimant => ProblemResults.Result(StatusCodes.Status403Forbidden, ProblemReasons.NotClaimant),
+            ReleaseResult.NotClaimed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemNotClaimed),
+            ReleaseResult.ProposalExpired => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ProposalExpired),
+            ReleaseResult.Closed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemClosed),
+            ReleaseResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
         };
     }
 
