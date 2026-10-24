@@ -450,14 +450,17 @@ Add it to `StartupGuardFilter.Configure`. Never include the path in the exceptio
 | A5 | `ReviewerTenantMap` covers every tenant that can have an `approved` proposal | Pattern 5 | A tenant with an approved proposal but no mapped group would not be swept. Not possible through the current approve path. |
 | A6 | `FileStream.Flush(true)` plus a per-line open/close gives adequate durability for D-12 on Windows and Linux | Pattern 6 | Rare loss after an OS crash. Resolves to in-doubt, which is the designed outcome. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **D-16 vs D-17: transcript contains the rationale by design.**
    - Known: the view row includes the rationale (D-14) and the transcript prints that row (D-16). D-17 says the scan covers the transcript for the rationale sentinel.
    - Unclear: the two cannot both hold for the same sentinel value.
    - Recommendation: scan the transcript for the session key and tokens only. Scan the JSONL, logs and responses for the rationale sentinel (separate approve with a sentinel rationale). Record this reading in the plan.
+   - RESOLVED: Plan 06-07 Task 1 uses a literal non-sentinel rationale and scans the transcript for session key, tokens and the justification sentinel; Plan 06-06 Task 2 scans JSONL, logs, responses and ledger/proposal rows for the rationale sentinel.
 2. **Execution-record identity.** Anchor the view on the `started` row's `execution_id` (recommended) or add a shared `attempt_id`. Either works; pick one in planning.
+   - RESOLVED: Plan 06-01 anchors the `execution_chain` view on the `started` row's `execution_id`.
 3. **Idle `olive_app` view SELECT.** `olive_app` receives SELECT on the view per D-15, and it already has SELECT on every underlying table except none missing. Confirm in the privilege matrix that the view (relkind `v`) is checked with `has_table_privilege`.
+   - RESOLVED: Plan 06-01 Task 2 grants SELECT on the view and adds `DB_04_execution_chain_view_is_select_only` to the privilege matrix.
 
 ## Environment Availability
 
