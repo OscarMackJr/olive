@@ -1,6 +1,7 @@
 using Npgsql;
 using Olive.Application;
 using Olive.Catalog;
+using Olive.Executor.Simulated;
 using Olive.Host.Alarms;
 using Olive.Host.Auth;
 using Olive.Host.Endpoints;
@@ -35,6 +36,20 @@ builder.Services.AddSingleton<TenantUnitOfWork>();
 builder.Services.AddSingleton<IProposalStore, PostgresProposalStore>();
 builder.Services.AddSingleton<IQueueStore, PostgresQueueStore>();
 builder.Services.AddSingleton<QueueService>();
+// EXE-01 / D-13: the executor is simulated and not INonProductionOnly. A singleton so its write semaphore serialises all writers.
+builder.Services.AddSingleton<IExecutionStore>(sp => new PostgresExecutionStore(sp.GetRequiredService<TenantUnitOfWork>()));
+builder.Services.AddSingleton<IActionExecutor>(sp =>
+{
+    var path = sp.GetRequiredService<IConfiguration>()["OLIVE_EXECUTOR_OUTPUT_PATH"];
+    if (string.IsNullOrWhiteSpace(path))
+    {
+        throw new InvalidOperationException("OLIVE_EXECUTOR_OUTPUT_PATH is not configured.");
+    }
+
+    return new SimulatedActionExecutor(new SimulatedExecutorOptions(path));
+});
+builder.Services.AddSingleton<IActionCatalogCheck, CatalogExecutionCheck>();
+builder.Services.AddSingleton<ExecutionService>();
 // Phase 1 has only the stub introspector; the production guard in 01-06 refuses it.
 builder.Services.AddSingleton<IKeyIntrospector>(sp => StubKeyIntrospector.CreateDefault(sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<IOperationalAlarm, LoggingOperationalAlarm>();

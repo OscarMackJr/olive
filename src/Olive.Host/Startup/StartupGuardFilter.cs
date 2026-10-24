@@ -5,7 +5,7 @@ using Olive.Persistence;
 namespace Olive.Host.Startup;
 
 // Runs every guard while the host builds its pipeline, which is before Kestrel listens (and also under WebApplicationFactory).
-public sealed class StartupGuardFilter(IConfiguration configuration, IServiceProvider provider, ServiceCollectionAccessor accessor) : IStartupFilter
+public sealed class StartupGuardFilter(IConfiguration configuration, IServiceProvider provider, ServiceCollectionAccessor accessor, ILoggerFactory loggerFactory) : IStartupFilter
 {
     public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
     {
@@ -16,7 +16,10 @@ public sealed class StartupGuardFilter(IConfiguration configuration, IServicePro
         StartupGuards.CheckQueueKinds(provider);
         StartupGuards.CheckNoNonProductionComponents(accessor.Services, provider, env);
         StartupGuards.CheckDevReviewerNotInProduction(provider, env);
+        StartupGuards.CheckExecutorOutput(configuration);
         CheckDatabase();
+        // D-13: stated at startup so an operator can see no real write path exists.
+        loggerFactory.CreateLogger<StartupGuardFilter>().LogInformation("Executor is simulated: execution_mode=simulated");
         return next;
     }
 

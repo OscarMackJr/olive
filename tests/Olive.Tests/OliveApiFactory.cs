@@ -37,6 +37,9 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
 
     public InMemoryLogCapture Logs { get; } = new();
 
+    // EXE-04: every factory host appends to its own temp JSONL file (extraConfig may override the setting).
+    public string ExecutorOutputPath { get; } = Path.Combine(Path.GetTempPath(), "olive-exec-" + Guid.NewGuid().ToString("N") + ".jsonl");
+
     public List<string> Events { get; } = [];
 
     public RecordingKeyIntrospector Introspector { get; private set; } = null!;
@@ -61,7 +64,7 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
         builder.UseEnvironment(Environments.Production);
         var url = db.AppUrl;
         NoSharedPostgres.Assert(PostgresUrl.ToNpgsql(url));
-        var config = new Dictionary<string, string?> { ["OLIVE_ENVIRONMENT"] = environment, ["OLIVE_POSTGRES_URL"] = url };
+        var config = new Dictionary<string, string?> { ["OLIVE_ENVIRONMENT"] = environment, ["OLIVE_POSTGRES_URL"] = url, ["OLIVE_EXECUTOR_OUTPUT_PATH"] = ExecutorOutputPath };
         if (extraConfig is not null)
         {
             foreach (var kv in extraConfig) { config[kv.Key] = kv.Value; }
@@ -115,6 +118,15 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
             services.AddSingleton<IStartupFilter>(new ReviewerProbeStartupFilter());
             configureServices?.Invoke(services);
         });
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing)
+        {
+            try { File.Delete(ExecutorOutputPath); } catch (IOException) { }
+        }
     }
 
     public HttpClient CreateKeyClient(string sessionKey)

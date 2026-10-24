@@ -88,6 +88,38 @@ public static class StartupGuards
         }
     }
 
+    // EXE-04 / D-11: the simulated executor's JSONL path must be set and appendable. The message is static: it never carries the path
+    // or the underlying exception text.
+    public static void CheckExecutorOutput(IConfiguration configuration)
+    {
+        const string reason = "the executor output path is missing or not writable";
+        var path = configuration["OLIVE_EXECUTOR_OUTPUT_PATH"];
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new StartupGuardException("EXE-04", reason);
+        }
+
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                throw new InvalidOperationException();
+            }
+
+            var parent = Path.GetDirectoryName(Path.GetFullPath(path));
+            if (!string.IsNullOrEmpty(parent))
+            {
+                Directory.CreateDirectory(parent);
+            }
+
+            using var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+        }
+        catch (Exception)
+        {
+            throw new StartupGuardException("EXE-04", reason);
+        }
+    }
+
     // FND-05: in production no INonProductionOnly implementation may be registered or resolvable.
     public static void CheckNoNonProductionComponents(IServiceCollection services, IServiceProvider provider, OliveEnvironment env)
     {

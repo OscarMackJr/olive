@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Olive.Application;
@@ -425,6 +426,15 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
             builder.UseSetting("OLIVE_ENVIRONMENT", "ci");
             builder.UseSetting("OLIVE_POSTGRES_URL", db.AppUrl);
             builder.UseSetting(setting, value);
+            builder.UseSetting("OLIVE_EXECUTOR_OUTPUT_PATH", OutputPath);
+        }
+
+        private string OutputPath { get; } = Path.Combine(Path.GetTempPath(), "olive-exec-" + Guid.NewGuid().ToString("N") + ".jsonl");
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            if (disposing) { try { File.Delete(OutputPath); } catch (IOException) { } }
         }
     }
 
@@ -543,6 +553,61 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
         var real = Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml");
         Assert.True(File.Exists(real));
         StartupGuards.CheckVendoredVocabulary(real);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void EXE_04_guard_fails_when_output_path_missing()
+    {
+        var empty = new ConfigurationBuilder().Build();
+        Assert.Equal("EXE-04", Assert.Throws<StartupGuardException>(() => StartupGuards.CheckExecutorOutput(empty)).Rule);
+        var blank = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["OLIVE_EXECUTOR_OUTPUT_PATH"] = "  " }).Build();
+        Assert.Equal("EXE-04", Assert.Throws<StartupGuardException>(() => StartupGuards.CheckExecutorOutput(blank)).Rule);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void EXE_04_guard_fails_when_output_path_is_a_directory()
+    {
+        var cfg = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["OLIVE_EXECUTOR_OUTPUT_PATH"] = Path.GetTempPath() }).Build();
+        Assert.Equal("EXE-04", Assert.Throws<StartupGuardException>(() => StartupGuards.CheckExecutorOutput(cfg)).Rule);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void EXE_04_guard_message_never_contains_the_path()
+    {
+        var path = Path.GetTempPath();
+        var cfg = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["OLIVE_EXECUTOR_OUTPUT_PATH"] = path }).Build();
+        var e = Assert.Throws<StartupGuardException>(() => StartupGuards.CheckExecutorOutput(cfg));
+        Assert.DoesNotContain(path, e.Message);
+        Assert.DoesNotContain(path, e.ToString());
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void EXE_04_guard_accepts_a_writable_new_file_and_writes_nothing()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "olive-guard-" + Guid.NewGuid().ToString("N"), "out.jsonl");
+        try
+        {
+            var cfg = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["OLIVE_EXECUTOR_OUTPUT_PATH"] = path }).Build();
+            StartupGuards.CheckExecutorOutput(cfg);
+            Assert.Equal(0, new FileInfo(path).Length);
+        }
+        finally
+        {
+            Directory.Delete(Path.GetDirectoryName(path)!, true);
+        }
+    }
+
+    [Fact]
+    public async Task EXE_04_startup_logs_simulated_mode()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        Assert.Null(await TryStartAsync(factory));
+        Assert.Contains("execution_mode=simulated", factory.Logs.Text);
     }
 
     private const string DriftedRegistry = "kinds:\n  - kind: action_approval\n    subtypes: [proposal]\n    decisions: [approve, reject]\n    required_role: role:other_role\n    ref_schemes: [olive]\n    expires: true\n";
