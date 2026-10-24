@@ -134,11 +134,11 @@
 ### Execution and audit chain (EXE)
 
 - [ ] **EXE-01**: An approved proposal is executed by the simulated executor after the approval commits. A startup sweep picks up any approved proposal that hasn't run yet.
-- [ ] **EXE-02**: Execution is idempotent on `proposal_id`. A unique ledger row per `(tenant_id, proposal_id)` and a per-proposal lock ensure that a duplicate attempt produces one write and returns the first result. (Charter REQ-ACT-03)
+- [x] **EXE-02**: Execution is idempotent on `proposal_id`. A unique ledger row per `(tenant_id, proposal_id)` and a per-proposal lock ensure that a duplicate attempt produces one write and returns the first result. (Charter REQ-ACT-03)
 - [ ] **EXE-03**: Catalog validity and expiry are checked again immediately before execution.
-- [ ] **EXE-04**: The simulated executor writes `execution_mode = "simulated"` ledger rows and JSONL target output. It performs no network write.
+- [x] **EXE-04**: The simulated executor writes `execution_mode = "simulated"` ledger rows and JSONL target output. It performs no network write.
 - [ ] **EXE-05**: An executor failure records `execution_failed`, which is terminal in Phase 1. A fault-injection test covers failure between the ledger write and the state update.
-- [ ] **EXE-06**: The full chain is queryable from an execution record through a `security_invoker` view: proposal, trace verification, policy decision, named approver and rationale, and execution. (Charter REQ-ACT-01)
+- [x] **EXE-06**: The full chain is queryable from an execution record through a `security_invoker` view: proposal, trace verification, policy decision, named approver and rationale, and execution. (Charter REQ-ACT-01)
 
 ### Reviewer UI (UI)
 
@@ -269,11 +269,11 @@ Deferred. Tracked but not in the current roadmap.
 | APR-04 | Phase 5 | Complete |
 | APR-05 | Phase 5 | Complete |
 | EXE-01 | Phase 6 | Pending |
-| EXE-02 | Phase 6 | Pending |
+| EXE-02 | Phase 6 | Complete |
 | EXE-03 | Phase 6 | Pending |
-| EXE-04 | Phase 6 | Pending |
+| EXE-04 | Phase 6 | Complete |
 | EXE-05 | Phase 6 | Pending |
-| EXE-06 | Phase 6 | Pending |
+| EXE-06 | Phase 6 | Complete |
 | UI-01 | Phase 7 | Pending |
 | UI-02 | Phase 7 | Pending |
 | UI-03 | Phase 7 | Pending |
