@@ -56,7 +56,8 @@ public sealed class ExecutionSweepTests(PostgresFixture fixture)
         return proposal;
     }
 
-    private static void Start(OliveApiFactory factory) => _ = factory.Services;
+    private static async Task StartAsync(OliveApiFactory factory) =>
+        await factory.Services.GetRequiredService<Olive.Host.Startup.ExecutionSweep>().Completion.WaitAsync(Ct);
 
     [Fact]
     public async Task EXE_01_sweep_executes_approved_proposals_in_each_mapped_tenant()
@@ -75,7 +76,7 @@ public sealed class ExecutionSweepTests(PostgresFixture fixture)
 
         Assert.Empty(host1Lines);
         await using var h2 = new OliveApiFactory(db);
-        Start(h2);
+        await StartAsync(h2);
 
         Assert.Equal("executed", await StateOf(db, TestPaths.TenantAlpha, a));
         Assert.Equal("executed", await StateOf(db, TestPaths.TenantBeta, b));
@@ -102,7 +103,7 @@ public sealed class ExecutionSweepTests(PostgresFixture fixture)
         }
 
         await using var h2 = new OliveApiFactory(db);
-        Start(h2);
+        await StartAsync(h2);
 
         Assert.Equal("executed", await StateOf(db, TestPaths.TenantAlpha, executed));
         Assert.Equal("awaiting_approval", await StateOf(db, TestPaths.TenantAlpha, awaiting));
@@ -117,7 +118,7 @@ public sealed class ExecutionSweepTests(PostgresFixture fixture)
         await using var db = await fixture.CreateDatabaseAsync();
         FaultingExecutionStore? store = null;
         await using var h2 = new OliveApiFactory(db, configureServices: s => s.Decorate<IExecutionStore>(real => store = new FaultingExecutionStore(real)));
-        Start(h2);
+        await StartAsync(h2);
         _ = h2.Services.GetRequiredService<ExecutionService>();
         store!.Mode = ExecutionFault.ThrowOnBegin;
         store.ThrowOnce = true;
@@ -143,7 +144,7 @@ public sealed class ExecutionSweepTests(PostgresFixture fixture)
         }
 
         await using var h2 = new OliveApiFactory(db);
-        Start(h2);
+        await StartAsync(h2);
 
         Assert.Equal("execution_failed", await StateOf(db, TestPaths.TenantAlpha, proposal));
         Assert.Equal(1L, await Scalar<long>(db, TestPaths.TenantAlpha, "select count(*) from execution_ledger where proposal_id = @p and phase = 'finished' and outcome = 'failed' and reason = 'execution_in_doubt'", proposal));
@@ -161,7 +162,7 @@ public sealed class ExecutionSweepTests(PostgresFixture fixture)
         }
 
         await using var h2 = new OliveApiFactory(db, configureServices: s => s.AddSingleton(new CatalogSet([new CatalogRelease(1, [])])));
-        Start(h2);
+        await StartAsync(h2);
 
         Assert.Equal("execution_failed", await StateOf(db, TestPaths.TenantAlpha, proposal));
         Assert.Equal(1L, await Scalar<long>(db, TestPaths.TenantAlpha, "select count(*) from execution_ledger where proposal_id = @p and phase = 'finished' and reason = 'catalog_invalid'", proposal));
@@ -180,7 +181,7 @@ public sealed class ExecutionSweepTests(PostgresFixture fixture)
 
         var clock = new ManualTimeProvider(DateTimeOffset.UtcNow.AddHours(3));
         await using var h2 = new OliveApiFactory(db, configureServices: s => s.AddSingleton<TimeProvider>(clock));
-        Start(h2);
+        await StartAsync(h2);
 
         Assert.Equal("expired", await StateOf(db, TestPaths.TenantAlpha, proposal));
         Assert.Equal(1L, await Scalar<long>(db, TestPaths.TenantAlpha, "select count(*) from execution_ledger where proposal_id = @p and phase = 'finished' and reason = 'proposal_expired'", proposal));
@@ -199,7 +200,7 @@ public sealed class ExecutionSweepTests(PostgresFixture fixture)
         }
 
         // D-19 guard: the migrator URL key present in the service configuration refuses start.
-        await using var h2 = new OliveApiFactory(db, extraConfig: new Dictionary<string, string?> { ["OLIVE_MIGRATOR_URL"] = "" });
+        await using var h2 = new OliveApiFactory(db, extraConfig: new Dictionary<string, string?> { ["OLIVE_MIGRATOR_URL"] = "" }, awaitSweep: false);
         Assert.ThrowsAny<Exception>(() => h2.Services);
         await Task.Delay(TimeSpan.FromSeconds(2), Ct);
 
@@ -221,6 +222,7 @@ public sealed class ExecutionSweepTests(PostgresFixture fixture)
         await using var h2 = Host1(db, ExecutionFault.ThrowOnBegin);
         using var client = h2.CreateKeyClient(ApiProposalTests.AlphaKey);
         var response = await client.GetAsync($"/v1/proposals/{proposal}", Ct);
+        await StartAsync(h2);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("approved", await StateOf(db, TestPaths.TenantAlpha, proposal));
