@@ -167,6 +167,50 @@ public sealed class TenantIsolationAblationTests(PostgresFixture fixture)
         Assert.Equal("open", await As<string>(ds, TestPaths.TenantBeta, "select state from queue_item where item_id = @i and tenant_id = @t", ("i", betaItem), ("t", TestPaths.TenantBeta)));
     }
 
+    private static Task SeedLedgerAsync(TestDatabase db, Guid tenant, Guid proposal) =>
+        db.AdminExecAsync(
+            "insert into execution_ledger (tenant_id, execution_id, proposal_id, phase, execution_mode, recorded_at) " +
+            $"values ('{tenant}', gen_random_uuid(), '{proposal}', 'started', 'simulated', now())");
+
+    [Fact]
+    public async Task EXE_02_predicate_removed_rls_blocks_cross_tenant_ledger_access()
+    {
+        var (db, ds, _, betaP) = await Setup();
+        await using var _d = db;
+        await using var _s = ds;
+        await SeedLedgerAsync(db, TestPaths.TenantBeta, betaP);
+        Assert.Equal(0L, await As<long>(ds, TestPaths.TenantAlpha, "select count(*) from execution_ledger where proposal_id = @p", ("p", betaP)));
+        var ex = await Assert.ThrowsAsync<PostgresException>(() => NonQueryAs(ds, TestPaths.TenantAlpha,
+            "insert into execution_ledger (tenant_id, execution_id, proposal_id, phase, execution_mode, recorded_at) values (@t, @e, @p, 'started', 'simulated', now())",
+            ("t", TestPaths.TenantBeta), ("e", Guid.NewGuid()), ("p", betaP)));
+        Assert.Equal("42501", ex.SqlState);
+    }
+
+    [Fact]
+    public async Task EXE_02_rls_disabled_ablation_is_real_and_sql_predicate_blocks_cross_tenant_ledger()
+    {
+        var (db, ds, _, betaP) = await Setup("execution_ledger");
+        await using var _d = db;
+        await using var _s = ds;
+        await SeedLedgerAsync(db, TestPaths.TenantBeta, betaP);
+        Assert.Equal(1L, await As<long>(ds, TestPaths.TenantAlpha, "select count(*) from execution_ledger where proposal_id = @p", ("p", betaP)));
+        Assert.Equal(0L, await As<long>(ds, TestPaths.TenantAlpha, "select count(*) from execution_ledger where proposal_id = @p and tenant_id = @t", ("p", betaP), ("t", TestPaths.TenantAlpha)));
+    }
+
+    [Fact]
+    public async Task EXE_06_chain_view_returns_zero_cross_tenant_rows_to_reader()
+    {
+        var (db, ds, alphaP, betaP) = await Setup();
+        await using var _d = db;
+        await using var _s = ds;
+        await SeedLedgerAsync(db, TestPaths.TenantAlpha, alphaP);
+        await SeedLedgerAsync(db, TestPaths.TenantBeta, betaP);
+        await using var reader = NpgsqlDataSource.Create(TestDatabase.WithMaxPoolSize(db.ReaderConnectionString, 1));
+        Assert.Equal(0L, await As<long>(reader, TestPaths.TenantAlpha, "select count(*) from execution_chain where proposal_id = @p", ("p", betaP)));
+        Assert.Equal(1L, await As<long>(reader, TestPaths.TenantAlpha, "select count(*) from execution_chain where proposal_id = @p", ("p", alphaP)));
+        Assert.Equal(1L, await As<long>(reader, TestPaths.TenantBeta, "select count(*) from execution_chain"));
+    }
+
     [Fact]
     public async Task DB_06_app_role_cannot_disable_rls()
     {

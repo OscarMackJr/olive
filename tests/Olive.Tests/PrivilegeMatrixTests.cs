@@ -20,6 +20,10 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
         ("queue_item", "olive_reader", ["SELECT"]),
         ("queue_item_event", "olive_app", ["SELECT", "INSERT"]),
         ("queue_item_event", "olive_reader", ["SELECT"]),
+        ("execution_ledger", "olive_app", ["SELECT", "INSERT"]),
+        ("execution_ledger", "olive_reader", ["SELECT"]),
+        ("execution_chain", "olive_app", ["SELECT"]),
+        ("execution_chain", "olive_reader", ["SELECT"]),
     ];
 
     [Fact]
