@@ -31,7 +31,7 @@ public sealed class ContainmentTests(PostgresFixture fixture)
     }
 
     // Issues a known sentinel token for the grant derived from the introspected key; optionally mutates the grant.
-    private sealed class FixedTokenIssuer(IKeyIntrospector introspector, string token, Func<ServiceTokenGrant, ServiceTokenGrant>? mutate = null) : ITokenIssuer
+    internal sealed class FixedTokenIssuer(IKeyIntrospector introspector, string token, Func<ServiceTokenGrant, ServiceTokenGrant>? mutate = null) : ITokenIssuer
     {
         public async Task<TokenIssueResult> IssueAsync(SessionKey key, CancellationToken ct)
         {

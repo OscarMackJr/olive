@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Olive.Application;
+using Olive.Integrations.Popeye;
 
 namespace Olive.Tests;
 
@@ -10,6 +12,7 @@ namespace Olive.Tests;
 public sealed class Beat2DemoTests(PostgresFixture fixture)
 {
     private const string JustSentinel = "SENTINEL-BEAT2-JUSTIFICATION-7741";
+    private const string TokenSentinel = "SENTINEL-BEAT2-SERVICE-TOKEN-5203";
     private const string Rationale = "Checked the case note reference against the source record.";
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -17,7 +20,9 @@ public sealed class Beat2DemoTests(PostgresFixture fixture)
     public async Task EVD_02_fixture_traced_proposal_is_approved_executed_and_chain_queried_from_the_execution_record()
     {
         await using var db = await fixture.CreateDatabaseAsync();
-        await using var factory = new OliveApiFactory(db);
+        // T-06-29: issue a known sentinel service token so the transcript scan can prove it is absent.
+        var keys = StubKeyIntrospector.CreateDefault(TimeProvider.System);
+        await using var factory = new OliveApiFactory(db, introspector: keys, innerIssuer: new ContainmentTests.FixedTokenIssuer(keys, TokenSentinel));
         var t = new StringBuilder("# Beat 2 transcript: approved action executes in simulation and the chain is read from the execution record\n\n");
 
         // Step 1: the agent submits an in-purpose proposal.
@@ -87,7 +92,8 @@ public sealed class Beat2DemoTests(PostgresFixture fixture)
         Assert.Contains("fixture", written);
         var scan = new SentinelScan();
         scan.AddSource("transcript", written);
-        scan.AssertAbsent(ApiProposalTests.AlphaKey, JustSentinel);
+        Assert.Contains(factory.OutboundCalls, c => c.Port == nameof(ITokenIssuer));
+        scan.AssertAbsent(ApiProposalTests.AlphaKey, TokenSentinel, JustSentinel);
     }
 
     [Fact]
