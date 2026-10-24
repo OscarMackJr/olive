@@ -2,14 +2,12 @@
 phase: 06-simulated-execution-and-audit-chain
 reviewed: 2026-10-24T00:00:00Z
 depth: standard
-files_reviewed: 50
+files_reviewed: 47
 files_reviewed_list:
-  - .env.example
-  - .gitignore
   - build/demo-beat2.sh
+  - contracts/execution-record/v1/execution-record.invalid.json
   - contracts/execution-record/v1/execution-record.schema.json
   - contracts/execution-record/v1/execution-record.valid.json
-  - contracts/execution-record/v1/execution-record.invalid.json
   - sql/migrations/0009_execution_ledger.sql
   - src/Olive.Application/ExecutionReasons.cs
   - src/Olive.Application/ExecutionService.cs
@@ -54,145 +52,137 @@ files_reviewed_list:
   - tests/Olive.Tests/TenantIsolationAblationTests.cs
   - tests/Olive.Tests/TenantUnitOfWorkTests.cs
 findings:
-  critical: 1
-  warning: 5
-  info: 5
-  total: 11
+  critical: 0
+  warning: 4
+  info: 6
+  total: 10
 status: issues_found
 ---
 
-# Phase 6: Code Review Report
+# Phase 6: Code Review Report (re-review after gap closure 06-08 / 06-09)
 
 **Reviewed:** 2026-10-24
 **Depth:** standard
-**Files Reviewed:** 50
+**Files Reviewed:** 47
 **Status:** issues_found
 
 ## Narrative Findings (AI reviewer)
 
 ## Summary
 
-The exactly-once core holds up under inspection. The advisory lock sits on its own connection, the `started` row is committed before the target write, `unique (tenant_id, proposal_id, phase)` backs up the lock, and a started-only shape is resolved as `execution_in_doubt` with no second write. The `finished` row, the state compare-and-set and the `proposal_event` share one transaction. Tenant isolation on `execution_ledger` (forced RLS plus app predicate) and on `execution_chain` (`security_invoker = true`, with base-table grants present for `olive_reader`) is correct. Failure reasons are static constants, and the sweep and endpoint log lines are static.
+This is a re-review after gap-closure plans 06-08 (CR-01) and 06-09 (WR-01, WR-02). Commits reviewed: 3e9e1b2, 73298d0, eff7af6.
 
-The serious defect is ordering. ASP.NET Core starts `IHostedService` instances **before** the request pipeline is built, so `ExecutionSweep` performs real executions (JSONL append and ledger and state writes) before `StartupGuardFilter` runs any fail-closed guard. I confirmed this with a minimal .NET 10 `WebApplication`: output order was `HOSTED`, `FILTER`, `STARTED`. The remaining warnings concern failure classification, a fail-open expiry conjunction, an equal lock/command timeout race, missing operational alarms for in-doubt outcomes, and a contract that is looser than the DB shape check.
+**Status of the previous findings:**
 
-## Critical Issues
+| Prior ID | Status | Notes |
+|----------|--------|-------|
+| CR-01 sweep runs before startup guards | **Resolved** | `ExecutionSweep.StartAsync` now only registers on `ApplicationStarted`. The host raises that event after `GenericWebHostService.StartAsync` has built the pipeline, so every guard in `StartupGuardFilter.Configure` runs first. A refusing host never raises `ApplicationStarted`. Regression test `EXE_04_failing_startup_guard_prevents_sweep_execution` would fail against the old code. The fix adds a new shutdown hazard; see WR-01 below. |
+| WR-01 executor exception recorded as definite failure | **Resolved (exception path)** | Exceptions now record `execution_in_doubt` (`ExecutionService.cs:54-59`). `ExecutorFailed` is removed and no references remain. The cancellation half of the old finding remains open and is now more likely to happen; see WR-01 below. |
+| WR-02 fail-open expiry | **Resolved** | Expiry is unconditional (`ExecutionService.cs:34-38`) and falls back to `execution_failed`. |
+| WR-03 lock timeout equals command timeout | **Open** | Carried forward as WR-02. |
+| WR-04 no alarm or correlation for in-doubt | **Open, and more important** | Carried forward as WR-03. Every executor fault is now in-doubt, and none of them raises an alarm. |
+| WR-05 contract looser than DB shape | **Open** | Carried forward as WR-04. |
+| IN-01 event detail built by concatenation | Open | IN-01 |
+| IN-02 timestamp precision on replay | Open | IN-02 |
+| IN-03 example `result_ref` format | Open | IN-03 |
+| IN-04 file-share mismatch | Open | IN-04 |
+| IN-05 serial sweep blocks host start | **Resolved** | The sweep runs in the background after `ApplicationStarted`. |
 
-### CR-01: Startup execution sweep runs before every startup guard, so fail-closed startup is bypassed
-
-**File:** `src/Olive.Host/Program.cs:22,54`, `src/Olive.Host/Startup/ExecutionSweep.cs:9-54`, `src/Olive.Host/Startup/StartupGuardFilter.cs:260-274`
-**Issue:** `StartupGuardFilter` is an `IStartupFilter`. It runs only when `GenericWebHostService.StartAsync` builds the pipeline. `WebApplicationBuilder` registers `GenericWebHostService` last, so user hosted services start first. That means `ExecutionSweep.StartAsync` lists approved proposals and calls `ExecutionService.ExecuteAsync` (executor write, ledger insert, state transition) **before** any of these guards run:
-- D-19, migrator URL present
-- FND-03, vendored vocabulary hash
-- FND-05, non-production components in production
-- Q17, dev reviewer scheme in production
-- EXE-04, executor output path
-- DB-07, database role and migration safety, e.g. a superuser or owner role that bypasses forced RLS, or unapplied or checksum-mismatched migrations
-
-A host that is about to refuse start can therefore still execute approved proposals. For example, it can execute with an unsafe DB role, against a tampered migration set, or with a catalog that the guard would reject (`CatalogSet` is resolved lazily inside the sweep). The comment in `ExecutionSweep.cs:11-12` ("the startup guards keep reporting their own refusals first") assumes the opposite ordering and is wrong. No test covers "guard refuses, so no sweep execution". `ExecutionSweepTests` only exercises healthy hosts.
-Repro (verified with a minimal .NET 10 app that registers an `IStartupFilter` and an `AddHostedService`): output order was `HOSTED`, `FILTER`, `STARTED`.
-**Fix:** Make the sweep run only after the guards pass. Two options:
-```csharp
-// Option A: run the sweep after the server has started (guards have passed by then).
-public sealed class ExecutionSweep(IServiceProvider services, IHostApplicationLifetime lifetime) : IHostedService
-{
-    public Task StartAsync(CancellationToken ct)
-    {
-        lifetime.ApplicationStarted.Register(() => _ = Task.Run(() => SweepAsync(lifetime.ApplicationStopping)));
-        return Task.CompletedTask;
-    }
-    ...
-}
-```
-Option B: run the guards eagerly in `Program.cs` right after `builder.Build()` and before `app.Run()`, and keep the filter only as a backstop. Also add a test that boots a host with a failing guard (for example a missing `OLIVE_EXECUTOR_OUTPUT_PATH` alternative, or a DB-07 violation) while an approved proposal is pending. It should assert zero ledger rows and an unchanged `approved` state.
+The exactly-once core is unchanged and still holds. This review found no new Critical issues. The new defect is in how the deferred sweep handles cancellation and shutdown. It conflicts with the decide path's own rule (D-01: `CancellationToken.None` so that an interrupted attempt is never left in-doubt).
 
 ## Warnings
 
-### WR-01: Executor exception is recorded as a definite failure even when the target write may have happened
+### WR-01: Deferred sweep runs attempts on `ApplicationStopping` and `StopAsync` does not drain it, so a routine shutdown leaves approved proposals that were never written marked as in-doubt failures
 
-**File:** `src/Olive.Application/ExecutionService.cs:49-53`, `src/Olive.Executor.Simulated/SimulatedActionExecutor.cs:333-335`
-**Issue:** Any non-cancellation exception from the executor is recorded as `outcome=failed, reason=executor_failed`. `SimulatedActionExecutor` can throw after `fs.WriteAsync` succeeded, for example from `fs.Flush(flushToDisk: true)` or from the `FileStream` dispose flush. In that case the JSONL line exists while the ledger asserts a clean failure. For the real executor this seam is designed for, a timeout or transport exception is the classic "may have written" case. The core value requires the execution record to prove what happened. Recording "failed" for an ambiguous outcome makes the record contradict the target. The same applies to cancellation in the opposite direction: `OperationCanceledException` from `_gate.WaitAsync(ct)` (nothing written) leaves a started-only row that later becomes `execution_in_doubt`. That is conservative but mislabelled.
-**Fix:** Separate "definitely not attempted" from "outcome unknown". Validate and serialize before the started row (parse `ParametersJson` up front, which already happens before any I/O). Treat any exception raised after the executor has begun I/O as `execution_in_doubt`. Alternatively, let `IActionExecutor` return a typed result (`Succeeded`, `RejectedBeforeWrite`, `Unknown`) instead of relying on exceptions:
+**File:** `src/Olive.Host/Startup/ExecutionSweep.cs:19,75,85`, `src/Olive.Application/ExecutionService.cs:47-54`, `src/Olive.Executor.Simulated/SimulatedActionExecutor.cs:33,37`
+**Issue:** The sweep is started with `lifetime.ApplicationStopping` as its token (line 19). That token reaches every `ExecuteAsync` call (line 75), and `ExecutionService` passes it to the executor. Since 73298d0 the sweep runs after the server is listening, so any shutdown during the sweep cancels it. Rolling deploys, an orchestrator restart shortly after start, and SIGTERM all qualify. Trace an attempt cancelled after `RecordStartedAsync` has committed (line 47):
+1. `_gate.WaitAsync(ct)` or `fs.WriteAsync(line, ct)` throws `OperationCanceledException` before any byte is written.
+2. The catch at line 54 is filtered by `when (!ct.IsCancellationRequested)`, so the OCE propagates.
+3. A started-only row remains. On the next start, the D-08 branch (line 22-26) records `execution_in_doubt` and moves the proposal to `execution_failed`.
+
+The result is a human-approved action that ends permanently failed without ever being attempted, and a ledger that reports "may have written" when nothing was written. The decide path avoids exactly this with `CancellationToken.None` (`QueueEndpoints.cs:171-185`, comment D-01). The sweep breaks that design rule.
+
+`StopAsync` also returns `Task.CompletedTask` (line 85) without waiting for the background sweep. The host then disposes the service provider (including `NpgsqlDataSource`) while an attempt may be between the target write and `RecordFinishedAsync`. That attempt ends in-doubt even though a completed write could have been recorded as `succeeded`. Every remaining proposal in the loop also logs "Execution sweep attempt failed." at Error level on a normal shutdown, which is misleading.
+
+No test covers shutdown during a sweep.
+**Fix:** Use the stopping token only between attempts. Never cancel an attempt once it has started, and drain the sweep in `StopAsync`:
 ```csharp
-catch (Exception) when (!ct.IsCancellationRequested)
-{
-    var failed = await attempt.RecordFinishedAsync(new FinishedOutcome(false, ExecutionReasons.ExecutionInDoubt, null), ...);
-```
+private Task _sweep = Task.CompletedTask;
 
-### WR-02: Expiry check is fail-open on the lifecycle table
-
-**File:** `src/Olive.Application/ExecutionService.cs:31`
-**Issue:** `if (snap.ExpiresAt <= now && ProposalStates.CanTransition(snap.State, ProposalStates.Expired))` means that when the lifecycle table does not permit `approved -> expired`, an expired proposal falls through and **is executed**. Today the table permits it (`ProposalStates.cs:23`), so the guard is dead. However, a future edit to the lifecycle table would silently turn expired approvals into executions. Expiry must not depend on whether the state can be recorded.
-**Fix:**
-```csharp
-if (snap.ExpiresAt <= now)
+public Task StartAsync(CancellationToken _)
 {
-    var to = ProposalStates.CanTransition(snap.State, ProposalStates.Expired) ? ProposalStates.Expired : ProposalStates.ExecutionFailed;
-    return new ExecutionResult.Failed(await attempt.RecordRefusalAsync(ExecutionReasons.ProposalExpired, to, now, ct));
+    lifetime.ApplicationStarted.Register(() => _sweep = Task.Run(() => SweepAsync(lifetime.ApplicationStopping)));
+    return Task.CompletedTask;
+}
+
+// in RunAsync
+foreach (var id in ids)
+{
+    if (stopping.IsCancellationRequested) { return; }
+    try { await execution.ExecuteAsync(tenantId, id, CancellationToken.None); }   // same rule as the decide path (D-01)
+    catch (Exception) { log.LogError(...); }
+}
+
+public async Task StopAsync(CancellationToken ct)
+{
+    try { await _sweep.WaitAsync(ct); } catch (OperationCanceledException) { }
 }
 ```
+Add a test that triggers `StopApplication()` while a blocking executor double is in the sweep. Assert that the proposal ends `executed`, or stays `approved` with zero ledger rows, and never ends `execution_in_doubt`.
 
-### WR-03: Lock timeout equals Npgsql's default command timeout, so `LockTimeout` is nondeterministic and the decide request can block for 30 s
+### WR-02 (carried from prior WR-03): Lock timeout equals Npgsql's default command timeout, so `LockTimeout` is nondeterministic and decide can block for about 30 s
 
-**File:** `src/Olive.Persistence/PostgresExecutionStore.cs:14`, `src/Olive.Persistence/TenantUnitOfWork.cs:173-182`, `src/Olive.Host/Endpoints/QueueEndpoints.cs:150,185`
-**Issue:** The default `lockTimeout` is 30 s and `set local lock_timeout` uses that value. Npgsql's default `CommandTimeout` is also 30 s, and `Program.cs:33` does not override it. Whichever fires first wins. If the client-side command timeout fires, Npgsql throws `NpgsqlException` (inner `TimeoutException`), not `PostgresException 55P03`. The attempt then surfaces as an unhandled exception instead of `ExecutionResult.LockTimeout`, and the connection is broken. Separately, `DecisionAsync` awaits execution inline with `CancellationToken.None`. A reviewer's decide call can therefore hang for up to about 30 s plus executor time on lock contention (for example a reviewer retry that races the first request), and the client cannot cancel it.
-**Fix:** Keep `lock_timeout` well below the command timeout. For example, set an explicit `CommandTimeout` on the lock command (`new CommandDefinition(lockSql, parameters, tx, commandTimeout: (int)lockTimeout.TotalSeconds + 5, ...)`), or default `lockTimeout` to a few seconds for the request path. Consider a short lock timeout on the decide path and leave stragglers to the sweep.
+**File:** `src/Olive.Persistence/PostgresExecutionStore.cs:14`, `src/Olive.Persistence/TenantUnitOfWork.cs:41-43`, `src/Olive.Host/Program.cs:33`
+**Issue:** Nothing has changed here. The `lockTimeout` default is 30 s, and Npgsql's default `CommandTimeout` is also 30 s and is not overridden. If the client-side timeout fires first, the lock statement throws `NpgsqlException` with an inner `TimeoutException`, not `55P03`. The catch at `TenantUnitOfWork.cs:46` then misses it, and the attempt surfaces as an exception instead of `ExecutionResult.LockTimeout`. Since the sweep now runs while traffic is live, contention between the sweep and the decide path on the same proposal is a normal event. The decide request awaits the lock inline with no cancellation.
+**Fix:** Make `lock_timeout` clearly shorter than the command timeout, for example by passing `commandTimeout: (int)lockTimeout.TotalSeconds + 5` on the lock `CommandDefinition`. Use a short lock timeout (a few seconds) on the decide path.
 
-### WR-04: In-doubt and failed executions raise no operational alarm, and fault logs carry no correlation
+### WR-03 (carried from prior WR-04, escalated): In-doubt outcomes and decide-path lock timeouts raise no alarm and leave no correlated trace
 
-**File:** `src/Olive.Host/Endpoints/QueueEndpoints.cs:183-190`, `src/Olive.Host/Startup/ExecutionSweep.cs:36-51`
-**Issue:** `ExecutionResult.Failed` with `execution_in_doubt` is the one outcome an operator must reconcile manually against the target system. Both callers discard the result. There is no `IOperationalAlarm` call (one is already registered in `Program.cs:57`) and no log line. Thrown faults log a fixed string with no proposal or tenant identifier, so an operator cannot tell which proposal is stranded in `approved` or ended in-doubt. Proposal and tenant GUIDs are not secrets and are not bodies, so static-text logging (D-09) does not preclude them.
-**Fix:** Inspect the result. On `Failed` with reason `execution_in_doubt`, raise the operational alarm. Include `proposal_id` and `tenant_id` as structured log fields in the static messages:
-```csharp
-log.LogError("Execution sweep attempt failed. proposal_id={ProposalId} tenant_id={TenantId}", id, tenantId);
-```
+**File:** `src/Olive.Host/Endpoints/QueueEndpoints.cs:173-191`, `src/Olive.Host/Startup/ExecutionSweep.cs:71-81`, `src/Olive.Application/ExecutionService.cs:54-59`
+**Issue:** After eff7af6, every executor exception is recorded as `execution_in_doubt`. An operator must reconcile each of these against the target by hand. Both callers discard the `ExecutionResult`, so `IOperationalAlarm` (registered at `Program.cs:59`) is never raised, and nothing is logged. A `LockTimeout` on the decide path is also dropped with no log. That proposal stays `approved` until the next process restart, because the sweep runs only once and has no timer. Thrown faults log a fixed string with no `proposal_id` or `tenant_id`. These GUIDs are neither secrets nor bodies, and D-09 does not forbid them as structured fields.
+**Fix:** Inspect the result in both callers. On `Failed` with `Reason == ExecutionReasons.ExecutionInDoubt`, call `alarm.Raise(AlarmCodes.ExecutionInDoubt, "executor")`. On `LockTimeout`, log a warning. Add `proposal_id={ProposalId} tenant_id={TenantId}` as structured fields to the static messages.
 
-### WR-05: Execution-record v1 contract is looser than the ledger shape constraint
+### WR-04 (carried from prior WR-05): Execution-record v1 contract is looser than the `execution_ledger_shape` check
 
-**File:** `contracts/execution-record/v1/execution-record.schema.json:7-17`
-**Issue:** `sql/migrations/0009_execution_ledger.sql:18-21` requires the following: `succeeded` implies `result_ref` and no `reason`; `failed` implies `reason`; `outcome` implies a finished record. The schema has none of these conditionals. It accepts `{"outcome":"succeeded"}` with no `result_ref`, `{"outcome":"failed"}` with no `reason`, and `reason` with `outcome: "succeeded"`. It also accepts `outcome` without `finished_at` and vice versa. External consumers validating against the contract can accept records the database could never produce, so the published contract does not encode the audit chain's invariants. Note also that `format: "uuid"` and `format: "date-time"` are annotation-only in draft 2020-12 unless format assertion is enabled.
-**Fix:** Add conditionals mirroring the DB check, plus an invalid example per rule:
-```json
-"dependentRequired": { "outcome": ["finished_at"], "finished_at": ["outcome"] },
-"allOf": [
-  { "if": { "properties": { "outcome": { "const": "succeeded" } }, "required": ["outcome"] },
-    "then": { "required": ["result_ref"], "not": { "required": ["reason"] } } },
-  { "if": { "properties": { "outcome": { "const": "failed" } }, "required": ["outcome"] },
-    "then": { "required": ["reason"] } }
-]
-```
+**File:** `contracts/execution-record/v1/execution-record.schema.json:7-17`, `sql/migrations/0009_execution_ledger.sql:18-21`
+**Issue:** Nothing has changed here. The schema accepts `{"outcome":"succeeded"}` with no `result_ref`, `outcome: "failed"` with no `reason`, a `reason` alongside `succeeded`, and `outcome` without `finished_at`. The database cannot produce any of these shapes. `execution-record.invalid.json` tests only `execution_mode` and `additionalProperties`.
+**Fix:** Add `dependentRequired` for `outcome` and `finished_at`. Add `allOf`/`if-then` rules for `succeeded` (requires `result_ref`, forbids `reason`) and for `failed` (requires `reason`). Add one invalid example per rule.
 
 ## Info
 
 ### IN-01: Transition event detail JSON built by string concatenation
 
 **File:** `src/Olive.Persistence/PostgresExecutionStore.cs:128`
-**Issue:** `"{\"reason\":\"" + reason + "\",...}"` is safe today only because every `reason` is a constant from `ExecutionReasons` or `"executed"`. A future non-constant reason would produce malformed JSON or allow injection into the event detail.
-**Fix:** Serialize with `JsonSerializer.Serialize(new { reason, execution_mode = "simulated" })`.
+**Issue:** This is unchanged. It is safe only while every `reason` is a constant.
+**Fix:** `JsonSerializer.Serialize(new { reason, execution_mode = "simulated" })`.
 
-### IN-02: Ledger row timestamps differ between first execution and replay
+### IN-02: Returned `LedgerRow.RecordedAt` has 100 ns precision; replayed rows have microsecond precision
 
 **File:** `src/Olive.Persistence/PostgresExecutionStore.cs:101`
-**Issue:** `InsertLedger` returns `now` at 100 ns precision, while `LoadAsync` returns the DB value truncated to microseconds. As a result, `Executed.Row.RecordedAt != Replayed.Row.RecordedAt` for the same row. It is not surfaced over HTTP today, but any future API returning the row would be non-idempotent.
-**Fix:** Truncate `now` to microseconds before insert and return the truncated value, or use `insert ... returning recorded_at`.
+**Fix:** Truncate `now` to microseconds before the insert, or use `returning recorded_at`.
 
-### IN-03: Valid example `result_ref` does not match the real format
+### IN-03: Valid example `result_ref` does not match the emitted format
 
 **File:** `contracts/execution-record/v1/execution-record.valid.json:1`
-**Issue:** The example uses `"simulated://1"`, but the executor emits `"simulated:<uuid>"` (`SimulatedActionExecutor.cs:342`).
-**Fix:** Use `"simulated:22222222-2222-2222-2222-222222222222"`.
+**Issue:** The example uses `"simulated://1"`, but the executor emits `"simulated:<uuid>"` (`SimulatedActionExecutor.cs:45`).
 
-### IN-04: Inconsistent file sharing between the startup probe and the executor
+### IN-04: Startup probe and executor open the output file with different share modes
 
-**File:** `src/Olive.Executor.Simulated/SimulatedActionExecutor.cs:333`, `src/Olive.Host/Startup/StartupGuards.cs:172`
-**Issue:** The guard probes with `FileShare.ReadWrite`, while the executor opens with `FileShare.Read`. A second process appending to the same path, such as a second host instance or a log shipper opening for write, makes every execution throw `IOException`, and each one is recorded as `executor_failed` (see WR-01). The probe does not detect this.
-**Fix:** Use the same share mode in both places, and document a single-writer requirement for the output path.
+**File:** `src/Olive.Host/Startup/StartupGuards.cs:115`, `src/Olive.Executor.Simulated/SimulatedActionExecutor.cs:36`
+**Issue:** The probe uses `FileShare.ReadWrite` and the executor uses `FileShare.Read`. A second writer therefore makes every execution throw. Since eff7af6, each of those failures is recorded as `execution_in_doubt` even though nothing was written.
+**Fix:** Use one share mode in both places, and document that the output path must have a single writer.
 
-### IN-05: Startup sweep is serial and blocks host start
+### IN-05: `ExecutionService` exposes a lifecycle-override seam on its public, DI-activated constructor
 
-**File:** `src/Olive.Host/Startup/ExecutionSweep.cs:29-53`
-**Issue:** Each attempt can wait up to the 30 s lock timeout, and `StartAsync` blocks host start until every tenant and proposal is processed. With many approved proposals, or a peer instance holding locks, startup time grows without bound. This compounds CR-01, because the sweep runs before the server listens.
-**Fix:** Once CR-01 is fixed, run the sweep in the background after `ApplicationStarted`, with a short per-attempt lock timeout.
+**File:** `src/Olive.Application/ExecutionService.cs:6-8`
+**Issue:** `Func<string, string, bool>? canTransition` exists only for the WR-02 unit test. Because `ExecutionService` is DI-activated (`Program.cs:52`), any future `Func<string,string,bool>` registration in the container would be injected silently. It would then override the lifecycle table for the expiry decision. Meanwhile `PostgresExecutionStore.Transition` (line 107) still consults `ProposalStates.CanTransition` directly, so there are two sources of truth that can disagree. The failure mode is fail-closed, because the store throws and the transaction rolls back, but the seam is a hazard.
+**Fix:** Make the seam an `internal` constructor with `InternalsVisibleTo` for the test project. Alternatively, inject a named `ILifecycleTable` abstraction that the store also uses.
+
+### IN-06: `ExecutionSweep.Completion` signals "done" on shutdown while the sweep may still be running, and `OliveApiFactory.CreateHost` leaks the host when the wait times out
+
+**File:** `src/Olive.Host/Startup/ExecutionSweep.cs:15,20`, `tests/Olive.Tests/OliveApiFactory.cs:125-134`
+**Issue:** The `ApplicationStopping.Register(() => _completion.TrySetResult())` call completes `Completion` while an attempt may still be in flight, which contradicts the comment on line 14. In the factory, `Completion.WaitAsync(TimeSpan.FromSeconds(60))` throws `TimeoutException` after `base.CreateHost` has already started the host. `WebApplicationFactory` never receives that host, so it is never stopped or disposed. The started host and its sweep keep running against the test database and can affect later assertions.
+**Fix:** Complete `Completion` only from `SweepAsync`'s `finally`, or from a "never started" path when host start fails. In `CreateHost`, wrap the wait in a try/catch that calls `host.StopAsync()` and `host.Dispose()` before rethrowing.
 
 ---
 
