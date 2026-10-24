@@ -38,6 +38,29 @@ public sealed class ExecutionEndpointTests(PostgresFixture fixture)
         return doc.RootElement.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
     }
 
+    // WR-03: a decide-path lock timeout is no longer dropped silently; it logs a warning with correlating identifiers.
+    [Fact]
+    public async Task EXE_02_decide_path_lock_timeout_logs_warning_with_proposal_and_tenant()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, configureServices: s => s.AddSingleton<IExecutionStore>(sp =>
+            new Olive.Persistence.PostgresExecutionStore(sp.GetRequiredService<Olive.Persistence.TenantUnitOfWork>(), TimeSpan.FromSeconds(1))));
+        var (item, proposal) = await SubmitClaimed(factory, db, "e1lt");
+
+        var uow = factory.Services.GetRequiredService<Olive.Persistence.TenantUnitOfWork>();
+        await using (var held = await uow.AcquireAdvisoryLockAsync(DecisionHttp.Alpha, Olive.Persistence.ExecutionSql.LockExecution,
+            new { tenant_id = DecisionHttp.Alpha, proposal_id = proposal }, TimeSpan.FromSeconds(5), Ct))
+        {
+            Assert.NotNull(held);
+            Assert.Equal(HttpStatusCode.OK, (await DecisionHttp.Decide(factory, "alpha-sup-1", item, "approve")).StatusCode);
+        }
+
+        Assert.Equal("approved", await DecisionHttp.ProposalState(db, proposal));
+        Assert.Equal(0L, await LedgerCount(db, proposal));
+        Assert.Contains("lock wait timed out", factory.Logs.Text);
+        Assert.Contains(proposal.ToString(), factory.Logs.Text);
+    }
+
     [Fact]
     public async Task EXE_01_approve_executes_after_commit_and_state_becomes_executed()
     {

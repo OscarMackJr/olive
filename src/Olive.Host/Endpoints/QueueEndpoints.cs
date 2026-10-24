@@ -180,13 +180,19 @@ public static class QueueEndpoints
         };
         if (item is null || item.Decision != "approve" || item.ProposalId is not { } proposalId) { return; }
 
+        // WR-03: identifiers are logged as structured fields (they are neither secrets nor bodies); exception text never is.
+        var log = loggerFactory.CreateLogger("Olive.Host.Execution");
         try
         {
-            await execution.ExecuteAsync(item.TenantId, proposalId, CancellationToken.None);
+            var outcome = await execution.ExecuteAsync(item.TenantId, proposalId, CancellationToken.None);
+            if (outcome is ExecutionResult.LockTimeout)
+            {
+                log.LogWarning("Simulated execution lock wait timed out after approval. proposal_id={ProposalId} tenant_id={TenantId}", proposalId, item.TenantId);
+            }
         }
         catch (Exception)
         {
-            loggerFactory.CreateLogger("Olive.Host.Execution").LogError("Simulated execution failed after approval.");
+            log.LogError("Simulated execution failed after approval. proposal_id={ProposalId} tenant_id={TenantId}", proposalId, item.TenantId);
         }
     }
 

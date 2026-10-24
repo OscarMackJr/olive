@@ -17,4 +17,6 @@ public static class AlarmCodes
     public const string DirectoryResolver401 = "directory_resolver_401";
     public const string DirectoryResolver403 = "directory_resolver_403";
     public const string DirectoryResponseMalformed = "directory_response_malformed";
+    // WR-03: an execution outcome is unknown and must be reconciled against the target by an operator.
+    public const string ExecutionInDoubt = "execution_in_doubt";
 }

@@ -160,6 +160,7 @@ public sealed class ExecutionFailureTests(PostgresFixture fixture)
 
         var failed = Assert.IsType<ExecutionResult.Failed>(second);
         Assert.Equal("execution_in_doubt", failed.Row.Reason);
+        Assert.Contains(AlarmCodes.ExecutionInDoubt, rig.Factory.Alarms.Codes);
         Assert.Equal("execution_failed", await DecisionHttp.ProposalState(db, proposal));
         Assert.Equal(1L, await Count(db, "phase = 'finished' and outcome = 'failed' and reason = 'execution_in_doubt'", proposal));
         Assert.Single(Lines(rig.Factory));
@@ -186,6 +187,7 @@ public sealed class ExecutionFailureTests(PostgresFixture fixture)
         Assert.Equal(1L, await Count(db, "phase = 'finished' and outcome = 'failed' and reason = 'execution_in_doubt'", proposal));
         Assert.Equal(1L, await Events(db, proposal, "execution_failed"));
         Assert.Empty(Lines(rig.Factory));
+        Assert.Equal([AlarmCodes.ExecutionInDoubt], rig.Factory.Alarms.Codes);
         await AssertNoSentinelAsync(rig, db, proposal, ThrowingExecutor.Sentinel);
 
         var again = await rig.Factory.Services.GetRequiredService<ExecutionService>().ExecuteAsync(DecisionHttp.Alpha, proposal, Ct);

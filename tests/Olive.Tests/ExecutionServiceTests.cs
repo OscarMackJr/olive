@@ -21,8 +21,9 @@ public sealed class ExecutionServiceTests
         public bool Disposed { get; set; }
         public string? FinishedReason { get; set; }
         public string? ToState { get; set; }
+        public RecordingAlarm Alarm { get; } = new();
 
-        public ExecutionService Service(Func<string, string, bool>? canTransition = null) => new(new Store(this), new Executor(this), new Check(this), new ManualTimeProvider(Now), canTransition);
+        public ExecutionService Service(Func<string, string, bool>? canTransition = null) => new(new Store(this), new Executor(this), new Check(this), new ManualTimeProvider(Now), Alarm, canTransition);
 
         public static ExecutionSnapshot Approved(DateTimeOffset? expires = null, LedgerRow? started = null, LedgerRow? finished = null) =>
             new(ProposalStates.Approved, "crm.case_note@1", "{\"case_ref\":\"c\",\"note_ref\":\"n\"}", expires ?? Now.AddHours(1), started, finished);
@@ -99,6 +100,7 @@ public sealed class ExecutionServiceTests
         var executed = Assert.IsType<ExecutionResult.Executed>(result);
         Assert.Equal(["started", "executor", "finished:succeeded"], rig.Calls);
         Assert.Equal(ProposalStates.Executed, rig.ToState);
+        Assert.Empty(rig.Alarm.Codes);
         Assert.Equal("simulated:" + Proposal, executed.Row.ResultRef);
         Assert.True(rig.Disposed);
     }
@@ -194,6 +196,35 @@ public sealed class ExecutionServiceTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => rig.Service().ExecuteAsync(Tenant, Proposal, Ct));
         Assert.Equal(["started", "executor"], rig.Calls);
         Assert.True(rig.Disposed);
+    }
+
+    [Fact]
+    public async Task EXE_05_started_without_finished_raises_execution_in_doubt_alarm()
+    {
+        var rig = new Rig { Snapshot = Rig.Approved(started: Rig.Row("started")) };
+        await rig.Service().ExecuteAsync(Tenant, Proposal, Ct);
+
+        Assert.Equal([AlarmCodes.ExecutionInDoubt], rig.Alarm.Codes);
+    }
+
+    [Fact]
+    public async Task EXE_05_executor_exception_raises_execution_in_doubt_alarm()
+    {
+        var rig = new Rig { Snapshot = Rig.Approved(), ExecutorThrows = true };
+        await rig.Service().ExecuteAsync(Tenant, Proposal, Ct);
+
+        Assert.Equal([AlarmCodes.ExecutionInDoubt], rig.Alarm.Codes);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task EXE_03_definite_refusals_raise_no_alarm(bool expired, bool executable)
+    {
+        var rig = new Rig { Snapshot = Rig.Approved(expires: expired ? Now : null), Executable = executable };
+        await rig.Service().ExecuteAsync(Tenant, Proposal, Ct);
+
+        Assert.Empty(rig.Alarm.Codes);
     }
 
     [Fact]

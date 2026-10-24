@@ -76,7 +76,7 @@ public sealed class ExecutionSweep(IServiceProvider services, IHostApplicationLi
             }
             catch (Exception)
             {
-                log.LogError("Execution sweep could not list approved proposals.");
+                log.LogError("Execution sweep could not list approved proposals. tenant_id={TenantId}", tenantId);
                 continue;
             }
 
@@ -86,11 +86,15 @@ public sealed class ExecutionSweep(IServiceProvider services, IHostApplicationLi
                 if (stopping.IsCancellationRequested) { return; }
                 try
                 {
-                    await execution.ExecuteAsync(tenantId, id, CancellationToken.None);
+                    var outcome = await execution.ExecuteAsync(tenantId, id, CancellationToken.None);
+                    if (outcome is ExecutionResult.LockTimeout)
+                    {
+                        log.LogWarning("Execution sweep lock wait timed out. proposal_id={ProposalId} tenant_id={TenantId}", id, tenantId);
+                    }
                 }
                 catch (Exception)
                 {
-                    log.LogError("Execution sweep attempt failed.");
+                    log.LogError("Execution sweep attempt failed. proposal_id={ProposalId} tenant_id={TenantId}", id, tenantId);
                 }
             }
         }

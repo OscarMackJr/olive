@@ -79,7 +79,7 @@ public sealed class ExecutionConcurrencyTests(PostgresFixture fixture)
 
         var uow = factory.Services.GetRequiredService<TenantUnitOfWork>();
         var impatient = new ExecutionService(new PostgresExecutionStore(uow, TimeSpan.FromSeconds(1)), gate,
-            factory.Services.GetRequiredService<IActionCatalogCheck>(), TimeProvider.System);
+            factory.Services.GetRequiredService<IActionCatalogCheck>(), TimeProvider.System, factory.Alarms);
         var second = await impatient.ExecuteAsync(DecisionHttp.Alpha, proposal, Ct);
         Assert.IsType<ExecutionResult.LockTimeout>(second);
 

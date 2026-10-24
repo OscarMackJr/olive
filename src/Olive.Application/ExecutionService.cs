@@ -3,8 +3,12 @@ using Olive.Domain;
 namespace Olive.Application;
 
 // Execution orchestrator (D-02, D-05..D-12). Business outcomes are returned, never thrown. Exception text is never read (D-09).
-public sealed class ExecutionService(IExecutionStore store, IActionExecutor executor, IActionCatalogCheck catalogCheck, TimeProvider time, Func<string, string, bool>? canTransition = null)
+// WR-03: every execution_in_doubt outcome raises an operational alarm (code and component only, D-07), because each one needs
+// manual reconciliation against the target.
+public sealed class ExecutionService(IExecutionStore store, IActionExecutor executor, IActionCatalogCheck catalogCheck, TimeProvider time, IOperationalAlarm alarm, Func<string, string, bool>? canTransition = null)
 {
+    private const string Component = "executor";
+
     private readonly Func<string, string, bool> _canTransition = canTransition ?? ProposalStates.CanTransition;
 
     public async Task<ExecutionResult> ExecuteAsync(Guid tenantId, Guid proposalId, CancellationToken ct)
@@ -22,6 +26,7 @@ public sealed class ExecutionService(IExecutionStore store, IActionExecutor exec
         if (snap.Started is not null)
         {
             var row = await attempt.RecordFinishedAsync(new FinishedOutcome(false, ExecutionReasons.ExecutionInDoubt, null), ProposalStates.ExecutionFailed, time.GetUtcNow(), ct);
+            alarm.Raise(AlarmCodes.ExecutionInDoubt, Component);
             return new ExecutionResult.Failed(row);
         }
 
@@ -55,6 +60,7 @@ public sealed class ExecutionService(IExecutionStore store, IActionExecutor exec
         {
             // WR-01: the started row is committed, so the target write may have happened. Outcome unknown, not a definite failure.
             var failed = await attempt.RecordFinishedAsync(new FinishedOutcome(false, ExecutionReasons.ExecutionInDoubt, null), ProposalStates.ExecutionFailed, time.GetUtcNow(), ct);
+            alarm.Raise(AlarmCodes.ExecutionInDoubt, Component);
             return new ExecutionResult.Failed(failed);
         }
 
