@@ -1,0 +1,153 @@
+@page "/review/items/{id:guid}"
+@model Olive.Host.Pages.Review.ItemModel
+@{
+    ViewData["Title"] = "Review item";
+}
+@if (Model.ForbiddenReason is not null)
+{
+    <partial name="_Forbidden" model="new ForbiddenViewModel(Model.ForbiddenReason, Model.ForbiddenItemId)" />
+    return;
+}
+@if (Model.ItemNotFound)
+{
+    ViewData["Title"] = "Item not found";
+    <section class="panel">
+        <h1>Item not found</h1>
+        <p>This item does not exist or is not in your tenant.</p>
+        <div class="actions"><a href="/review">Back to queue</a></div>
+    </section>
+    return;
+}
+@{
+    var item = Model.Item!;
+}
+<h1>Review item</h1>
+<p class="muted mono">@item.ItemId</p>
+@if (Model.Flash is { } flash)
+{
+    <div class="flash @(flash.IsError ? "flash-error" : "flash-success")" role="@(flash.IsError ? "alert" : "status")">@flash.Text</div>
+}
+@if (Model.FixtureTrace)
+{
+    <div class="banner">Fixture trace: this proposal's trace was verified against a test fixture, not a live hometown answer.</div>
+}
+
+<section>
+    <h2>Item</h2>
+    <dl>
+        <dt>Kind</dt><dd>@item.Kind</dd>
+        <dt>Subtype</dt><dd>@item.Subtype</dd>
+        <dt>State</dt><dd><span class="badge">@item.State</span></dd>
+        <dt>Subject ref</dt><dd class="mono">@item.SubjectRef</dd>
+        <dt>Payload ref</dt><dd class="mono">@item.PayloadRef</dd>
+        <dt>Claimed by</dt><dd class="mono">@(item.ClaimedBy ?? "Not claimed")</dd>
+        <dt>Created</dt><dd>@TimeText.Utc(item.CreatedAt)</dd>
+        <dt>Expires</dt>
+        <dd>@(item.ExpiresAt is { } expiresAt ? TimeText.Utc(expiresAt) + " (" + TimeText.Remaining(expiresAt, Model.Now) + ")" : "No expiry")</dd>
+    </dl>
+</section>
+
+<section>
+    <h2>Payload</h2>
+    @if (Model.Payload is { } payload)
+    {
+        <dl>
+            <dt>Action type</dt><dd>@payload.ActionType</dd>
+            <dt>On behalf of</dt><dd class="mono">@payload.OnBehalfOf</dd>
+            <dt>Expires</dt>
+            <dd>@(payload.ExpiresAt is { } payloadExpiry ? TimeText.Utc(payloadExpiry) + " (" + TimeText.Remaining(payloadExpiry, Model.Now) + ")" : "No expiry")</dd>
+            <dt>Trace ref</dt><dd class="mono">@payload.TraceRef</dd>
+            <dt>Justification</dt><dd>@payload.Justification</dd>
+        </dl>
+        @if (Model.Parameters.Count == 0)
+        {
+            <p class="muted">No parameters.</p>
+        }
+        else
+        {
+            <table>
+                <caption>Parameters</caption>
+                <thead>
+                    <tr><th scope="col">Name</th><th scope="col">Value</th></tr>
+                </thead>
+                <tbody>
+                @foreach (var row in Model.Parameters)
+                {
+                    <tr>
+                        <td class="mono">@row.Name</td>
+                        <td class="@(row.Nested ? "mono" : "")">@row.Value</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    }
+    else if (Model.PayloadHidden)
+    {
+        <p>You do not hold the role required to view this item's payload. You can see its references only.</p>
+    }
+</section>
+
+<section>
+    <h2>Claim</h2>
+    @if (Model.Expired)
+    {
+        <p>This proposal has expired and can no longer be decided.</p>
+    }
+    else if (item.State == "open")
+    {
+        <form method="post" asp-page-handler="Claim" asp-route-id="@item.ItemId">
+            <button type="submit" class="button button-primary">Claim item</button>
+        </form>
+    }
+    else if (item.State == "claimed" && Model.IsClaimant)
+    {
+        <p>You have claimed this item.</p>
+        <form method="post" asp-page-handler="Release" asp-route-id="@item.ItemId">
+            <button type="submit" class="button button-secondary">Release item</button>
+        </form>
+    }
+    else if (item.State == "claimed")
+    {
+        <p>Claimed by another reviewer.</p>
+    }
+    else if (item.State == "decided")
+    {
+        <p>This item has been decided. See the audit history for the record.</p>
+    }
+    else if (item.State == "withdrawn")
+    {
+        <p>This item was withdrawn by its producer.</p>
+    }
+</section>
+
+@if (Model.IsClaimant && !Model.Expired)
+{
+    <section>
+        <h2>Decision</h2>
+        @if (Model.DecisionsSupported)
+        {
+            <form method="post" asp-page-handler="Decide" asp-route-id="@item.ItemId">
+                <fieldset>
+                    <legend>Decision</legend>
+                    <label><input type="radio" name="decision" value="approve" required> Approve</label>
+                    <label><input type="radio" name="decision" value="reject" required> Reject</label>
+                </fieldset>
+                <label for="rationale" class="field-label">Rationale (required)</label>
+                <textarea id="rationale" name="rationale" required maxlength="4000" aria-describedby="rationale-hint"></textarea>
+                <p id="rationale-hint" class="muted">Explain why you approve or reject. Do not paste record values, personal data or parameter values. Up to 4000 characters.</p>
+                <p class="muted">Decisions are final. Approving runs the simulated executor immediately; no real system is changed.</p>
+                <button type="submit" class="button button-primary">Submit decision</button>
+            </form>
+        }
+        else
+        {
+            <p>Decisions for this item kind are not available in this release.</p>
+        }
+    </section>
+}
+
+<div class="actions">
+    <a href="/review/items/@item.ItemId/audit">View audit history</a>
+    <a href="/review">Back to queue</a>
+</div>

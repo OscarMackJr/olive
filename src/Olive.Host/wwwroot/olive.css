@@ -41,3 +41,7 @@ dd { margin: 0; }
 .panel-forbidden { border-top: 4px solid var(--destructive); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-md); margin-top: var(--space-md); }
 @media (max-width: 640px) { dl { grid-template-columns: 1fr; } }
+
+textarea { display: block; width: 100%; min-height: 160px; font: inherit; padding: var(--space-sm); box-sizing: border-box; }
+fieldset { border: 1px solid var(--muted); margin: 0 0 var(--space-md); padding: var(--space-md); }
+.field-label { display: block; margin-top: var(--space-md); font-weight: 600; }
