@@ -48,6 +48,9 @@ public static class ProblemResults
         ProblemReasons.ApprovalIdentityUnresolved => "The requester identity could not be resolved.",
         ProblemReasons.IdentityResolutionUnavailable => "Identity resolution is unavailable.",
         ProblemReasons.KindNotSupported => "This queue item kind does not support decisions yet.",
+        ProblemReasons.RoleNotHeld => "The reviewer no longer holds the required role.",
+        ProblemReasons.GroupsOverage => "The sign-in token did not include the reviewer groups.",
+        ProblemReasons.NoReviewerTenant => "The reviewer account is not mapped to exactly one tenant.",
         _ => "An internal error occurred.",
     };
 

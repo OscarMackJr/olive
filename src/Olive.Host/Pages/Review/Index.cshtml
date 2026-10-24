@@ -1,0 +1,56 @@
+@page "/review"
+@model Olive.Host.Pages.Review.IndexModel
+@{
+    ViewData["Title"] = "Review queue";
+}
+@if (Model.ForbiddenReason is not null)
+{
+    <partial name="_Forbidden" model="new ForbiddenViewModel(Model.ForbiddenReason, Model.ForbiddenItemId)" />
+    return;
+}
+<h1>Review queue</h1>
+<p class="muted">Open items for tenant <span class="mono">@Model.Reviewer!.TenantId</span>. Oldest first.</p>
+@if (Model.Items.Count == 0)
+{
+    <section class="panel">
+        <h2>No open items</h2>
+        <p>There is nothing to review in your tenant right now. New items appear here when they pass policy checks. Reload this page to check again.</p>
+    </section>
+}
+else
+{
+    <table>
+        <caption class="visually-hidden">Open review items</caption>
+        <thead>
+            <tr>
+                <th scope="col">Created</th>
+                <th scope="col">Age</th>
+                <th scope="col">Kind</th>
+                <th scope="col">Subtype</th>
+                <th scope="col">Subject</th>
+                <th scope="col">State</th>
+                <th scope="col">Expires</th>
+                <th scope="col">Item</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in Model.Items)
+        {
+            <tr>
+                <td>@Display.Timestamp(item.CreatedAt)</td>
+                <td>@Display.Age(item.AgeSeconds)</td>
+                <td>@item.Kind</td>
+                <td>@item.Subtype</td>
+                <td class="mono">@item.SubjectRef</td>
+                <td><span class="badge">@item.State</span></td>
+                <td>@Display.Remaining(item.ExpiresAt, Model.Now)</td>
+                <td><a href="/review/items/@item.ItemId" aria-label="Open item @item.ItemId">Open</a></td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    @if (Model.LimitReached)
+    {
+        <p class="muted">Showing the oldest @Model.Items.Count items.</p>
+    }
+}

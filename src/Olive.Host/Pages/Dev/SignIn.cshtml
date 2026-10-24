@@ -1,0 +1,30 @@
+@page "/dev/sign-in"
+@model Olive.Host.Pages.Dev.SignInModel
+@{
+    ViewData["Title"] = "Development sign-in";
+}
+<h1>Development sign-in</h1>
+<div class="banner">Development sign-in: you are using a fixture identity. This environment is not production.</div>
+<p class="muted">Choose a fixture reviewer. This page does not exist in production.</p>
+<table>
+    <caption class="visually-hidden">Fixture reviewers</caption>
+    <thead>
+        <tr><th scope="col">Reviewer</th><th scope="col">Groups</th><th scope="col">Action</th></tr>
+    </thead>
+    <tbody>
+    @foreach (var reviewer in Model.Reviewers)
+    {
+        <tr>
+            <td class="mono">@reviewer.ReviewerId</td>
+            <td class="mono">@string.Join(", ", reviewer.Groups)</td>
+            <td>
+                <form method="post">
+                    <input type="hidden" name="reviewerId" value="@reviewer.ReviewerId">
+                    <input type="hidden" name="returnUrl" value="@Model.ReturnUrl">
+                    <button type="submit" class="button button-primary">Sign in as @reviewer.ReviewerId</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>

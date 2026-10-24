@@ -1,0 +1,12 @@
+@page "/signed-out"
+@model Olive.Host.Pages.Account.SignedOutModel
+@{
+    ViewData["Title"] = "Signed out";
+}
+<section class="panel">
+    <h1>You are signed out</h1>
+    <p>Your review session has ended.</p>
+    <div class="actions">
+        <a class="button button-primary" href="@ReviewerCookie.LoginPath">Sign in again</a>
+    </div>
+</section>

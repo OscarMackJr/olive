@@ -31,5 +31,8 @@ public static class ProblemReasons
     public const string ApprovalIdentityUnresolved = "approval_identity_unresolved";
     public const string IdentityResolutionUnavailable = "identity_resolution_unavailable";
     public const string KindNotSupported = "kind_not_supported";
+    public const string RoleNotHeld = "role_not_held";
+    public const string GroupsOverage = "groups_overage";
+    public const string NoReviewerTenant = "no_reviewer_tenant";
     public const string InternalError = "internal_error";
 }

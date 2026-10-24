@@ -155,6 +155,38 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
         client.DefaultRequestHeaders.Add(Olive.Host.Auth.DevReviewerAuthenticationHandler.HeaderName, reviewerId);
         return client;
     }
+
+    // Phase 7 pages: https base address (Secure __Host- cookies), cookie handling on, redirects left visible to the test.
+    public HttpClient CreateUiClient() => CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
+    {
+        BaseAddress = new Uri("https://localhost"),
+        AllowAutoRedirect = false,
+        HandleCookies = true,
+    });
+
+    public static async Task<string> ScrapeAntiforgeryTokenAsync(HttpClient client, string path)
+    {
+        var html = await client.GetStringAsync(path, TestContext.Current.CancellationToken);
+        var match = System.Text.RegularExpressions.Regex.Match(html, "name=\"__RequestVerificationToken\"[^>]*value=\"([^\"]+)\"");
+        Assert.True(match.Success, "no antiforgery token on " + path);
+        return System.Net.WebUtility.HtmlDecode(match.Groups[1].Value);
+    }
+
+    // Signs a fixture reviewer in through the real picker and asserts the redirect to /review.
+    public async Task<HttpClient> SignInDevAsync(string reviewerId)
+    {
+        var client = CreateUiClient();
+        var token = await ScrapeAntiforgeryTokenAsync(client, "/dev/sign-in");
+        var response = await client.PostAsync("/dev/sign-in", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["reviewerId"] = reviewerId,
+            ["returnUrl"] = "",
+            ["__RequestVerificationToken"] = token,
+        }), TestContext.Current.CancellationToken);
+        Assert.Equal(System.Net.HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/review", response.Headers.Location?.OriginalString);
+        return client;
+    }
 }
 
 // Test-only (never in src): GET /v1/queue/_probe enforces the same policy the real reviewer routes will use (DevReviewer scheme,

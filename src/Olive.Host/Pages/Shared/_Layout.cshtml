@@ -1,0 +1,38 @@
+@{
+    var authSource = User.FindFirst(ReviewerClaims.AuthSource)?.Value;
+    var signedIn = User.Identity?.IsAuthenticated == true && authSource is not null;
+    var sourceLabel = authSource == "entra" ? "Microsoft Entra ID" : "Development fixture";
+    var title = ViewData["Title"] as string ?? "Review";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>@title · Olive review queue</title>
+    <link rel="stylesheet" href="/olive.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="site-header">
+    <a class="brand" href="/review">Olive review queue</a>
+    @if (signedIn)
+    {
+        <div class="session">
+            <span>Signed in · @sourceLabel</span>
+            <span class="mono">@User.FindFirst(ReviewerClaims.Oid)?.Value</span>
+            <form method="post" asp-page="/Account/SignOut">
+                <button type="submit" class="button button-secondary">Sign out</button>
+            </form>
+        </div>
+    }
+</header>
+@if (signedIn && authSource == "stub")
+{
+    <div class="banner">Development sign-in: you are using a fixture identity. This environment is not production.</div>
+}
+<main id="main">
+    @RenderBody()
+</main>
+</body>
+</html>
