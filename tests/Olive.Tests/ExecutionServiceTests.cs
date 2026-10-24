@@ -22,7 +22,7 @@ public sealed class ExecutionServiceTests
         public string? FinishedReason { get; set; }
         public string? ToState { get; set; }
 
-        public ExecutionService Service() => new(new Store(this), new Executor(this), new Check(this), new ManualTimeProvider(Now));
+        public ExecutionService Service(Func<string, string, bool>? canTransition = null) => new(new Store(this), new Executor(this), new Check(this), new ManualTimeProvider(Now), canTransition);
 
         public static ExecutionSnapshot Approved(DateTimeOffset? expires = null, LedgerRow? started = null, LedgerRow? finished = null) =>
             new(ProposalStates.Approved, "crm.case_note@1", "{\"case_ref\":\"c\",\"note_ref\":\"n\"}", expires ?? Now.AddHours(1), started, finished);
@@ -141,6 +141,18 @@ public sealed class ExecutionServiceTests
     }
 
     [Fact]
+    public async Task EXE_03_expiry_falls_back_to_execution_failed_when_expired_transition_disallowed()
+    {
+        var rig = new Rig { Snapshot = Rig.Approved(expires: Now.AddSeconds(-1)) };
+        var result = await rig.Service((_, _) => false).ExecuteAsync(Tenant, Proposal, Ct);
+
+        var failed = Assert.IsType<ExecutionResult.Failed>(result);
+        Assert.Equal(ExecutionReasons.ProposalExpired, failed.Row.Reason);
+        Assert.Equal(ProposalStates.ExecutionFailed, rig.ToState);
+        Assert.DoesNotContain("executor", rig.Calls);
+    }
+
+    [Fact]
     public async Task EXE_03_catalog_invalid_is_refused_and_never_calls_executor()
     {
         var rig = new Rig { Snapshot = Rig.Approved(), Executable = false };
@@ -162,14 +174,14 @@ public sealed class ExecutionServiceTests
     }
 
     [Fact]
-    public async Task EXE_05_executor_exception_becomes_executor_failed_without_storing_exception_text()
+    public async Task EXE_05_executor_exception_becomes_execution_in_doubt_without_storing_exception_text()
     {
         var rig = new Rig { Snapshot = Rig.Approved(), ExecutorThrows = true };
         var result = await rig.Service().ExecuteAsync(Tenant, Proposal, Ct);
 
         var failed = Assert.IsType<ExecutionResult.Failed>(result);
         Assert.Equal(["started", "executor", "finished:failed"], rig.Calls);
-        Assert.Equal(ExecutionReasons.ExecutorFailed, failed.Row.Reason);
+        Assert.Equal(ExecutionReasons.ExecutionInDoubt, failed.Row.Reason);
         Assert.DoesNotContain("SECRET", failed.Row.Reason);
         Assert.Equal(ProposalStates.ExecutionFailed, rig.ToState);
     }
@@ -220,7 +232,7 @@ public sealed class ExecutionServiceTests
     [Fact]
     public void EXE_05_reasons_are_static_snake_case_constants()
     {
-        foreach (var r in new[] { ExecutionReasons.CatalogInvalid, ExecutionReasons.ProposalExpired, ExecutionReasons.ExecutionInDoubt, ExecutionReasons.ExecutorFailed })
+        foreach (var r in new[] { ExecutionReasons.CatalogInvalid, ExecutionReasons.ProposalExpired, ExecutionReasons.ExecutionInDoubt })
         {
             Assert.Matches("^[a-z][a-z_]{0,63}$", r);
         }

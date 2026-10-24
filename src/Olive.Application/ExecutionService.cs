@@ -3,8 +3,10 @@ using Olive.Domain;
 namespace Olive.Application;
 
 // Execution orchestrator (D-02, D-05..D-12). Business outcomes are returned, never thrown. Exception text is never read (D-09).
-public sealed class ExecutionService(IExecutionStore store, IActionExecutor executor, IActionCatalogCheck catalogCheck, TimeProvider time)
+public sealed class ExecutionService(IExecutionStore store, IActionExecutor executor, IActionCatalogCheck catalogCheck, TimeProvider time, Func<string, string, bool>? canTransition = null)
 {
+    private readonly Func<string, string, bool> _canTransition = canTransition ?? ProposalStates.CanTransition;
+
     public async Task<ExecutionResult> ExecuteAsync(Guid tenantId, Guid proposalId, CancellationToken ct)
     {
         await using var attempt = await store.BeginAttemptAsync(tenantId, proposalId, ct);
@@ -28,9 +30,11 @@ public sealed class ExecutionService(IExecutionStore store, IActionExecutor exec
         var now = time.GetUtcNow();
 
         // Expiry is checked before the catalog (documented choice; D-05/D-06 do not order them).
-        if (snap.ExpiresAt <= now && ProposalStates.CanTransition(snap.State, ProposalStates.Expired))
+        // WR-02: expiry never depends on whether the state change is permitted; fall back to execution_failed.
+        if (snap.ExpiresAt <= now)
         {
-            return new ExecutionResult.Failed(await attempt.RecordRefusalAsync(ExecutionReasons.ProposalExpired, ProposalStates.Expired, now, ct));
+            var to = _canTransition(snap.State, ProposalStates.Expired) ? ProposalStates.Expired : ProposalStates.ExecutionFailed;
+            return new ExecutionResult.Failed(await attempt.RecordRefusalAsync(ExecutionReasons.ProposalExpired, to, now, ct));
         }
 
         var check = catalogCheck.Check(snap.ActionType, snap.ParametersJson);
@@ -49,7 +53,8 @@ public sealed class ExecutionService(IExecutionStore store, IActionExecutor exec
         }
         catch (Exception) when (!ct.IsCancellationRequested)
         {
-            var failed = await attempt.RecordFinishedAsync(new FinishedOutcome(false, ExecutionReasons.ExecutorFailed, null), ProposalStates.ExecutionFailed, time.GetUtcNow(), ct);
+            // WR-01: the started row is committed, so the target write may have happened. Outcome unknown, not a definite failure.
+            var failed = await attempt.RecordFinishedAsync(new FinishedOutcome(false, ExecutionReasons.ExecutionInDoubt, null), ProposalStates.ExecutionFailed, time.GetUtcNow(), ct);
             return new ExecutionResult.Failed(failed);
         }
 
