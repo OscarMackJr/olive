@@ -254,7 +254,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 ### Phase 6: Simulated Execution and Audit Chain
 
-**Goal**: An approved proposal executes exactly once in simulation, and the whole core-value chain can be queried from the execution record.
+**Goal**: As a program reviewer, I want to see an approved proposal execute exactly once in simulation, so that I can trace the full core-value chain from its execution record.
 **Mode:** mvp
 **Depends on**: Phase 5 (can run in parallel with Phases 7 and 8)
 **Requirements**: EXE-01, EXE-02, EXE-03, EXE-04, EXE-05, EXE-06, EVD-02
