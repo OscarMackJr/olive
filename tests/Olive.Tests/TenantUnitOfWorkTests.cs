@@ -47,6 +47,24 @@ public sealed class TenantUnitOfWorkTests(PostgresFixture fixture)
         Assert.NotNull(uow);
     }
 
+    // WR-02: with a client command timeout shorter than lock_timeout, the lock wait must still end as the deterministic 55P03
+    // outcome (null), never as a client-side timeout exception.
+    [Fact]
+    public async Task EXE_02_lock_timeout_outcome_is_deterministic_when_command_timeout_is_shorter()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var holderDs = NpgsqlDataSource.Create(db.AppConnectionString);
+        var shortTimeout = new NpgsqlConnectionStringBuilder(db.AppConnectionString) { CommandTimeout = 1 };
+        await using var waiterDs = NpgsqlDataSource.Create(shortTimeout.ConnectionString);
+        var args = new { tenant_id = TestPaths.TenantAlpha, proposal_id = Guid.NewGuid() };
+
+        await using var held = await new TenantUnitOfWork(holderDs).AcquireAdvisoryLockAsync(TestPaths.TenantAlpha, ExecutionSql.LockExecution, args, TimeSpan.FromSeconds(5), Ct);
+        Assert.NotNull(held);
+
+        var waited = await new TenantUnitOfWork(waiterDs).AcquireAdvisoryLockAsync(TestPaths.TenantAlpha, ExecutionSql.LockExecution, args, TimeSpan.FromSeconds(2), Ct);
+        Assert.Null(waited);
+    }
+
     [Fact]
     public async Task DB_05_empty_tenant_is_rejected_before_opening_a_connection()
     {

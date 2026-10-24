@@ -8,6 +8,9 @@ public sealed class TenantUnitOfWork(NpgsqlDataSource dataSource)
 {
     private const string SetTenant = "select set_config('olive.tenant_id', @t, true)";
 
+    // Seconds the lock statement's client timeout exceeds the server-side lock_timeout.
+    public const int LockCommandTimeoutMarginSeconds = 5;
+
     public async Task<T> ExecuteAsync<T>(Guid tenantId, Func<NpgsqlConnection, NpgsqlTransaction, Task<T>> work, CancellationToken ct)
     {
         if (tenantId == Guid.Empty)
@@ -40,7 +43,10 @@ public sealed class TenantUnitOfWork(NpgsqlDataSource dataSource)
             await conn.ExecuteScalarAsync<string>(new CommandDefinition(SetTenant, new { t = tenantId.ToString("D") }, tx, cancellationToken: ct));
             var ms = Math.Max(1, (long)lockTimeout.TotalMilliseconds);
             await conn.ExecuteAsync(new CommandDefinition("set local lock_timeout = " + ms.ToString(System.Globalization.CultureInfo.InvariantCulture), transaction: tx, cancellationToken: ct));
-            await conn.ExecuteAsync(new CommandDefinition(lockSql, parameters, tx, cancellationToken: ct));
+            // WR-02: the client command timeout must outlast lock_timeout, or Npgsql's default (30 s) can fire first and surface as a
+            // client-side timeout exception instead of 55P03, making the lock-timeout outcome nondeterministic.
+            var commandTimeout = (int)Math.Ceiling(lockTimeout.TotalSeconds) + LockCommandTimeoutMarginSeconds;
+            await conn.ExecuteAsync(new CommandDefinition(lockSql, parameters, tx, commandTimeout: commandTimeout, cancellationToken: ct));
             return new LockHandle(conn, tx);
         }
         catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.LockNotAvailable)

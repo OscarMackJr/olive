@@ -11,7 +11,11 @@ public sealed class PostgresExecutionStore(TenantUnitOfWork uow, TimeSpan lockTi
 {
     static PostgresExecutionStore() => DefaultTypeMap.MatchNamesWithUnderscores = true;
 
-    public PostgresExecutionStore(TenantUnitOfWork uow) : this(uow, TimeSpan.FromSeconds(30)) { }
+    // WR-02: short by default. A lock wait only happens while another attempt holds the lock, and that holder finishes the
+    // proposal, so a waiter (the decide request or the sweep) gains nothing by blocking for long.
+    public static readonly TimeSpan DefaultLockTimeout = TimeSpan.FromSeconds(5);
+
+    public PostgresExecutionStore(TenantUnitOfWork uow) : this(uow, DefaultLockTimeout) { }
 
     private sealed class ProposalRow
     {
