@@ -160,7 +160,7 @@
 ### Evidence and contract package (EVD)
 
 - [ ] **EVD-01**: Every case in the D§16.8 and D§17.4 test tables, plus charter TC-ACT-01..06 and TC-QUE-01..04, has a named test that passes in CI.
-- [ ] **EVD-02**: A scripted local beat 2 demo shows a proposal verified against a fixture trace being approved and executed in simulation, with the chain queried from the execution record.
+- [x] **EVD-02**: A scripted local beat 2 demo shows a proposal verified against a fixture trace being approved and executed in simulation, with the chain queried from the execution record.
 - [x] **EVD-03**: A scripted local beat 4 demo shows an out-of-purpose proposal being refused, its refusal traced, and the proposal never appearing in the queue.
 - [ ] **EVD-04**: A hand-authored OpenAPI 3.1 at `contracts/proposal/v1/openapi.yaml` `$ref`s the v1 schemas, and a drift test checks it against the live routes.
 - [ ] **EVD-05**: `contracts/proposal/v1/COMPATIBILITY.md` maps S-OL-1 to v1 field by field, including the 422 behaviour and the Q1–Q3 outcomes. Liam fixtures accompany it for the §3 joint review.
@@ -286,7 +286,7 @@ Deferred. Tracked but not in the current roadmap.
 | IRQ-03 | Phase 8 | Pending |
 | IRQ-04 | Phase 8 | Pending |
 | EVD-01 | Phase 9 | Pending |
-| EVD-02 | Phase 6 | Pending |
+| EVD-02 | Phase 6 | Complete |
 | EVD-03 | Phase 5 | Complete |
 | EVD-04 | Phase 9 | Pending |
 | EVD-05 | Phase 9 | Pending |

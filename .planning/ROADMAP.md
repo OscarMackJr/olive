@@ -26,7 +26,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 4: Policy, Expiry and Refusal** - Purpose, entitlement and rate-limit policy before any queueing, guarded lifecycle transitions, absolute expiry, and the asserted pipeline order (completed 2026-10-23)
 - [x] **Phase 5: Generic Review Queue and Action Approval** - IR-1 queue with kind registry, claim/release/decide/audit, approval rules, lazy expiry withdrawal, and the beat 4 demo
  (completed 2026-10-23)
-- [ ] **Phase 6: Simulated Execution and Audit Chain** - Exactly-once simulated execution, INSERT-only ledger, chain view, and the beat 2 demo through the API
+- [x] **Phase 6: Simulated Execution and Audit Chain** - Exactly-once simulated execution, INSERT-only ledger, chain view, and the beat 2 demo through the API (completed 2026-10-24)
 - [ ] **Phase 7: Reviewer UI and Entra OIDC** - Minimal Razor Pages reviewer UI with OIDC behind an interface, a dev IdP stub, and a role check at decision time
 - [ ] **Phase 8: Identity Review Queue Kind** - The identity_review / candidate_pair kind on stub bluto traffic, with a service-token inbound path and IR-1 polling
 - [ ] **Phase 9: Contract and Evidence Pack** - OpenAPI 3.1 with drift test, COMPATIBILITY.md, Liam fixtures, full named test suite, credential audit, and refreshed docs
@@ -291,7 +291,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 6** *(blocked on Wave 5)*
 
-- [ ] 06-07-PLAN.md — Beat 2 demo and runner script (EVD-02, EXE-06)
+- [x] 06-07-PLAN.md — Beat 2 demo and runner script (EVD-02, EXE-06)
 
 **Research flag**: Run `/gsd-plan-phase 6 --research-phase`. Topics: the execution trigger, holding a per-proposal lock across the executor, and `execution_failed` semantics.
 **Notes**: Working defaults Q5 (in-process after commit plus startup sweep), Q6 (terminal failure), Q16 (re-check catalog and expiry, not entitlements) and Q18 (view, no new API endpoint) apply.
@@ -369,7 +369,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 3. Trace Verification | 6/6 | Complete    | 2026-10-22 |
 | 4. Policy, Expiry and Refusal | 7/7 | Complete    | 2026-10-23 |
 | 5. Generic Review Queue and Action Approval | 10/10 | Complete    | 2026-10-23 |
-| 6. Simulated Execution and Audit Chain | 6/7 | In Progress|  |
+| 6. Simulated Execution and Audit Chain | 7/7 | Complete   | 2026-10-24 |
 | 7. Reviewer UI and Entra OIDC | 0/TBD | Not started | - |
 | 8. Identity Review Queue Kind | 0/TBD | Not started | - |
 | 9. Contract and Evidence Pack | 0/TBD | Not started | - |
