@@ -11,6 +11,7 @@
     <ProjectReference Include="..\Olive.Integrations.Entra\Olive.Integrations.Entra.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="Npgsql" />
   </ItemGroup>
   <ItemGroup>
