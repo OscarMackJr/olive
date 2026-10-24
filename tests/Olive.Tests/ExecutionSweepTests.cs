@@ -188,6 +188,27 @@ public sealed class ExecutionSweepTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task EXE_04_failing_startup_guard_prevents_sweep_execution()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        Guid proposal;
+        await using (var h1 = Host1(db, ExecutionFault.ThrowOnBegin))
+        {
+            proposal = await ApproveAsync(h1, db, false, "sw8");
+            Assert.Equal("approved", await StateOf(db, TestPaths.TenantAlpha, proposal));
+        }
+
+        // D-19 guard: the migrator URL key present in the service configuration refuses start.
+        await using var h2 = new OliveApiFactory(db, extraConfig: new Dictionary<string, string?> { ["OLIVE_MIGRATOR_URL"] = "" });
+        Assert.ThrowsAny<Exception>(() => h2.Services);
+        await Task.Delay(TimeSpan.FromSeconds(2), Ct);
+
+        Assert.Equal("approved", await StateOf(db, TestPaths.TenantAlpha, proposal));
+        Assert.Equal(0L, await Scalar<long>(db, TestPaths.TenantAlpha, "select count(*) from execution_ledger where proposal_id = @p", proposal));
+        Assert.Empty(Lines(h2));
+    }
+
+    [Fact]
     public async Task EXE_01_sweep_fault_does_not_stop_host_start()
     {
         await using var db = await fixture.CreateDatabaseAsync();
