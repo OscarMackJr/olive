@@ -313,7 +313,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 6 plans
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — Dev sign-in, reviewer cookie session, page shell, /review list (UI-01, UI-02)
+- [x] 07-01-PLAN.md — Dev sign-in, reviewer cookie session, page shell, /review list (UI-01, UI-02)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -390,6 +390,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 4. Policy, Expiry and Refusal | 7/7 | Complete    | 2026-10-23 |
 | 5. Generic Review Queue and Action Approval | 10/10 | Complete    | 2026-10-23 |
 | 6. Simulated Execution and Audit Chain | 9/9 | Complete    | 2026-10-24 |
-| 7. Reviewer UI and Entra OIDC | 0/TBD | Not started | - |
+| 7. Reviewer UI and Entra OIDC | 1/6 | In Progress|  |
 | 8. Identity Review Queue Kind | 0/TBD | Not started | - |
 | 9. Contract and Evidence Pack | 0/TBD | Not started | - |
