@@ -195,6 +195,67 @@ public sealed class TenantUnitOfWorkTests(PostgresFixture fixture)
         Assert.Empty(offenders);
     }
 
+    private static Task<IAsyncDisposable?> Lock(TenantUnitOfWork uow, Guid proposal, TimeSpan timeout) =>
+        uow.AcquireAdvisoryLockAsync(TestPaths.TenantAlpha, ExecutionSql.LockExecution, new { tenant_id = TestPaths.TenantAlpha, proposal_id = proposal }, timeout, Ct);
+
+    [Fact]
+    public async Task EXE_02_lock_for_same_key_blocks_second_acquire_until_first_is_disposed()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var ds = NpgsqlDataSource.Create(db.AppConnectionString);
+        var uow = new TenantUnitOfWork(ds);
+        var key = Guid.NewGuid();
+        var first = await Lock(uow, key, TimeSpan.FromSeconds(5));
+        Assert.NotNull(first);
+        var second = Lock(uow, key, TimeSpan.FromSeconds(10));
+        await Task.Delay(500, Ct);
+        Assert.False(second.IsCompleted);
+        await first.DisposeAsync();
+        var handle = await second;
+        Assert.NotNull(handle);
+        await handle.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task EXE_02_lock_times_out_to_null_instead_of_hanging()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var ds = NpgsqlDataSource.Create(db.AppConnectionString);
+        var uow = new TenantUnitOfWork(ds);
+        var key = Guid.NewGuid();
+        await using var first = await Lock(uow, key, TimeSpan.FromSeconds(5));
+        Assert.NotNull(first);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var second = await Lock(uow, key, TimeSpan.FromSeconds(1));
+        Assert.Null(second);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task EXE_02_different_key_is_not_blocked()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var ds = NpgsqlDataSource.Create(db.AppConnectionString);
+        var uow = new TenantUnitOfWork(ds);
+        await using var first = await Lock(uow, Guid.NewGuid(), TimeSpan.FromSeconds(5));
+        await using var second = await Lock(uow, Guid.NewGuid(), TimeSpan.FromSeconds(1));
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+    }
+
+    [Fact]
+    public async Task EXE_02_lock_survives_a_commit_on_a_separate_connection()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var ds = NpgsqlDataSource.Create(db.AppConnectionString);
+        var uow = new TenantUnitOfWork(ds);
+        var key = Guid.NewGuid();
+        await using var first = await Lock(uow, key, TimeSpan.FromSeconds(5));
+        Assert.NotNull(first);
+        Assert.Equal(1, await uow.ExecuteAsync(TestPaths.TenantAlpha, (_, _) => Task.FromResult(1), Ct));
+        Assert.Null(await Lock(uow, key, TimeSpan.FromSeconds(1)));
+    }
+
     [Fact]
     public async Task DB_05_state_constants_match_check_constraint()
     {
