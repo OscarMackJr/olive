@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olive.invalid/contracts/execution-record/v1/execution-record.schema.json",
+  "title": "Execution record (v1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["execution_id", "proposal_id", "execution_mode", "started_at"],
+  "properties": {
+    "execution_id": { "type": "string", "format": "uuid" },
+    "proposal_id": { "type": "string", "format": "uuid" },
+    "execution_mode": { "const": "simulated" },
+    "outcome": { "enum": ["succeeded", "failed"] },
+    "reason": { "type": "string", "pattern": "^[a-z][a-z_]{0,63}$" },
+    "result_ref": { "type": "string", "minLength": 1 },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" }
+  }
+}

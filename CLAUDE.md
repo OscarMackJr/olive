@@ -128,7 +128,7 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 ## Layers
 - Purpose: JSON Schemas + valid/invalid examples, queue-kind contracts, vendored vocabulary
 - Location: `contracts/`
-- Contains: `proposal/v1/`, `catalog/v1/`, `queue-item/v1/`, `execution-record/v0/`, `introspection/`, `queue/identity-review/`, `vendored/` (read-only `vocabulary.yaml`)
+- Contains: `proposal/v1/`, `catalog/v1/`, `queue-item/v1/`, `execution-record/v1/`, `introspection/`, `queue/identity-review/`, `vendored/` (read-only `vocabulary.yaml`)
 - Used by: tests (`RequirementsTests`), external producers/consumers
 - Location: `catalog/` (YAML per action type, named `<action_id>.yaml`)
 - Parsed by line-based reader in `Catalog.Parse` (not a YAML library)

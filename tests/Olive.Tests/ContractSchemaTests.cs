@@ -7,7 +7,7 @@ public sealed class ContractSchemaTests
 {
     private static readonly string[] Folders =
     [
-        "contracts/proposal/v1", "contracts/catalog/v1", "contracts/queue-item/v1", "contracts/execution-record/v0", "contracts/trace-resolution", "contracts/identity", "contracts/reviewer",
+        "contracts/proposal/v1", "contracts/catalog/v1", "contracts/queue-item/v1", "contracts/execution-record/v1", "contracts/trace-resolution", "contracts/identity", "contracts/reviewer",
     ];
 
     public static TheoryData<string> SchemaFiles()
@@ -161,6 +161,15 @@ public sealed class ContractSchemaTests
         var v = Check("contracts/proposal/v1/proposal-submit-response.schema.json", """{"proposal_id":"not-a-uuid","state":"proposed"}""");
         Assert.Equal(new SchemaViolation("/proposal_id", "format"), v);
     }
+
+    [Theory]
+    [InlineData("""{"execution_id":"11111111-1111-1111-1111-111111111111","proposal_id":"22222222-2222-2222-2222-222222222222","execution_mode":"simulated","started_at":"2026-08-05T00:00:00Z"}""", true)]
+    [InlineData("""{"execution_id":"11111111-1111-1111-1111-111111111111","proposal_id":"22222222-2222-2222-2222-222222222222","execution_mode":"live","started_at":"2026-08-05T00:00:00Z"}""", false)]
+    [InlineData("""{"execution_id":"11111111-1111-1111-1111-111111111111","proposal_id":"22222222-2222-2222-2222-222222222222","execution_mode":"simulated","started_at":"2026-08-05T00:00:00Z","extra":1}""", false)]
+    [InlineData("""{"execution_id":"11111111-1111-1111-1111-111111111111","proposal_id":"22222222-2222-2222-2222-222222222222","execution_mode":"simulated","outcome":"failed","reason":"Bad Reason!","started_at":"2026-08-05T00:00:00Z"}""", false)]
+    [Trait("Category", "Unit")]
+    public void EXE_04_execution_record_v1_pins_simulated_mode_and_static_reason(string body, bool ok) =>
+        Assert.Equal(ok, Check("contracts/execution-record/v1/execution-record.schema.json", body) is null);
 
     [Fact]
     [Trait("Category", "Unit")]
