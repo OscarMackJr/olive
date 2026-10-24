@@ -37,6 +37,7 @@ builder.Services.AddSingleton<TenantUnitOfWork>();
 builder.Services.AddSingleton<IProposalStore, PostgresProposalStore>();
 builder.Services.AddSingleton<IQueueStore, PostgresQueueStore>();
 builder.Services.AddSingleton<QueueService>();
+builder.Services.AddSingleton<IAuditStore, PostgresAuditStore>();
 // EXE-01 / D-13: the executor is simulated and not INonProductionOnly. A singleton so its write semaphore serialises all writers.
 builder.Services.AddSingleton<IExecutionStore>(sp => new PostgresExecutionStore(sp.GetRequiredService<TenantUnitOfWork>()));
 builder.Services.AddSingleton<IActionExecutor>(sp =>
