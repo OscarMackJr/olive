@@ -221,6 +221,8 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
     private sealed class ProductionReviewerStub : IReviewerIdentitySource
     {
         public ReviewerIdentity? Find(string reviewerId) => null;
+
+        public IReadOnlyList<ReviewerIdentity> All() => [];
     }
 
     [Fact]

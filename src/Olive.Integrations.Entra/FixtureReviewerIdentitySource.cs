@@ -32,6 +32,8 @@ public sealed class FixtureReviewerIdentitySource : IReviewerIdentitySource, INo
 
     public ReviewerIdentity? Find(string reviewerId) => _identities.TryGetValue(reviewerId, out var identity) ? identity : null;
 
+    public IReadOnlyList<ReviewerIdentity> All() => _identities.Values.OrderBy(i => i.ReviewerId, StringComparer.Ordinal).ToArray();
+
     private static string ReadResource(Assembly asm, string name)
     {
         using var s = asm.GetManifestResourceStream(name) ?? throw new InvalidOperationException("A reviewer fixture resource is missing.");

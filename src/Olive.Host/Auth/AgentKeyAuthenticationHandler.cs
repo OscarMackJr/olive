@@ -19,8 +19,9 @@ public sealed class AgentKeyAuthenticationHandler(
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        // D-02: reviewer routes belong to the DevReviewer scheme; an agent key there is never introspected (T-05-23).
-        if (Request.Path.StartsWithSegments("/v1/queue", StringComparison.OrdinalIgnoreCase))
+        // D-15: only the agent routes use this scheme; reviewer and UI routes never introspect an agent key (T-05-23, T-07-06).
+        if (!Request.Path.StartsWithSegments("/v1/proposals", StringComparison.OrdinalIgnoreCase)
+            && !Request.Path.StartsWithSegments("/v1/catalog", StringComparison.OrdinalIgnoreCase))
         {
             return AuthenticateResult.NoResult();
         }
