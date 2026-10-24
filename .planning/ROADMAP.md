@@ -310,7 +310,27 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. The audit page shows the item history, the four hashed fields, `body_sha256` and `proposal_hash`, and a banner when the trace was verified by fixture. The UI has no dashboards, bulk actions, SLA views or assignment rules.
   5. A CI test runs the real OIDC handler against `mock-oauth2-server`, trying every credential type against every route group. Only the intended pairing is admitted.
 
-**Plans**: TBD
+**Plans**: 6 plans
+**Wave 1**
+
+- [ ] 07-01-PLAN.md — Dev sign-in, reviewer cookie session, page shell, /review list (UI-01, UI-02)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 07-02-PLAN.md — Item page: claim, release, decide, stub decide-time role re-read (UI-03, UI-04, APR-03, UI-05)
+- [ ] 07-03-PLAN.md — Audit page, hash recompute, execution chain (UI-05)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 07-04-PLAN.md — Entra OpenIdConnect sign-in, claims mapper, config guard, mock-oauth2-server harness (UI-01)
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 07-05-PLAN.md — Decide-time re-challenge (prompt=login, max_age=0), draft store, evidence check (APR-03, UI-04)
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 07-06-PLAN.md — Credential x route matrix, UI surface test, sentinel scan, manual UAT (UI-06, UI-07, UI-01)
 **UI hint**: yes
 **Research flag**: Run `/gsd-plan-phase 7 --research-phase`. Topics: Entra app role plus `max_age` versus Graph, group overage, the oid mapping, SameSite and HTTPS.
 **Notes**: Q14 and Q15 working defaults apply. Live approvals stay blocked until the `role:case_supervisor` Entra group is named. That is an external dependency and does not block phase completion against the stub and mock-oauth2-server.
