@@ -58,6 +58,8 @@ public sealed class ReviewerTenantMap : IReviewerTenantMap
         return Parse(r.ReadToEnd());
     }
 
+    public IReadOnlyCollection<Guid> AllTenants => _groups.Values.Distinct().ToArray();
+
     public IReadOnlyCollection<Guid> TenantsFor(IEnumerable<string> groups) =>
         groups.Where(g => g is not null && _groups.ContainsKey(g)).Select(g => _groups[g]).Distinct().ToArray();
 }

@@ -32,4 +32,14 @@ public sealed class ReviewerTenantMapTests
         Assert.Equal(2, m.TenantsFor(["tenant-alpha-reviewers", "tenant-alpha-duplicate"]).Count);
         Assert.Contains(Beta, m.TenantsFor(["tenant-beta-reviewers"]));
     }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void ReviewerTenant_AllTenants_lists_each_seeded_tenant_once()
+    {
+        var all = ReviewerTenantMap.LoadEmbedded().AllTenants;
+        Assert.Contains(Alpha, all);
+        Assert.Contains(Beta, all);
+        Assert.Equal(all.Count, all.Distinct().Count());
+    }
 }

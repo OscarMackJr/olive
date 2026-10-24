@@ -50,6 +50,8 @@ builder.Services.AddSingleton<IActionExecutor>(sp =>
 });
 builder.Services.AddSingleton<IActionCatalogCheck, CatalogExecutionCheck>();
 builder.Services.AddSingleton<ExecutionService>();
+// D-03 / EXE-01: one startup sweep of approved-but-unfinished proposals, no timer.
+builder.Services.AddHostedService<ExecutionSweep>();
 // Phase 1 has only the stub introspector; the production guard in 01-06 refuses it.
 builder.Services.AddSingleton<IKeyIntrospector>(sp => StubKeyIntrospector.CreateDefault(sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<IOperationalAlarm, LoggingOperationalAlarm>();
