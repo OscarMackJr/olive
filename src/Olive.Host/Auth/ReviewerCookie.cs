@@ -14,7 +14,7 @@ public static class ReviewerCookie
     public static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(30);
     public static readonly TimeSpan AbsoluteCap = TimeSpan.FromHours(8);
 
-    public static AuthenticationBuilder AddReviewerSession(this AuthenticationBuilder builder)
+    public static AuthenticationBuilder AddReviewerSession(this AuthenticationBuilder builder, string loginPath = LoginPath)
     {
         builder.Services.AddOptions<CookieAuthenticationOptions>(Scheme)
             .Configure<TimeProvider>((o, time) => o.TimeProvider = time);
@@ -28,7 +28,7 @@ public static class ReviewerCookie
             o.Cookie.Path = "/";
             o.ExpireTimeSpan = IdleTimeout;
             o.SlidingExpiration = true;
-            o.LoginPath = LoginPath;
+            o.LoginPath = loginPath;
             o.AccessDeniedPath = "/review";
             o.ReturnUrlParameter = "returnUrl";
             o.Events.OnValidatePrincipal = EnforceAbsoluteCap;

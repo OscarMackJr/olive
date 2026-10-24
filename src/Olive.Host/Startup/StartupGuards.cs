@@ -88,6 +88,41 @@ public static class StartupGuards
         }
     }
 
+    // UI-01 / D-18: production requires a complete, https Entra configuration and no dev sign-in path. Messages are static: they
+    // name settings only, never a configured value.
+    public static void CheckOidcConfiguration(IConfiguration configuration, OliveEnvironment env, IServiceCollection? services = null)
+    {
+        if (!env.IsProduction)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(configuration["OLIVE_OIDC_AUTHORITY"]))
+        {
+            throw new StartupGuardException("UI-01", "OLIVE_OIDC_AUTHORITY is required in production");
+        }
+
+        if (string.IsNullOrWhiteSpace(configuration["OLIVE_OIDC_CLIENT_ID"]))
+        {
+            throw new StartupGuardException("UI-01", "OLIVE_OIDC_CLIENT_ID is required in production");
+        }
+
+        if (string.IsNullOrWhiteSpace(configuration["OLIVE_OIDC_CLIENT_SECRET"]))
+        {
+            throw new StartupGuardException("UI-01", "OLIVE_OIDC_CLIENT_SECRET is required in production");
+        }
+
+        if (!Uri.TryCreate(configuration["OLIVE_OIDC_AUTHORITY"]!.Trim(), UriKind.Absolute, out var authority) || authority.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new StartupGuardException("UI-01", "OLIVE_OIDC_AUTHORITY must be an absolute https URL in production");
+        }
+
+        if (services is not null && services.Any(d => d.ServiceType == typeof(Auth.DevSignInGate) || d.ImplementationType == typeof(Auth.DevSignInGate)))
+        {
+            throw new StartupGuardException("UI-01", "the dev sign-in picker is registered in production");
+        }
+    }
+
     // EXE-04 / D-11: the simulated executor's JSONL path must be set and appendable. The message is static: it never carries the path
     // or the underlying exception text.
     public static void CheckExecutorOutput(IConfiguration configuration)

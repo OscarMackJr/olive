@@ -83,10 +83,16 @@ builder.Services.AddSingleton<IAgentAllowlist>(_ => AgentAllowlist.LoadEmbedded(
 builder.Services.AddSingleton<IQueueKindRegistry>(_ => QueueKindRegistry.LoadEmbedded());
 builder.Services.AddSingleton<IReviewerTenantMap>(_ => ReviewerTenantMap.LoadEmbedded());
 builder.Services.AddSingleton(_ => CatalogLoader.LoadEmbedded(Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml")));
-builder.Services.AddAuthentication(AgentKeyAuthenticationHandler.SchemeName)
+// UI-01: Entra sign-in is configured only from environment variables; absent settings leave the dev picker as the only sign-in path.
+var oidc = OidcConfig.Read(builder.Configuration);
+var authentication = builder.Services.AddAuthentication(AgentKeyAuthenticationHandler.SchemeName)
     .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, AgentKeyAuthenticationHandler>(AgentKeyAuthenticationHandler.SchemeName, _ => { })
     .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DevReviewerAuthenticationHandler>(DevReviewerAuthenticationHandler.SchemeName, _ => { })
-    .AddReviewerSession();
+    .AddReviewerSession(oidc is null ? ReviewerCookie.LoginPath : "/auth/sign-in");
+if (oidc is not null)
+{
+    authentication.AddReviewerOidc(oidc);
+}
 // D-07: dev reviewer identities from a source-controlled fixture (INonProductionOnly, so FND-05 bars it in production).
 builder.Services.AddSingleton<IReviewerIdentitySource>(_ => FixtureReviewerIdentitySource.CreateDefault());
 // D-15: the reviewer cookie scheme is named only by this UI policy, never by a /v1 route.
@@ -98,6 +104,8 @@ builder.Services.AddRazorPages(o =>
     // Sign-out authenticates the cookie so its antiforgery token (bound to the signed-in user) validates; SignedOut stays anonymous.
     o.Conventions.AuthorizePage("/Account/SignOut", "ReviewerUi");
     o.Conventions.AllowAnonymousToPage("/Account/SignedOut");
+    o.Conventions.AllowAnonymousToPage("/Account/SignIn");
+    o.Conventions.AllowAnonymousToPage("/Account/Failed");
 });
 builder.Services.AddAntiforgery(o =>
 {

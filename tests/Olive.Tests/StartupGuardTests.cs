@@ -194,7 +194,7 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
     }
 
     // The factory wires the recording stubs for the Phase 3 ports; production positive controls swap in non-stub doubles.
-    private static void ProductionSafePorts(IServiceCollection s, bool keepDevReviewerScheme = false)
+    internal static void ProductionSafePorts(IServiceCollection s, bool keepDevReviewerScheme = false)
     {
         s.RemoveAll<ITokenIssuer>();
         s.AddSingleton<ITokenIssuer>(new FakeTokenIssuer());

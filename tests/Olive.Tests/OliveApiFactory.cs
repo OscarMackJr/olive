@@ -65,6 +65,14 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
         var url = db.AppUrl;
         NoSharedPostgres.Assert(PostgresUrl.ToNpgsql(url));
         var config = new Dictionary<string, string?> { ["OLIVE_ENVIRONMENT"] = environment, ["OLIVE_POSTGRES_URL"] = url, ["OLIVE_EXECUTOR_OUTPUT_PATH"] = ExecutorOutputPath };
+        if (environment == "production")
+        {
+            // UI-01: a production host must carry a complete https OIDC configuration; the guard tests override these.
+            config["OLIVE_OIDC_AUTHORITY"] = "https://idp.invalid/tenant";
+            config["OLIVE_OIDC_CLIENT_ID"] = "olive-test";
+            config["OLIVE_OIDC_CLIENT_SECRET"] = "test-" + Guid.NewGuid().ToString("N");
+        }
+
         if (extraConfig is not null)
         {
             foreach (var kv in extraConfig) { config[kv.Key] = kv.Value; }
@@ -72,9 +80,9 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
 
         builder.ConfigureAppConfiguration((_, c) => c.AddInMemoryCollection(config));
         // Program.cs reads the trace and directory timeouts before Build(), which ConfigureAppConfiguration does not reach.
-        foreach (var name in new[] { "OLIVE_TRACE_TIMEOUT_MS", "OLIVE_DIRECTORY_TIMEOUT_MS", "OLIVE_IDENTITY_RESOLVER_TIMEOUT_MS" })
+        foreach (var name in new[] { "OLIVE_TRACE_TIMEOUT_MS", "OLIVE_DIRECTORY_TIMEOUT_MS", "OLIVE_IDENTITY_RESOLVER_TIMEOUT_MS", "OLIVE_ENVIRONMENT", "OLIVE_OIDC_AUTHORITY", "OLIVE_OIDC_CLIENT_ID", "OLIVE_OIDC_CLIENT_SECRET", "OLIVE_OIDC_TENANT_ID", "OLIVE_OIDC_FRESHNESS_MINUTES" })
         {
-            if (config.TryGetValue(name, out var timeout))
+            if (config.TryGetValue(name, out var timeout) && timeout is not null)
             {
                 builder.UseSetting(name, timeout);
             }

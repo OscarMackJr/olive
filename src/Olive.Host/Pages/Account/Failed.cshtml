@@ -1,0 +1,12 @@
+@page "/auth/failed"
+@model Olive.Host.Pages.Account.FailedModel
+@{
+    ViewData["Title"] = "Sign-in did not complete";
+}
+<section class="panel">
+    <h1>Sign-in did not complete</h1>
+    <p>We could not confirm your sign-in, so nothing was changed.</p>
+    <div class="actions">
+        <a class="button button-primary" href="/auth/sign-in">Try signing in again</a>
+    </div>
+</section>

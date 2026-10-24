@@ -1,5 +1,6 @@
 @page "/signed-out"
 @model Olive.Host.Pages.Account.SignedOutModel
+@inject Microsoft.Extensions.Options.IOptionsMonitor<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions> Cookies
 @{
     ViewData["Title"] = "Signed out";
 }
@@ -7,6 +8,6 @@
     <h1>You are signed out</h1>
     <p>Your review session has ended.</p>
     <div class="actions">
-        <a class="button button-primary" href="@ReviewerCookie.LoginPath">Sign in again</a>
+        <a class="button button-primary" href="@Cookies.Get(ReviewerCookie.Scheme).LoginPath">Sign in again</a>
     </div>
 </section>

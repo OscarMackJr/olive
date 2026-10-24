@@ -5,7 +5,7 @@ public static class SecurityHeaders
 {
     public const string ContentSecurityPolicy = "default-src 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'";
 
-    private static readonly string[] NoStorePrefixes = ["/review", "/dev", "/auth", "/signed-out"];
+    private static readonly string[] NoStorePrefixes = ["/review", "/dev", "/auth", "/signed-out", "/signin-oidc", "/signout-callback-oidc"];
 
     public static IApplicationBuilder UseOliveSecurityHeaders(this IApplicationBuilder app) => app.Use((context, next) =>
     {
