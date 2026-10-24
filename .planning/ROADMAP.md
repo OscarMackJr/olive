@@ -24,7 +24,8 @@ Decimal phases appear between their surrounding integers in numeric order.
  (completed 2026-10-22)
 - [x] **Phase 3: Trace Verification** - Fixture-backed trace resolver with ordered checks 1-5, fail-closed 503s, popeye token stub and cache, and session-key capture (completed 2026-10-22)
 - [x] **Phase 4: Policy, Expiry and Refusal** - Purpose, entitlement and rate-limit policy before any queueing, guarded lifecycle transitions, absolute expiry, and the asserted pipeline order (completed 2026-10-23)
-- [x] **Phase 5: Generic Review Queue and Action Approval** - IR-1 queue with kind registry, claim/release/decide/audit, approval rules, lazy expiry withdrawal, and the beat 4 demo (completed 2026-10-23)
+- [x] **Phase 5: Generic Review Queue and Action Approval** - IR-1 queue with kind registry, claim/release/decide/audit, approval rules, lazy expiry withdrawal, and the beat 4 demo
+ (completed 2026-10-23)
 - [ ] **Phase 6: Simulated Execution and Audit Chain** - Exactly-once simulated execution, INSERT-only ledger, chain view, and the beat 2 demo through the API
 - [ ] **Phase 7: Reviewer UI and Entra OIDC** - Minimal Razor Pages reviewer UI with OIDC behind an interface, a dev IdP stub, and a role check at decision time
 - [ ] **Phase 8: Identity Review Queue Kind** - The identity_review / candidate_pair kind on stub bluto traffic, with a service-token inbound path and IR-1 polling
@@ -266,7 +267,32 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. A scripted beat 2 demo submits a fixture-traced proposal, approves it, executes it in simulation, and prints the chain from the execution record.
 
 **Carry-over from Phase 3 (IDN-08)**: extend the sentinel-key search to the simulated executor JSONL output (reuse `SentinelScan.AddSource`); Phase 3 covered logs, responses and stored rows only.
-**Plans**: TBD
+**Plans**: 7 plans
+**Wave 1**
+
+- [ ] 06-01-PLAN.md — Migration 0009 (execution_ledger, execution_chain view), isolation/privilege test extensions, execution-record v1 contract (EXE-02, EXE-04, EXE-06)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 06-02-PLAN.md — Ports, ExecutionService decision table, JSONL simulated executor, catalog re-check, unit-proven (EXE-01..05)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 06-03-PLAN.md — Slice: approve then execute (Postgres store with lock-holder, host wiring, output-path guard, endpoint hook) (EXE-01, EXE-02, EXE-04)
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 06-04-PLAN.md — Slice: concurrency, refusal, in-doubt and fault-injection tests (EXE-02, EXE-03, EXE-05)
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 06-05-PLAN.md — Slice: startup sweep and restart behaviour (EXE-01, EXE-03, EXE-05)
+- [ ] 06-06-PLAN.md — Slice: chain view tests and IDN-08 JSONL sentinel scan (EXE-06, IDN-08)
+
+**Wave 6** *(blocked on Wave 5)*
+
+- [ ] 06-07-PLAN.md — Beat 2 demo and runner script (EVD-02, EXE-06)
+
 **Research flag**: Run `/gsd-plan-phase 6 --research-phase`. Topics: the execution trigger, holding a per-proposal lock across the executor, and `execution_failed` semantics.
 **Notes**: Working defaults Q5 (in-process after commit plus startup sweep), Q6 (terminal failure), Q16 (re-check catalog and expiry, not entitlements) and Q18 (view, no new API endpoint) apply.
 
