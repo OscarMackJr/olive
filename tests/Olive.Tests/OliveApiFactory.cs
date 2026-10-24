@@ -20,7 +20,7 @@ namespace Olive.Tests;
 
 public enum TraceMode { AutoFixture, Explicit }
 
-public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null, string? environment = "ci", Action<IServiceCollection>? configureServices = null, bool replaceIntrospector = true, TraceMode traceMode = TraceMode.AutoFixture, ITraceResolver? innerResolver = null, ITokenIssuer? innerIssuer = null, IDirectoryGroupResolver? innerDirectory = null, IUserIdentityResolver? innerUserIdentity = null)
+public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null, string? environment = "ci", Action<IServiceCollection>? configureServices = null, bool replaceIntrospector = true, TraceMode traceMode = TraceMode.AutoFixture, ITraceResolver? innerResolver = null, ITokenIssuer? innerIssuer = null, IDirectoryGroupResolver? innerDirectory = null, IUserIdentityResolver? innerUserIdentity = null, bool awaitSweep = true)
     : WebApplicationFactory<Program>
 {
     private static readonly IReadOnlySet<string> CatalogPurposes = new HashSet<string> { "servicing", "origination", "collections", "analytics", "marketing", "compliance-review", "internal-support" };
@@ -118,6 +118,19 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
             services.AddSingleton<IStartupFilter>(new ReviewerProbeStartupFilter());
             configureServices?.Invoke(services);
         });
+    }
+
+    // The startup sweep runs in the background after ApplicationStarted; tests that share the host wait for it so executor
+    // calls and states are deterministic. Hosts that refuse to start throw before this point.
+    protected override IHost CreateHost(IHostBuilder builder)
+    {
+        var host = base.CreateHost(builder);
+        if (awaitSweep)
+        {
+            host.Services.GetRequiredService<Olive.Host.Startup.ExecutionSweep>().Completion.WaitAsync(TimeSpan.FromSeconds(60)).GetAwaiter().GetResult();
+        }
+
+        return host;
     }
 
     protected override void Dispose(bool disposing)
