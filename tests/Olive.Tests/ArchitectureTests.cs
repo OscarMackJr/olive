@@ -31,7 +31,7 @@ public sealed class ArchitectureTests
     {
         ["Olive.Persistence"] = ["Dapper", "Npgsql"],
         ["Olive.Catalog"] = ["JsonSchema.Net", "YamlDotNet"],
-        ["Olive.Host"] = ["Npgsql"],
+        ["Olive.Host"] = ["Microsoft.AspNetCore.Authentication.OpenIdConnect", "Npgsql"],
     };
 
     private static string[] SrcProjectDirs() =>

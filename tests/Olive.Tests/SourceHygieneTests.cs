@@ -18,7 +18,7 @@ public sealed class SourceHygieneTests
 
     [Fact]
     [Trait("Category", "Architecture")]
-    public void FND_06_expose_secret_called_only_in_popeye_and_secret_types()
+    public void FND_06_expose_secret_called_only_in_popeye_secret_types_and_the_oidc_options_delegate()
     {
         var src = Path.Combine(TestPaths.Root, "src");
         var offenders = Directory.GetFiles(src, "*.cs", SearchOption.AllDirectories)
@@ -27,7 +27,8 @@ public sealed class SourceHygieneTests
             .Where(f => File.ReadAllText(f).Contains("ExposeSecret(", StringComparison.Ordinal))
             .Select(f => Path.GetRelativePath(src, f).Replace('\\', '/'))
             .Where(f => !f.StartsWith("Olive.Integrations.Popeye/", StringComparison.Ordinal)
-                        && f != "Olive.Domain/SessionKey.cs" && f != "Olive.Domain/ServiceToken.cs")
+                        && f != "Olive.Domain/SessionKey.cs" && f != "Olive.Domain/ServiceToken.cs" && f != "Olive.Domain/OidcClientSecret.cs"
+                        && f != "Olive.Host/Auth/ReviewerOidc.cs")
             .ToList();
         // AgentKeyHeader mentions no ExposeSecret( call; any offender here is a leak path.
         Assert.Empty(offenders);

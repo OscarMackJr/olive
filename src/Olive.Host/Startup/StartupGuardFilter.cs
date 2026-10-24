@@ -16,6 +16,7 @@ public sealed class StartupGuardFilter(IConfiguration configuration, IServicePro
         StartupGuards.CheckQueueKinds(provider);
         StartupGuards.CheckNoNonProductionComponents(accessor.Services, provider, env);
         StartupGuards.CheckDevReviewerNotInProduction(provider, env);
+        StartupGuards.CheckOidcConfiguration(configuration, env, accessor.Services);
         StartupGuards.CheckExecutorOutput(configuration);
         CheckDatabase();
         // D-13: stated at startup so an operator can see no real write path exists.

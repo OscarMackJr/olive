@@ -14,6 +14,7 @@ public sealed class SecretTypeTests
     [
         [(Func<string, object>)(s => new SessionKey(s))],
         [(Func<string, object>)(s => new ServiceToken(s))],
+        [(Func<string, object>)(s => new OidcClientSecret(s))],
     ];
 
     [Theory]
@@ -68,6 +69,7 @@ public sealed class SecretTypeTests
     public void FND_06_deserializing_a_session_key_throws()
     {
         Assert.Throws<NotSupportedException>(() => JsonSerializer.Deserialize<SessionKey>("\"abc\""));
+        Assert.Throws<NotSupportedException>(() => JsonSerializer.Deserialize<OidcClientSecret>("\"abc\""));
     }
 
     [Theory]
@@ -80,6 +82,8 @@ public sealed class SecretTypeTests
         Assert.Equal("A session key must not be empty.", ex.Message);
         var ex2 = Assert.Throws<ArgumentException>(() => new ServiceToken(value!));
         Assert.Equal("A service token must not be empty.", ex2.Message);
+        var ex3 = Assert.Throws<ArgumentException>(() => new OidcClientSecret(value!));
+        Assert.Equal("An OIDC client secret must not be empty.", ex3.Message);
     }
 
     [Fact]
@@ -89,6 +93,7 @@ public sealed class SecretTypeTests
         var s = Sentinel();
         Assert.Equal(s, new SessionKey(s).ExposeSecret());
         Assert.Equal(s, new ServiceToken(s).ExposeSecret());
+        Assert.Equal(s, new OidcClientSecret(s).ExposeSecret());
     }
 
     [Fact]
