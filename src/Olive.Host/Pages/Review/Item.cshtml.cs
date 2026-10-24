@@ -1,5 +1,9 @@
+using System.Globalization;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Olive.Application;
 using Olive.Contracts;
 using Olive.Host.Auth;
@@ -19,6 +23,7 @@ public sealed class ItemModel(
     IQueueKindRegistry registry,
     IProposalStore proposals,
     ILoggerFactory loggerFactory,
+    DraftStore drafts,
     TimeProvider time) : ReviewerPageModel
 {
     private const string FlashKey = "flash";
@@ -45,6 +50,12 @@ public sealed class ItemModel(
     public bool DecisionsSupported { get; private set; }
 
     public bool Expired { get; private set; }
+
+    public bool DraftRestored { get; private set; }
+
+    public string? DraftDecision { get; private set; }
+
+    public string? DraftRationale { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(Guid id, CancellationToken ct)
     {
@@ -76,6 +87,24 @@ public sealed class ItemModel(
         DecisionsSupported = registry.TryGet(item.Kind, out var kind) && kind.Decisions.SequenceEqual(["approve", "reject"], StringComparer.Ordinal);
         FixtureTrace = await IsFixtureTraceAsync(item, ct);
         Flash = FlashMessages.Resolve(TempData[FlashKey] as string);
+
+        // D-05: restoring a draft only prefills the form. The reviewer confirms with a normal antiforgery POST; nothing is decided here.
+        // The key is read from the query directly so it is never a bound handler argument.
+        if (Request.Query.TryGetValue("resume", out var resume) && resume.Count == 1 && !string.IsNullOrEmpty(resume[0]))
+        {
+            var draft = IsClaimant ? drafts.Take(resume[0]!, Reviewer!.Oid, id) : null;
+            if (draft is null)
+            {
+                Flash = FlashMessages.Resolve("draft_unavailable");
+            }
+            else
+            {
+                DraftDecision = draft.Decision;
+                DraftRationale = draft.Rationale;
+                DraftRestored = true;
+            }
+        }
+
         return Page();
     }
 
@@ -126,11 +155,26 @@ public sealed class ItemModel(
 
         // D-10: the cookie roles are not trusted here; the identity is re-resolved. A failure is a refusal and decides nothing.
         var outcome = await freshness.ResolveAsync(User, ct);
+        if (outcome is FreshnessOutcome.Stale)
+        {
+            // D-05, D-06: the Entra session is too old. Keep the draft server-side and re-authenticate; nothing is decided here.
+            if (decision is not ("approve" or "reject") || string.IsNullOrWhiteSpace(rationale) || rationale.Length > 4000)
+            {
+                return Prg(id, "invalid_request");
+            }
+
+            var key = drafts.Put(Reviewer!.Oid, id, decision, rationale);
+            var props = new AuthenticationProperties { RedirectUri = "/review/items/" + id + "?resume=" + key };
+            props.SetParameter(OpenIdConnectParameterNames.Prompt, "login");
+            props.SetParameter<TimeSpan?>(OpenIdConnectParameterNames.MaxAge, TimeSpan.Zero);
+            props.Items[ReviewerOidc.ReauthItem] = time.GetUtcNow().ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+            return Challenge(props, ReviewerOidc.Scheme);
+        }
+
         var fresh = outcome switch
         {
             FreshnessOutcome.Fresh f => f,
             FreshnessOutcome.Denied => null,
-            FreshnessOutcome.Stale => throw new InvalidOperationException("Unhandled freshness outcome."),
             _ => throw new InvalidOperationException("Unknown freshness outcome."),
         };
         if (fresh is null) { return Prg(id, "approval_identity_unresolved"); }
