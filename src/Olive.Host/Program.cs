@@ -94,7 +94,9 @@ builder.Services.AddRazorPages(o =>
 {
     o.Conventions.AuthorizeFolder("/Review", "ReviewerUi");
     o.Conventions.AllowAnonymousToFolder("/Dev");
-    o.Conventions.AllowAnonymousToFolder("/Account");
+    // Sign-out authenticates the cookie so its antiforgery token (bound to the signed-in user) validates; SignedOut stays anonymous.
+    o.Conventions.AuthorizePage("/Account/SignOut", "ReviewerUi");
+    o.Conventions.AllowAnonymousToPage("/Account/SignedOut");
 });
 builder.Services.AddAntiforgery(o =>
 {
