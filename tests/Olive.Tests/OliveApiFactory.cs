@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Builder;
@@ -20,7 +21,7 @@ namespace Olive.Tests;
 
 public enum TraceMode { AutoFixture, Explicit }
 
-public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null, string? environment = "ci", Action<IServiceCollection>? configureServices = null, bool replaceIntrospector = true, TraceMode traceMode = TraceMode.AutoFixture, ITraceResolver? innerResolver = null, ITokenIssuer? innerIssuer = null, IDirectoryGroupResolver? innerDirectory = null, IUserIdentityResolver? innerUserIdentity = null, bool awaitSweep = true)
+public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspector = null, IDictionary<string, string?>? extraConfig = null, string? environment = "ci", Action<IServiceCollection>? configureServices = null, bool replaceIntrospector = true, TraceMode traceMode = TraceMode.AutoFixture, ITraceResolver? innerResolver = null, ITokenIssuer? innerIssuer = null, IDirectoryGroupResolver? innerDirectory = null, IUserIdentityResolver? innerUserIdentity = null, bool awaitSweep = true, MockOidcFixture? mockOidc = null)
     : WebApplicationFactory<Program>
 {
     private static readonly IReadOnlySet<string> CatalogPurposes = new HashSet<string> { "servicing", "origination", "collections", "analytics", "marketing", "compliance-review", "internal-support" };
@@ -36,6 +37,15 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
     }
 
     public InMemoryLogCapture Logs { get; } = new();
+
+    // UI-01: the scenario the mock IdP applies to the next token request (set by tests before completing a callback).
+    public MockScenario Scenario { get; } = new();
+
+    // The pinned host clock when a mock IdP is attached: the fixture's T0 plus 30 s, so fresh-scenario tokens are 30 s old at start.
+    public ManualTimeProvider? Clock { get; private set; }
+
+    // The client secret handed to the host; sentinel scans look for it.
+    public string OidcClientSecret { get; } = "oidc-secret-" + Guid.NewGuid().ToString("N");
 
     // EXE-04: every factory host appends to its own temp JSONL file (extraConfig may override the setting).
     public string ExecutorOutputPath { get; } = Path.Combine(Path.GetTempPath(), "olive-exec-" + Guid.NewGuid().ToString("N") + ".jsonl");
@@ -65,6 +75,14 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
         var url = db.AppUrl;
         NoSharedPostgres.Assert(PostgresUrl.ToNpgsql(url));
         var config = new Dictionary<string, string?> { ["OLIVE_ENVIRONMENT"] = environment, ["OLIVE_POSTGRES_URL"] = url, ["OLIVE_EXECUTOR_OUTPUT_PATH"] = ExecutorOutputPath };
+        if (mockOidc is not null)
+        {
+            config["OLIVE_OIDC_AUTHORITY"] = mockOidc.Authority;
+            config["OLIVE_OIDC_CLIENT_ID"] = MockOidcFixture.ClientId;
+            config["OLIVE_OIDC_CLIENT_SECRET"] = OidcClientSecret;
+            config["OLIVE_OIDC_TENANT_ID"] = MockOidcFixture.Tenant;
+        }
+
         if (environment == "production")
         {
             // UI-01: a production host must carry a complete https OIDC configuration; the guard tests override these.
@@ -102,6 +120,17 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
             {
                 Introspector = new RecordingKeyIntrospector(inner, Events, OutboundCalls);
                 services.AddSingleton<IKeyIntrospector>(Introspector);
+            }
+
+            if (mockOidc is not null)
+            {
+                Clock = new ManualTimeProvider(mockOidc.T0.AddSeconds(30));
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton<TimeProvider>(Clock);
+                services.AddSingleton(Scenario);
+                // The scenario is read at request time by the handler.
+                services.Configure<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions>(Olive.Host.Auth.ReviewerOidc.Scheme,
+                    o => o.BackchannelHttpHandler = new ScenarioTokenRequestHandler(Scenario, new HttpClientHandler()));
             }
 
             services.AddSingleton<IOperationalAlarm>(Alarms);
@@ -165,11 +194,11 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
     }
 
     // Phase 7 pages: https base address (Secure __Host- cookies), cookie handling on, redirects left visible to the test.
-    public HttpClient CreateUiClient() => CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
+    public HttpClient CreateUiClient(bool handleCookies = true) => CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
     {
         BaseAddress = new Uri("https://localhost"),
         AllowAutoRedirect = false,
-        HandleCookies = true,
+        HandleCookies = handleCookies,
     });
 
     public static async Task<string> ScrapeAntiforgeryTokenAsync(HttpClient client, string path)

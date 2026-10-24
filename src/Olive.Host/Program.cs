@@ -19,6 +19,10 @@ builder.Configuration.AddDotEnvBelowEnvironment(Path.Combine(builder.Environment
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = ProposalEndpoints.MaxBodyBytes);
 
 builder.Logging.AddFilter("Microsoft.AspNetCore.Diagnostics.ExceptionHandlerMiddleware", LogLevel.None);
+// UI-01: the Hosting request-start line logs the full query string, which on /signin-oidc carries the one-time authorization code.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
+// UI-01: the OpenIdConnect handler logs the raw callback message (including the code) at Debug.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectHandler", LogLevel.Information);
 builder.Services.AddSingleton(new ServiceCollectionAccessor(builder.Services));
 builder.Services.AddSingleton<Microsoft.AspNetCore.Hosting.IStartupFilter, StartupGuardFilter>();
 builder.Services.AddSingleton(TimeProvider.System);
