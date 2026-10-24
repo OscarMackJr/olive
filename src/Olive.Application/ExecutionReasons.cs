@@ -6,5 +6,4 @@ public static class ExecutionReasons
     public const string CatalogInvalid = "catalog_invalid";
     public const string ProposalExpired = "proposal_expired";
     public const string ExecutionInDoubt = "execution_in_doubt";
-    public const string ExecutorFailed = "executor_failed";
 }

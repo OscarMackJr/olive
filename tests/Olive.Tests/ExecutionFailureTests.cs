@@ -183,7 +183,7 @@ public sealed class ExecutionFailureTests(PostgresFixture fixture)
         Assert.DoesNotContain(ThrowingExecutor.Sentinel, await response.Content.ReadAsStringAsync(Ct));
         Assert.Equal("execution_failed", await DecisionHttp.ProposalState(db, proposal));
         Assert.Equal(1L, await Count(db, "phase = 'started'", proposal));
-        Assert.Equal(1L, await Count(db, "phase = 'finished' and outcome = 'failed' and reason = 'executor_failed'", proposal));
+        Assert.Equal(1L, await Count(db, "phase = 'finished' and outcome = 'failed' and reason = 'execution_in_doubt'", proposal));
         Assert.Equal(1L, await Events(db, proposal, "execution_failed"));
         Assert.Empty(Lines(rig.Factory));
         await AssertNoSentinelAsync(rig, db, proposal, ThrowingExecutor.Sentinel);
