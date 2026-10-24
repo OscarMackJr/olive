@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-10-21)
 
 Phase: 06 (simulated-execution-and-audit-chain) — EXECUTING
 Plan: 7 of 7
-Status: Phase complete — ready for verification
+Status: Verification found gaps (CR-01) — gap closure needed
 Last activity: 2026-10-24
 
 Progress: [██████████] 100%
