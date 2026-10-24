@@ -36,7 +36,7 @@ public sealed class SelfApprovalTests(PostgresFixture fixture)
         await DecisionHttp.ClaimAsync(factory, "alpha-lookalike", item);
 
         Assert.Equal(HttpStatusCode.OK, (await DecisionHttp.Decide(factory, "alpha-lookalike", item, "approve")).StatusCode);
-        Assert.Equal("approved", await DecisionHttp.ProposalState(db, proposal));
+        Assert.Equal("executed", await DecisionHttp.ProposalState(db, proposal));
     }
 
     [Theory]

@@ -117,7 +117,7 @@ public static class QueueEndpoints
     }
 
     // APR-01: only decision and rationale are read from the body. Identity, tenant and auth source come from the authenticated claim.
-    private static async Task<IResult> DecisionAsync(Guid id, HttpContext http, QueueService service, CancellationToken ct)
+    private static async Task<IResult> DecisionAsync(Guid id, HttpContext http, QueueService service, ExecutionService execution, ILoggerFactory loggerFactory, CancellationToken ct)
     {
         var invalid = ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.InvalidRequest);
         if (!http.Request.HasJsonContentType()) { return invalid; }
@@ -147,6 +147,7 @@ public static class QueueEndpoints
         }
 
         var result = await service.DecideAsync(http.User.ToReviewerContext()!, id, decision, rationale, ct);
+        await ExecuteAfterApprovalAsync(result, execution, loggerFactory);
         return result switch
         {
             DecisionResult.Decided d => Results.Ok(ToDto(service.ToView(d.Item))),
@@ -165,6 +166,28 @@ public static class QueueEndpoints
             DecisionResult.InvalidRequest => invalid,
             _ => throw new InvalidOperationException("Unknown decision result."),
         };
+    }
+
+    // D-01: execution starts only after the approval transaction has committed, on its own connections. CancellationToken.None keeps
+    // a client disconnect from leaving an in-doubt attempt. A fault never changes the decide response (D-04) and is logged statically (D-09).
+    private static async Task ExecuteAfterApprovalAsync(DecisionResult result, ExecutionService execution, ILoggerFactory loggerFactory)
+    {
+        var item = result switch
+        {
+            DecisionResult.Decided d => d.Item,
+            DecisionResult.AlreadyDecidedSame d => d.Item,
+            _ => null,
+        };
+        if (item is null || item.Decision != "approve" || item.ProposalId is not { } proposalId) { return; }
+
+        try
+        {
+            await execution.ExecuteAsync(item.TenantId, proposalId, CancellationToken.None);
+        }
+        catch (Exception)
+        {
+            loggerFactory.CreateLogger("Olive.Host.Execution").LogError("Simulated execution failed after approval.");
+        }
     }
 
     private static System.Text.Json.JsonElement? ParseJson(string? json)

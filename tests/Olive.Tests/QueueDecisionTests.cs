@@ -78,7 +78,7 @@ public sealed class QueueDecisionTests(PostgresFixture fixture)
         Assert.Equal("approve", doc.RootElement.GetProperty("decision").GetString());
         Assert.Equal("aaaaaaaa-0000-4000-8000-000000000001", doc.RootElement.GetProperty("decided_by").GetString());
         Assert.DoesNotContain(DecisionHttp.Rationale, text);
-        Assert.Equal("approved", await DecisionHttp.ProposalState(db, proposal));
+        Assert.Equal("executed", await DecisionHttp.ProposalState(db, proposal));
     }
 
     [Fact]
@@ -214,7 +214,7 @@ public sealed class QueueDecisionTests(PostgresFixture fixture)
 
         using var agent = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
         using var got = JsonDocument.Parse(await (await agent.GetAsync($"/v1/proposals/{proposal}", Ct)).Content.ReadAsStringAsync(Ct));
-        Assert.Equal("approved", got.RootElement.GetProperty("state").GetString());
+        Assert.Equal("executed", got.RootElement.GetProperty("state").GetString());
         Assert.Equal("rejected", await DecisionHttp.ProposalState(db, proposal2));
         Assert.Equal("decided", await DecisionHttp.Scalar<string>(db, "select state from queue_item where item_id = @i", ("i", item)));
     }
