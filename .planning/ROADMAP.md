@@ -27,7 +27,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Generic Review Queue and Action Approval** - IR-1 queue with kind registry, claim/release/decide/audit, approval rules, lazy expiry withdrawal, and the beat 4 demo
  (completed 2026-10-23)
 - [x] **Phase 6: Simulated Execution and Audit Chain** - Exactly-once simulated execution, INSERT-only ledger, chain view, and the beat 2 demo through the API (completed 2026-10-24)
-- [ ] **Phase 7: Reviewer UI and Entra OIDC** - Minimal Razor Pages reviewer UI with OIDC behind an interface, a dev IdP stub, and a role check at decision time
+- [x] **Phase 7: Reviewer UI and Entra OIDC** - Minimal Razor Pages reviewer UI with OIDC behind an interface, a dev IdP stub, and a role check at decision time (completed 2026-10-24)
 - [ ] **Phase 8: Identity Review Queue Kind** - The identity_review / candidate_pair kind on stub bluto traffic, with a service-token inbound path and IR-1 polling
 - [ ] **Phase 9: Contract and Evidence Pack** - OpenAPI 3.1 with drift test, COMPATIBILITY.md, Liam fixtures, full named test suite, credential audit, and refreshed docs
 
@@ -330,7 +330,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 5** *(blocked on Wave 4)*
 
-- [ ] 07-06-PLAN.md — Credential x route matrix, UI surface test, sentinel scan, manual UAT (UI-06, UI-07, UI-01)
+- [x] 07-06-PLAN.md — Credential x route matrix, UI surface test, sentinel scan, manual UAT (UI-06, UI-07, UI-01)
 **UI hint**: yes
 **Research flag**: Run `/gsd-plan-phase 7 --research-phase`. Topics: Entra app role plus `max_age` versus Graph, group overage, the oid mapping, SameSite and HTTPS.
 **Notes**: Q14 and Q15 working defaults apply. Live approvals stay blocked until the `role:case_supervisor` Entra group is named. That is an external dependency and does not block phase completion against the stub and mock-oauth2-server.
@@ -390,6 +390,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 4. Policy, Expiry and Refusal | 7/7 | Complete    | 2026-10-23 |
 | 5. Generic Review Queue and Action Approval | 10/10 | Complete    | 2026-10-23 |
 | 6. Simulated Execution and Audit Chain | 9/9 | Complete    | 2026-10-24 |
-| 7. Reviewer UI and Entra OIDC | 5/6 | In Progress|  |
+| 7. Reviewer UI and Entra OIDC | 6/6 | Complete   | 2026-10-24 |
 | 8. Identity Review Queue Kind | 0/TBD | Not started | - |
 | 9. Contract and Evidence Pack | 0/TBD | Not started | - |
