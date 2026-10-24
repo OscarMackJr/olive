@@ -85,7 +85,7 @@
 - [x] **IDN-05**: A popeye token-issuer port, with a stub, returns `application`-type tokens carrying `tenant_id`, `delegated_agent_id`, `key_id` and an expiry.
 - [x] **IDN-06**: Service tokens are cached by `(tenant_id, delegated_agent_id, key_id)` until shortly before the earlier of the token's and the session key's expiry. A token is never reused for a new session key, and a token that expires after its session key is rejected and not cached.
 - [x] **IDN-07**: A token whose `delegated_agent_id` or `tenant_id` differs from Olive's own introspection of the session key is discarded, and the request fails with 503 and an alarm.
-- [ ] **IDN-08**: A recording decorator on every outbound port proves the session key reaches only popeye. A sentinel-key search finds no session key or token in any log line (at Trace level), JSONL output or stored row.
+- [x] **IDN-08**: A recording decorator on every outbound port proves the session key reaches only popeye. A sentinel-key search finds no session key or token in any log line (at Trace level), JSONL output or stored row.
 
 ### Trace verification (TRC)
 
