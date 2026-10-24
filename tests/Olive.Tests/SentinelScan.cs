@@ -3,8 +3,8 @@ using Npgsql;
 namespace Olive.Tests;
 
 // Reusable multi-source secret search (IDN-08). Each source is named text an observer could read.
-// Phase 6 adds the JSONL execution output as a further source through AddSource; until then the scan covers
-// HTTP responses (body and every header), captured logs and stored rows only.
+// The JSONL execution output is added as a further source through AddSource (AddJsonl). The scan otherwise covers
+// HTTP responses (body and every header), captured logs and stored rows (queue_item is excluded: it stores the rationale by design).
 internal sealed class SentinelScan
 {
     private readonly List<(string Name, string Text)> _sources = [];
@@ -12,6 +12,20 @@ internal sealed class SentinelScan
     public IReadOnlyList<string> SourceNames => _sources.Select(s => s.Name).ToArray();
 
     public void AddSource(string name, string text) => _sources.Add((name, text));
+
+    // Reads the executor output with FileShare.ReadWrite so a live writer does not block the scan.
+    public void AddJsonl(string path)
+    {
+        var text = "";
+        if (File.Exists(path))
+        {
+            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(fs);
+            text = reader.ReadToEnd();
+        }
+
+        AddSource("jsonl", text);
+    }
 
     public async Task AddResponseAsync(string name, HttpResponseMessage res)
     {
@@ -25,7 +39,7 @@ internal sealed class SentinelScan
 
     public async Task AddRowsAsync(TestDatabase db, params Guid[] tenants)
     {
-        foreach (var table in new[] { "proposal", "proposal_event" })
+        foreach (var table in new[] { "proposal", "proposal_event", "execution_ledger" })
         {
             var text = new List<string>();
             foreach (var tenant in tenants)

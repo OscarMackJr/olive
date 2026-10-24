@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Olive.Application;
@@ -10,9 +11,8 @@ using Olive.Integrations.Popeye;
 namespace Olive.Tests;
 
 // IDN-08 containment evidence: the port graph (ArchitectureTests), recorded outbound calls, and a sentinel search.
-// The sentinel search covers HTTP responses, logs captured at Trace level and stored rows. The JSONL execution output
-// does not exist yet; Phase 6 adds it as a further source through SentinelScan.AddSource. Until then IDN-08 and
-// Success Criterion 5 are not fully satisfied.
+// The sentinel search covers HTTP responses, logs captured at Trace level, stored rows and the JSONL execution output,
+// which is added as a source through SentinelScan.AddSource (via AddJsonl).
 [Trait("Category", "Integration")]
 public sealed class ContainmentTests(PostgresFixture fixture)
 {
@@ -166,6 +166,76 @@ public sealed class ContainmentTests(PostgresFixture fixture)
         Assert.Contains("[REDACTED", factory.Logs.Text);
         Assert.DoesNotContain(s.Key, factory.Logs.Text);
         Assert.DoesNotContain(s.Token, factory.Logs.Text);
+    }
+
+    // Submits as the sentinel agent, approves as a dev reviewer with the given rationale, and returns the evidence.
+    private static async Task<(HttpResponseMessage Submit, HttpResponseMessage Claim, HttpResponseMessage Decide, Guid Proposal)> ApproveAsync(
+        TestDatabase db, Sentinels s, OliveApiFactory factory, string body, string rationale)
+    {
+        using var agent = factory.CreateKeyClient(s.Key);
+        var submit = await agent.PostAsync("/v1/proposals", ApiProposalTests.Json(body), Ct);
+        Assert.Equal(HttpStatusCode.Created, submit.StatusCode);
+        var proposal = JsonDocument.Parse(await submit.Content.ReadAsStringAsync(Ct)).RootElement.GetProperty("proposal_id").GetGuid();
+        await db.AdminExecAsync($"update proposal set on_behalf_of = 'analyst.alpha@example.test' where proposal_id = '{proposal}'");
+        using var rev = factory.CreateReviewerClient("alpha-sup-1");
+        var items = await ReviewerTenantTests.ListAsync(rev);
+        var item = items.Single(i => i.GetProperty("producer_ref").GetGuid() == proposal).GetProperty("item_id").GetGuid();
+        var claim = await rev.PostAsync($"/v1/queue/items/{item}/claim", null, Ct);
+        Assert.Equal(HttpStatusCode.OK, claim.StatusCode);
+        var decide = await DecisionHttp.Decide(factory, "alpha-sup-1", item, "approve", rationale);
+        Assert.Equal(HttpStatusCode.OK, decide.StatusCode);
+        return (submit, claim, decide, proposal);
+    }
+
+    [Fact]
+    public async Task IDN_08_session_key_token_and_rationale_absent_from_jsonl_logs_and_responses()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        var s = Sentinels.New();
+        var rationale = "SENTINEL-RATIONALE-" + Guid.NewGuid().ToString("N");
+        await using var factory = Factory(db, s);
+        TraceFixtureLoader.Seed(factory, "match");
+
+        var (submit, claim, decide, proposal) = await ApproveAsync(db, s, factory, TraceFixtureLoader.LoadProposalBody("match"), rationale);
+
+        var scan = await SentinelScan.CollectAsync(factory, db, submit, claim, decide);
+        scan.AddJsonl(factory.ExecutorOutputPath);
+        Assert.Contains("jsonl", scan.SourceNames);
+        Assert.Contains("rows:execution_ledger", scan.SourceNames);
+        Assert.True(factory.Logs.CountAt(LogLevel.Trace) > 0);
+        scan.AssertAbsent(s.Key, s.Token, rationale);
+
+        // Not vacuous: the JSONL really holds this proposal, and the rationale is stored only in the queue item.
+        var jsonl = File.ReadAllText(factory.ExecutorOutputPath);
+        Assert.Contains(proposal.ToString(), jsonl);
+        Assert.Equal(rationale, await DecisionHttp.Scalar<string>(db, "select rationale from queue_item where proposal_id = @p", ("p", proposal)));
+    }
+
+    // The verified-trace fixture pins the proposal hash, so a changed justification cannot ride that path; this test uses the default stub flow.
+    [Fact]
+    public async Task IDN_08_justification_sentinel_absent_from_jsonl_and_view_row()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        var justification = "SENTINEL-JUSTIFICATION-" + Guid.NewGuid().ToString("N");
+        await using var factory = new OliveApiFactory(db);
+        using var agent = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
+        var body = ApiProposalTests.BodyFor("idn8j").Replace("\"justification\":\"j\"", "\"justification\":\"" + justification + "\"");
+        Assert.Contains(justification, body);
+        var post = await agent.PostAsync("/v1/proposals", ApiProposalTests.Json(body), Ct);
+        Assert.Equal(HttpStatusCode.Created, post.StatusCode);
+        var proposal = JsonDocument.Parse(await post.Content.ReadAsStringAsync(Ct)).RootElement.GetProperty("proposal_id").GetGuid();
+        await db.AdminExecAsync($"update proposal set on_behalf_of = 'analyst.alpha@example.test' where proposal_id = '{proposal}'");
+        using var rev = factory.CreateReviewerClient("alpha-sup-1");
+        var item = (await ReviewerTenantTests.ListAsync(rev)).Single(i => i.GetProperty("producer_ref").GetGuid() == proposal).GetProperty("item_id").GetGuid();
+        await DecisionHttp.ClaimAsync(factory, "alpha-sup-1", item);
+        Assert.Equal(HttpStatusCode.OK, (await DecisionHttp.Decide(factory, "alpha-sup-1", item, "approve")).StatusCode);
+
+        var jsonl = File.ReadAllText(factory.ExecutorOutputPath);
+        Assert.Contains(proposal.ToString(), jsonl);
+        Assert.DoesNotContain(justification, jsonl);
+        var execution = await DecisionHttp.Scalar<Guid>(db, "select execution_id from execution_ledger where proposal_id = @p and phase = 'started'", ("p", proposal));
+        var row = Assert.Single(await ExecutionChainViewTests.QueryChainAsync(db.ReaderConnectionString, DecisionHttp.Alpha, DecisionHttp.Alpha, execution));
+        Assert.DoesNotContain(justification, JsonSerializer.Serialize(row.ToDictionary(kv => kv.Key, kv => kv.Value?.ToString())));
     }
 
     [Fact]
