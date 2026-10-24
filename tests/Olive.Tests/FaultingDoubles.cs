@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Olive.Application;
 using Olive.Domain;
 using Olive.Integrations.Popeye;
@@ -119,5 +120,124 @@ public sealed class FaultingDirectoryResolver(IDirectoryGroupResolver healthy, R
             case ResolverFault.Malformed: return new DirectoryLookup.Malformed();
             default: return await healthy.ResolveAsync(tenantId, onBehalfOf, ct);
         }
+    }
+}
+
+public enum ExecutionFault { None, ThrowOnBegin, ThrowOnStarted, ThrowOnFinish }
+
+// Execution-path doubles (EXE-02, EXE-03, EXE-05). Tests only; the thrown text carries a sentinel so tests can prove it never leaks (D-09).
+public sealed class FaultingExecutionStore(IExecutionStore inner, ExecutionFault mode = ExecutionFault.None, bool throwOnce = true) : IExecutionStore
+{
+    public const string Sentinel = "EXEC-FAULT-SENTINEL-4471";
+
+    public ExecutionFault Mode { get; set; } = mode;
+
+    public bool ThrowOnce { get; set; } = throwOnce;
+
+    internal bool Take(ExecutionFault fault)
+    {
+        if (Mode != fault) { return false; }
+        if (ThrowOnce) { Mode = ExecutionFault.None; }
+        return true;
+    }
+
+    public async Task<IExecutionAttempt?> BeginAttemptAsync(Guid tenantId, Guid proposalId, CancellationToken ct)
+    {
+        if (Take(ExecutionFault.ThrowOnBegin)) { throw new InvalidOperationException(Sentinel); }
+        var attempt = await inner.BeginAttemptAsync(tenantId, proposalId, ct);
+        return attempt is null ? null : new FaultingAttempt(this, attempt);
+    }
+
+    public Task<IReadOnlyList<Guid>> ListApprovedAsync(Guid tenantId, CancellationToken ct) => inner.ListApprovedAsync(tenantId, ct);
+
+    private sealed class FaultingAttempt(FaultingExecutionStore owner, IExecutionAttempt real) : IExecutionAttempt
+    {
+        public ValueTask DisposeAsync() => real.DisposeAsync();
+
+        public Task<ExecutionSnapshot?> LoadAsync(CancellationToken ct) => real.LoadAsync(ct);
+
+        public Task<LedgerRow> RecordStartedAsync(DateTimeOffset now, CancellationToken ct)
+        {
+            if (owner.Take(ExecutionFault.ThrowOnStarted)) { throw new InvalidOperationException(Sentinel); }
+            return real.RecordStartedAsync(now, ct);
+        }
+
+        // Thrown before the real write: the started row and the target write exist, the finished row and state change do not.
+        public Task<LedgerRow> RecordFinishedAsync(FinishedOutcome outcome, string toState, DateTimeOffset now, CancellationToken ct)
+        {
+            if (owner.Take(ExecutionFault.ThrowOnFinish)) { throw new InvalidOperationException(Sentinel); }
+            return real.RecordFinishedAsync(outcome, toState, now, ct);
+        }
+
+        public Task<LedgerRow> RecordRefusalAsync(string reason, string toState, DateTimeOffset now, CancellationToken ct) =>
+            real.RecordRefusalAsync(reason, toState, now, ct);
+    }
+}
+
+// Signals when an attempt is inside the target write, then waits for the test to release it.
+public sealed class GateExecutor(IActionExecutor inner) : IActionExecutor
+{
+    private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _calls;
+
+    public Task Entered => _entered.Task;
+
+    public int Calls => Volatile.Read(ref _calls);
+
+    public void Release() => _release.TrySetResult();
+
+    public async Task<ExecutionTargetResult> ExecuteAsync(ExecutionRequest request, CancellationToken ct)
+    {
+        Interlocked.Increment(ref _calls);
+        _entered.TrySetResult();
+        await _release.Task.WaitAsync(ct);
+        return await inner.ExecuteAsync(request, ct);
+    }
+}
+
+public sealed class ThrowingExecutor : IActionExecutor
+{
+    public const string Sentinel = "EXECUTOR-THROW-SENTINEL-5582";
+
+    public Task<ExecutionTargetResult> ExecuteAsync(ExecutionRequest request, CancellationToken ct) =>
+        throw new InvalidOperationException(Sentinel);
+}
+
+public sealed class CountingExecutor(IActionExecutor inner) : IActionExecutor
+{
+    private int _calls;
+
+    public int Calls => Volatile.Read(ref _calls);
+
+    public Task<ExecutionTargetResult> ExecuteAsync(ExecutionRequest request, CancellationToken ct)
+    {
+        Interlocked.Increment(ref _calls);
+        return inner.ExecuteAsync(request, ct);
+    }
+}
+
+public sealed class SwitchableCatalogCheck(IActionCatalogCheck inner) : IActionCatalogCheck
+{
+    public bool? Executable { get; set; }
+
+    public CatalogCheckResult Check(string actionId, string parametersJson) =>
+        Executable == false ? new CatalogCheckResult(false, null) : inner.Check(actionId, parametersJson);
+}
+
+public static class ServiceDecoration
+{
+    // Replaces the registered T with decorate(real). The real instance is built by the original registration.
+    public static void Decorate<T>(this IServiceCollection services, Func<T, T> decorate) where T : class
+    {
+        var original = services.Last(d => d.ServiceType == typeof(T));
+        services.Remove(original);
+        services.AddSingleton<T>(sp =>
+        {
+            var real = original.ImplementationFactory is { } f ? (T)f(sp)
+                : original.ImplementationInstance is { } i ? (T)i
+                : (T)ActivatorUtilities.CreateInstance(sp, original.ImplementationType!);
+            return decorate(real);
+        });
     }
 }
