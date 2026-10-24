@@ -204,6 +204,8 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
         s.AddSingleton<IDirectoryGroupResolver>(new FaultingDirectoryResolver(new ProductionDirectoryStub(), ResolverFault.Unavailable));
         s.RemoveAll<IUserIdentityResolver>();
         s.AddSingleton<IUserIdentityResolver>(new FaultingUserIdentityResolver(new ProductionIdentityStub(), ResolverFault.Unavailable));
+        // The picker gate is non-production only (FND-05); a production-safe host does not carry it.
+        s.RemoveAll<Olive.Host.Auth.DevSignInGate>();
         s.RemoveAll<IReviewerIdentitySource>();
         s.AddSingleton<IReviewerIdentitySource>(new ProductionReviewerStub());
         if (!keepDevReviewerScheme)

@@ -1,0 +1,35 @@
+@model ForbiddenViewModel
+@{
+    ViewData["Title"] = "Access denied";
+    var heading = Model.Reason switch
+    {
+        "role_not_held" => "You no longer hold the role to decide this item",
+        _ => "No reviewer tenant for your account",
+    };
+    var body = Model.Reason switch
+    {
+        "role_not_held" => "Your role was checked when you submitted the decision and it is not assigned to you now. Nothing was decided. The item is still claimed by you; release it so another reviewer can decide it.",
+        "groups_overage" => "Your sign-in token did not include your group list because you belong to too many groups. Ask an Olive operator to limit the token to groups assigned to Olive.",
+        _ => "Your account is not mapped to exactly one reviewer tenant, so you cannot use the review queue. Ask an Olive operator to check the reviewer tenant map for your groups.",
+    };
+}
+<section class="panel panel-forbidden">
+    <h1>@heading</h1>
+    <p>@body</p>
+    <p class="muted mono">Reason code: @Model.Reason</p>
+    <div class="actions">
+        @if (Model.Reason == "role_not_held" && Model.ItemId is { } itemId)
+        {
+            <form method="post" action="/review/items/@itemId?handler=Release" asp-antiforgery="true">
+                <button type="submit" class="button button-secondary">Release item</button>
+            </form>
+            <a href="/review/items/@itemId">Back to item</a>
+        }
+        else
+        {
+            <form method="post" asp-page="/Account/SignOut">
+                <button type="submit" class="button button-secondary">Sign out</button>
+            </form>
+        }
+    </div>
+</section>

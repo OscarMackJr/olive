@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Npgsql;
 using Olive.Application;
 using Olive.Catalog;
@@ -83,17 +84,44 @@ builder.Services.AddSingleton<IReviewerTenantMap>(_ => ReviewerTenantMap.LoadEmb
 builder.Services.AddSingleton(_ => CatalogLoader.LoadEmbedded(Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml")));
 builder.Services.AddAuthentication(AgentKeyAuthenticationHandler.SchemeName)
     .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, AgentKeyAuthenticationHandler>(AgentKeyAuthenticationHandler.SchemeName, _ => { })
-    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DevReviewerAuthenticationHandler>(DevReviewerAuthenticationHandler.SchemeName, _ => { });
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DevReviewerAuthenticationHandler>(DevReviewerAuthenticationHandler.SchemeName, _ => { })
+    .AddReviewerSession();
 // D-07: dev reviewer identities from a source-controlled fixture (INonProductionOnly, so FND-05 bars it in production).
 builder.Services.AddSingleton<IReviewerIdentitySource>(_ => FixtureReviewerIdentitySource.CreateDefault());
-builder.Services.AddAuthorization();
+// D-15: the reviewer cookie scheme is named only by this UI policy, never by a /v1 route.
+builder.Services.AddAuthorization(o => o.AddPolicy("ReviewerUi", p => p.AddAuthenticationSchemes(ReviewerCookie.Scheme).RequireAuthenticatedUser()));
+builder.Services.AddRazorPages(o =>
+{
+    o.Conventions.AuthorizeFolder("/Review", "ReviewerUi");
+    o.Conventions.AllowAnonymousToFolder("/Dev");
+    o.Conventions.AllowAnonymousToFolder("/Account");
+});
+builder.Services.AddAntiforgery(o =>
+{
+    o.Cookie.Name = "__Host-olive-af";
+    o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    o.Cookie.SameSite = SameSiteMode.Lax;
+});
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("olive");
+if (builder.Configuration["OLIVE_DATA_PROTECTION_PATH"] is { Length: > 0 } keyPath)
+{
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyPath));
+}
+
+// D-02 / D-18: unconditional; as an INonProductionOnly marker it makes FND-05 refuse production while the picker exists.
+builder.Services.AddSingleton<DevSignInGate>();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
 
 var app = builder.Build();
 app.UseExceptionHandler();
+app.UseOliveSecurityHeaders();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseAntiforgery();
+app.MapGet("/", () => Results.Redirect("/review"));
+app.MapRazorPages();
 app.MapProposalEndpoints();
 app.MapQueueEndpoints();
 app.MapCatalogEndpoints();
