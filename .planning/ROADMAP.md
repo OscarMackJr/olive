@@ -286,7 +286,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 5** *(blocked on Wave 4)*
 
-- [ ] 06-05-PLAN.md — Slice: startup sweep and restart behaviour (EXE-01, EXE-03, EXE-05)
+- [x] 06-05-PLAN.md — Slice: startup sweep and restart behaviour (EXE-01, EXE-03, EXE-05)
 - [ ] 06-06-PLAN.md — Slice: chain view tests and IDN-08 JSONL sentinel scan (EXE-06, IDN-08)
 
 **Wave 6** *(blocked on Wave 5)*
@@ -369,7 +369,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 3. Trace Verification | 6/6 | Complete    | 2026-10-22 |
 | 4. Policy, Expiry and Refusal | 7/7 | Complete    | 2026-10-23 |
 | 5. Generic Review Queue and Action Approval | 10/10 | Complete    | 2026-10-23 |
-| 6. Simulated Execution and Audit Chain | 4/7 | In Progress|  |
+| 6. Simulated Execution and Audit Chain | 5/7 | In Progress|  |
 | 7. Reviewer UI and Entra OIDC | 0/TBD | Not started | - |
 | 8. Identity Review Queue Kind | 0/TBD | Not started | - |
 | 9. Contract and Evidence Pack | 0/TBD | Not started | - |
