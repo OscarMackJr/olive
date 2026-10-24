@@ -317,8 +317,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 07-02-PLAN.md — Item page: claim, release, decide, stub decide-time role re-read (UI-03, UI-04, APR-03, UI-05)
-- [ ] 07-03-PLAN.md — Audit page, hash recompute, execution chain (UI-05)
+- [x] 07-02-PLAN.md — Item page: claim, release, decide, stub decide-time role re-read (UI-03, UI-04, APR-03, UI-05)
+- [x] 07-03-PLAN.md — Audit page, hash recompute, execution chain (UI-05)
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -390,6 +390,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 4. Policy, Expiry and Refusal | 7/7 | Complete    | 2026-10-23 |
 | 5. Generic Review Queue and Action Approval | 10/10 | Complete    | 2026-10-23 |
 | 6. Simulated Execution and Audit Chain | 9/9 | Complete    | 2026-10-24 |
-| 7. Reviewer UI and Entra OIDC | 1/6 | In Progress|  |
+| 7. Reviewer UI and Entra OIDC | 3/6 | In Progress|  |
 | 8. Identity Review Queue Kind | 0/TBD | Not started | - |
 | 9. Contract and Evidence Pack | 0/TBD | Not started | - |
