@@ -7,25 +7,32 @@ namespace Olive.Host.Startup;
 // EXE-04: the sweep runs only after ApplicationStarted, which is raised after StartupGuardFilter has run every guard, so a
 // host that refuses to start never executes. Dependencies resolve inside the sweep so a resolution fault is logged and
 // cannot stop the host.
+// EXE-05 / D-01: the stopping token is consulted only between attempts. An attempt that has begun always runs to completion
+// with CancellationToken.None (the decide-path rule), and StopAsync drains the sweep, so a routine shutdown never leaves a
+// started-only row that the next start would record as execution_in_doubt.
 public sealed class ExecutionSweep(IServiceProvider services, IHostApplicationLifetime lifetime) : IHostedService
 {
     private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private Task _sweep = Task.CompletedTask;
 
     // Completes (never faults) when the sweep has finished, or when the host stops before it started.
     public Task Completion => _completion.Task;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        lifetime.ApplicationStarted.Register(() => _ = Task.Run(() => SweepAsync(lifetime.ApplicationStopping)));
-        lifetime.ApplicationStopping.Register(() => _completion.TrySetResult());
+        lifetime.ApplicationStarted.Register(() => Volatile.Write(ref _sweep, Task.Run(() => SweepAsync(lifetime.ApplicationStopping))));
+        lifetime.ApplicationStopping.Register(() =>
+        {
+            if (Volatile.Read(ref _sweep).IsCompleted) { _completion.TrySetResult(); }
+        });
         return Task.CompletedTask;
     }
 
-    private async Task SweepAsync(CancellationToken cancellationToken)
+    private async Task SweepAsync(CancellationToken stopping)
     {
         try
         {
-            await RunAsync(cancellationToken);
+            await RunAsync(stopping);
         }
         catch (Exception)
         {
@@ -37,7 +44,7 @@ public sealed class ExecutionSweep(IServiceProvider services, IHostApplicationLi
         }
     }
 
-    private async Task RunAsync(CancellationToken cancellationToken)
+    private async Task RunAsync(CancellationToken stopping)
     {
         var log = services.GetRequiredService<ILoggerFactory>().CreateLogger("Olive.Host.ExecutionSweep");
         IExecutionStore store;
@@ -57,10 +64,15 @@ public sealed class ExecutionSweep(IServiceProvider services, IHostApplicationLi
 
         foreach (var tenantId in allTenants)
         {
+            if (stopping.IsCancellationRequested) { return; }
             IReadOnlyList<Guid> ids;
             try
             {
-                ids = await store.ListApprovedAsync(tenantId, cancellationToken);
+                ids = await store.ListApprovedAsync(tenantId, stopping);
+            }
+            catch (Exception) when (stopping.IsCancellationRequested)
+            {
+                return;
             }
             catch (Exception)
             {
@@ -70,9 +82,11 @@ public sealed class ExecutionSweep(IServiceProvider services, IHostApplicationLi
 
             foreach (var id in ids)
             {
+                // Stop between attempts only; never cancel one that has begun.
+                if (stopping.IsCancellationRequested) { return; }
                 try
                 {
-                    await execution.ExecuteAsync(tenantId, id, cancellationToken);
+                    await execution.ExecuteAsync(tenantId, id, CancellationToken.None);
                 }
                 catch (Exception)
                 {
@@ -82,5 +96,20 @@ public sealed class ExecutionSweep(IServiceProvider services, IHostApplicationLi
         }
     }
 
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    // Drains an in-flight sweep so an attempt between the target write and its finished row can record its outcome before
+    // the service provider (and its data source) is disposed. Bounded by the host shutdown timeout.
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Volatile.Read(ref _sweep).WaitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            _completion.TrySetResult();
+        }
+    }
 }

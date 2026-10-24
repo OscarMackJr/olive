@@ -209,6 +209,44 @@ public sealed class ExecutionSweepTests(PostgresFixture fixture)
         Assert.Empty(Lines(h2));
     }
 
+    // WR-01: a shutdown that begins while the sweep is inside the target write must neither cancel the attempt nor dispose the
+    // data source under it. The attempt finishes as executed; it is never left started-only and later recorded as in-doubt.
+    [Fact]
+    public async Task EXE_05_shutdown_during_sweep_attempt_drains_and_never_leaves_in_doubt()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        Guid proposal;
+        await using (var h1 = Host1(db, ExecutionFault.ThrowOnBegin))
+        {
+            proposal = await ApproveAsync(h1, db, false, "sw9");
+            Assert.Equal("approved", await StateOf(db, TestPaths.TenantAlpha, proposal));
+        }
+
+        GateExecutor? gate = null;
+        var h2 = new OliveApiFactory(db, awaitSweep: false, configureServices: s => s.Decorate<IActionExecutor>(real => gate = new GateExecutor(real)));
+        try
+        {
+            Assert.IsType<GateExecutor>(h2.Services.GetRequiredService<IActionExecutor>());
+            await gate!.Entered.WaitAsync(TimeSpan.FromSeconds(30), Ct);
+
+            h2.Services.GetRequiredService<Microsoft.Extensions.Hosting.IHostApplicationLifetime>().StopApplication();
+            var disposing = h2.DisposeAsync().AsTask();
+            await Task.Delay(TimeSpan.FromMilliseconds(500), Ct);
+            Assert.False(disposing.IsCompleted);
+            gate!.Release();
+            await disposing.WaitAsync(TimeSpan.FromSeconds(30), Ct);
+        }
+        finally
+        {
+            gate?.Release();
+            await h2.DisposeAsync();
+        }
+
+        Assert.Equal("executed", await StateOf(db, TestPaths.TenantAlpha, proposal));
+        Assert.Equal(1L, await Scalar<long>(db, TestPaths.TenantAlpha, "select count(*) from execution_ledger where proposal_id = @p and phase = 'finished' and outcome = 'succeeded'", proposal));
+        Assert.Equal(0L, await Scalar<long>(db, TestPaths.TenantAlpha, "select count(*) from execution_ledger where proposal_id = @p and reason = 'execution_in_doubt'", proposal));
+    }
+
     [Fact]
     public async Task EXE_01_sweep_fault_does_not_stop_host_start()
     {
