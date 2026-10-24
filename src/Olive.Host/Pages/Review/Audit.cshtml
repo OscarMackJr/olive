@@ -1,0 +1,143 @@
+@page "/review/items/{id:guid}/audit"
+@model Olive.Host.Pages.Review.AuditModel
+@{
+    ViewData["Title"] = "Audit history";
+}
+@if (Model.ForbiddenReason is not null)
+{
+    <partial name="_Forbidden" model="new ForbiddenViewModel(Model.ForbiddenReason, Model.ForbiddenItemId)" />
+    return;
+}
+<h1>Audit history</h1>
+<p class="muted mono">@Model.ItemId</p>
+@if (Model.Record is { TraceVerification: "fixture" })
+{
+    <div class="banner">Fixture trace: this proposal's trace was verified against a test fixture, not a live hometown answer.</div>
+}
+@if (Model.Record is { } record)
+{
+    <h2>Hashed fields</h2>
+    @if (Model.CanSeeFields)
+    {
+        <dl>
+            <dt>Action type</dt>
+            <dd>@record.ActionType</dd>
+            <dt>Party ref</dt>
+            <dd class="mono">@record.PartyRef</dd>
+            <dt>Parameters</dt>
+            <dd>
+                @if (Model.Parameters.Count == 0)
+                {
+                    <span>No parameters.</span>
+                }
+                else
+                {
+                    <table>
+                        <caption class="visually-hidden">Parameters</caption>
+                        <thead><tr><th scope="col">Name</th><th scope="col">Value</th></tr></thead>
+                        <tbody>
+                        @foreach (var p in Model.Parameters)
+                        {
+                            <tr><td class="mono">@p.Key</td><td class="mono">@p.Value</td></tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+            </dd>
+            <dt>Justification</dt>
+            <dd>@record.Justification</dd>
+        </dl>
+    }
+    else
+    {
+        <p>You do not hold the role required to view this item's payload. You can see its references only.</p>
+    }
+
+    <h2>Hashes</h2>
+    <dl>
+        <dt>body_sha256</dt>
+        <dd class="mono">@record.BodySha256</dd>
+        <dt>proposal_hash</dt>
+        <dd class="mono">@record.ProposalHash</dd>
+    </dl>
+    @if (Model.HashMatches)
+    {
+        <div class="flash flash-success" role="status">Matches: recomputed proposal_hash equals the stored value.</div>
+    }
+    else
+    {
+        <div class="flash flash-error" role="alert">Does not match: recomputed proposal_hash differs from the stored value. Do not rely on this record.</div>
+    }
+}
+
+@if (Model.ShowChain)
+{
+    <h2>Execution chain</h2>
+    @if (Model.Record!.Chain is { } chain)
+    {
+        <dl>
+            <dt>Policy decision</dt>
+            <dd class="mono">@chain.PolicyDecisionJson</dd>
+            <dt>Decision</dt>
+            <dd>@Model.Item.Decision</dd>
+            <dt>Decided by</dt>
+            <dd class="mono">@chain.DecidedBy</dd>
+            <dt>Rationale</dt>
+            <dd>@chain.Rationale</dd>
+            <dt>Auth source</dt>
+            <dd>@chain.AuthSource</dd>
+            <dt>Decided at</dt>
+            <dd>@(chain.DecidedAt is { } decidedAt ? Display.Timestamp(decidedAt) : "")</dd>
+            <dt>Execution mode</dt>
+            <dd>@chain.ExecutionMode</dd>
+            <dt>Started at</dt>
+            <dd>@Display.Timestamp(chain.StartedAt)</dd>
+            <dt>Finished at</dt>
+            <dd>@(chain.FinishedAt is { } finishedAt ? Display.Timestamp(finishedAt) : "Not finished")</dd>
+            <dt>Outcome</dt>
+            <dd>@(chain.Outcome ?? "none")</dd>
+            <dt>Reason</dt>
+            <dd class="mono">@(chain.Reason ?? "none")</dd>
+        </dl>
+    }
+    else
+    {
+        <p>No execution recorded yet.</p>
+    }
+}
+
+<h2>History</h2>
+@if (Model.Events.Count == 0)
+{
+    <p>No events recorded.</p>
+}
+else
+{
+    <table>
+        <caption class="visually-hidden">Queue item events</caption>
+        <thead>
+            <tr>
+                <th scope="col">Seq</th>
+                <th scope="col">Event</th>
+                <th scope="col">From</th>
+                <th scope="col">To</th>
+                <th scope="col">Actor</th>
+                <th scope="col">At</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var e in Model.Events)
+        {
+            <tr>
+                <td>@e.Seq</td>
+                <td>@e.EventType</td>
+                <td>@(e.FromState ?? "")</td>
+                <td>@e.ToState</td>
+                <td class="mono">@e.Actor</td>
+                <td>@Display.Timestamp(e.CreatedAt)</td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+<p><a href="/review/items/@Model.ItemId">Back to item</a></p>
