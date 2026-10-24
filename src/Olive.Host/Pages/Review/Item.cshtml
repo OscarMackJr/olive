@@ -128,13 +128,17 @@
         @if (Model.DecisionsSupported)
         {
             <form method="post" asp-page-handler="Decide" asp-route-id="@item.ItemId">
+                @if (Model.DraftRestored)
+                {
+                    <div class="flash flash-success" role="status">You signed in again. Your draft decision is restored below. Check it and select Submit decision to complete it.</div>
+                }
                 <fieldset>
                     <legend>Decision</legend>
-                    <label><input type="radio" name="decision" value="approve" required> Approve</label>
-                    <label><input type="radio" name="decision" value="reject" required> Reject</label>
+                    <label><input type="radio" name="decision" value="approve" required checked="@(Model.DraftDecision == "approve")"> Approve</label>
+                    <label><input type="radio" name="decision" value="reject" required checked="@(Model.DraftDecision == "reject")"> Reject</label>
                 </fieldset>
                 <label for="rationale" class="field-label">Rationale (required)</label>
-                <textarea id="rationale" name="rationale" required maxlength="4000" aria-describedby="rationale-hint"></textarea>
+                <textarea id="rationale" name="rationale" required maxlength="4000" aria-describedby="rationale-hint">@Model.DraftRationale</textarea>
                 <p id="rationale-hint" class="muted">Explain why you approve or reject. Do not paste record values, personal data or parameter values. Up to 4000 characters.</p>
                 <p class="muted">Decisions are final. Approving runs the simulated executor immediately; no real system is changed.</p>
                 <button type="submit" class="button button-primary">Submit decision</button>

@@ -19,6 +19,7 @@ public static class ReviewerCookie
         builder.Services.AddOptions<CookieAuthenticationOptions>(Scheme)
             .Configure<TimeProvider>((o, time) => o.TimeProvider = time);
         builder.Services.AddSingleton<IDecisionFreshness, DecisionFreshness>();
+        builder.Services.AddSingleton<DraftStore>();
         return builder.AddCookie(Scheme, o =>
         {
             o.Cookie.Name = CookieName;
