@@ -35,6 +35,9 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 - ✓ A generic review queue on IR-1's model (`queue_item` plus INSERT-only `queue_item_event`), reference-only `olive:proposal/<id>` refs, and a strict source-controlled kind registry. An accepted proposal is enqueued atomically; refusals and replays never are. Validated in Phase 5: Generic Review Queue and Action Approval.
 - ✓ List, claim (exactly one winner under concurrency), claimant-only release and decide, with `decided_by` and a non-blank rationale required and a full `seq`-ordered history. Approval moves the item and the proposal in one transaction. Validated in Phase 5: Generic Review Queue and Action Approval.
 - ✓ Expired proposals cannot be approved: expiry is committed lazily at claim, release and decide, then `409 proposal_expired` is returned. Self-approval is refused by oid+tid equality through `IUserIdentityResolver`, failing closed (Q14 closed). Validated in Phase 5: Generic Review Queue and Action Approval.
+- ✓ An approved proposal is executed exactly once in simulation, keyed on `proposal_id`, under a lock-holder transaction against the INSERT-only `execution_ledger`. A retry returns the first result. Expired proposals are refused at execute time. Executor exceptions after the `started` row become `execution_in_doubt`. Validated in Phase 6: Simulated Execution and Audit Chain.
+- ✓ A startup sweep resolves approved and in-doubt proposals. It runs only after every startup guard has passed (CR-01). Validated in Phase 6: Simulated Execution and Audit Chain.
+- ✓ The `security_invoker` view `execution_chain` lets you query the whole core-value chain (trace → policy → reviewer and rationale → execution) from the execution record. The scripted beat 2 demo runs through the API. Validated in Phase 6: Simulated Execution and Audit Chain.
 
 ### Active
 
@@ -46,12 +49,11 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 **Identity and authorization (Decision §7, §17.1)**
 - [ ] A popeye introspection client behind an interface, with a stub for Phase 1. It covers `active`, `key_id`, `principal_type = agent`, the agent allowlist (`liam`), `on_behalf_of`, `purpose`, `tenant_id` and `expires_at`.
 - [ ] Separate caller paths. Users and applications receive `403 principal_not_permitted` on the proposal endpoint, and agents and users cannot use Olive's service path.
-- [ ] The session key is sent only to popeye. A capture of every outbound call proves this. (Phase 3 proved it for responses, Trace-level logs and stored rows. The JSONL output check is deferred to Phase 6.)
+- [ ] The session key is sent only to popeye. A capture of every outbound call proves this. (Phase 3 proved it for responses, Trace-level logs and stored rows. Phase 6 extended the sentinel scan to the simulated executor's JSONL output.)
 
 **Policy and lifecycle (Charter §3)**
-- [ ] The full lifecycle: `proposed` → `refused_policy` | `awaiting_approval` → `approved` | `rejected` → `executed` | `execution_failed` | `expired`, with state guards on every transition. (Phase 4 added the transition table and guarded compare-and-set `TransitionAsync`; Phase 5 wired approve, reject and lazy expiry; execute arrives in Phase 6.)
-- [ ] Expiry defaults to 8 hours, with a per-action maximum. `expires_in_seconds` can only shorten it, and it is capped at the key's `expires_at`. Expired proposals cannot be approved or executed and return a distinct error. (Phase 4 delivered the default, per-action maximum, shorten-only and key cap with an absolute `expires_at`; Phase 5 delivered the approve refusal (POL-08); the execute refusal arrives in Phase 6.)
-- [ ] Execution is idempotent on `proposal_id`. A retry returns the first result.
+- [ ] The full lifecycle: `proposed` → `refused_policy` | `awaiting_approval` → `approved` | `rejected` → `executed` | `execution_failed` | `expired`, with state guards on every transition. (Phase 4 added the transition table and guarded compare-and-set `TransitionAsync`; Phase 5 wired approve, reject and lazy expiry; Phase 6 wired execute → `executed` | `execution_failed`.)
+- [ ] Expiry defaults to 8 hours, with a per-action maximum. `expires_in_seconds` can only shorten it, and it is capped at the key's `expires_at`. Expired proposals cannot be approved or executed and return a distinct error. (Phase 4 delivered the default, per-action maximum, shorten-only and key cap with an absolute `expires_at`; Phase 5 delivered the approve refusal (POL-08); Phase 6 delivered the execute refusal.)
 
 **Persistence (Decision §10, §13)**
 - [ ] Postgres tables `proposal`, `proposal_event`, `queue_item` and `execution_ledger`, all with `tenant_id`, ENABLE + FORCE RLS, and `current_setting('olive.tenant_id')` without `missing_ok`.
@@ -134,4 +136,6 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-23 after Phase 5 (Generic Review Queue and Action Approval) completed. A proposal that passes policy now appears in a reference-only IR-1 queue, and a named reviewer other than the requester can claim it and approve or reject with a rationale. Every queue action is recorded. Reviewer and agent callers are hard-separated, expiry is committed lazily before `proposal_expired` is returned, and self-approval is refused by oid+tid. The Beat 4 demo shows an out-of-purpose proposal refused and absent from the queue. 1128 tests are green.*
+*Last updated: 2026-10-24 after Phase 6 (Simulated Execution and Audit Chain) completed, including gap closure 06-08 and 06-09. An approved proposal now executes exactly once in simulation and is recorded in an INSERT-only ledger. The startup sweep runs only after every startup guard has passed. The full chain can be queried through `execution_chain`, and the beat 2 demo runs through the API. 1209 tests are green.*
+
+*Previously: 2026-10-23 after Phase 5 (Generic Review Queue and Action Approval) completed. A proposal that passes policy now appears in a reference-only IR-1 queue, and a named reviewer other than the requester can claim it and approve or reject with a rationale. Every queue action is recorded. Reviewer and agent callers are hard-separated, expiry is committed lazily before `proposal_expired` is returned, and self-approval is refused by oid+tid. The Beat 4 demo shows an out-of-purpose proposal refused and absent from the queue. 1128 tests are green.*
