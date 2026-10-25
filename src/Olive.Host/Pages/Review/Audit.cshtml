@@ -70,6 +70,21 @@
     }
 }
 
+@if (Model.Item.State == "decided")
+{
+    <h2>Decision</h2>
+    <dl>
+        <dt>Decision</dt>
+        <dd>@Model.Item.Decision</dd>
+        <dt>Decided by</dt>
+        <dd class="mono">@Model.Item.DecidedBy</dd>
+        <dt>Decided at</dt>
+        <dd>@(Model.Item.DecidedAt is { } itemDecidedAt ? Display.Timestamp(itemDecidedAt) : "")</dd>
+        <dt>Auth source</dt>
+        <dd>@Model.Item.AuthSource</dd>
+    </dl>
+}
+
 @if (Model.ShowChain)
 {
     <h2>Execution chain</h2>
@@ -139,5 +154,15 @@ else
         }
         </tbody>
     </table>
+}
+@if (Model.DeferRationales.Count > 0)
+{
+    <h2>Defer rationales</h2>
+    <ul>
+    @foreach (var d in Model.DeferRationales)
+    {
+        <li>Event @d.Key: @d.Value</li>
+    }
+    </ul>
 }
 <p><a href="/review/items/@Model.ItemId">Back to item</a></p>

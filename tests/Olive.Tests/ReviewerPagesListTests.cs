@@ -71,7 +71,8 @@ public sealed class ReviewerPagesListTests(PostgresFixture fixture)
             Assert.True(openAt > claimedAt, reviewer + " does not see the open item after the older claimed item");
             Assert.Contains("<span class=\"badge\">claimed</span>", html);
             Assert.Contains("<span class=\"badge\">open</span>", html);
-            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(html, "<span class=\"badge\">").Count);
+            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(html, "<span class=\"badge\">(claimed|open)</span>").Count);
+            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(html, "<span class=\"badge\">action_approval</span>").Count);
             Assert.DoesNotContain(decided.ToString(), html);
             Assert.DoesNotContain(expiredOpen.ToString(), html);
             Assert.DoesNotContain(expiredClaimed.ToString(), html);

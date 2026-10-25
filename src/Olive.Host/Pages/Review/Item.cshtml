@@ -40,6 +40,11 @@
         <dt>State</dt><dd><span class="badge">@item.State</span></dd>
         <dt>Subject ref</dt><dd class="mono">@item.SubjectRef</dd>
         <dt>Payload ref</dt><dd class="mono">@item.PayloadRef</dd>
+        @if (Model.IsIdentity)
+        {
+            <dt>Producer ref</dt><dd class="mono">@item.ProducerRef</dd>
+            <dt>Ruleset version</dt><dd class="mono">@(item.RulesetVersion ?? "Not recorded")</dd>
+        }
         <dt>Claimed by</dt><dd class="mono">@(item.ClaimedBy ?? "Not claimed")</dd>
         <dt>Created</dt><dd>@TimeText.Utc(item.CreatedAt)</dd>
         <dt>Expires</dt>
@@ -86,6 +91,10 @@
     {
         <p>You do not hold the role required to view this item's payload. You can see its references only.</p>
     }
+    else if (Model.RefsOnly)
+    {
+        <p>Evidence comes from bluto's evidence endpoint under your own credential. Olive does not show or fetch it.</p>
+    }
 </section>
 
 <section>
@@ -96,6 +105,10 @@
     }
     else if (item.State == "open")
     {
+        @if (Model.LacksRole)
+        {
+            <p>You do not hold the role needed to decide this item. You can see its references only.</p>
+        }
         <form method="post" asp-page-handler="Claim" asp-route-id="@item.ItemId">
             <button type="submit" class="button button-primary">Claim item</button>
         </form>
@@ -125,7 +138,7 @@
 {
     <section>
         <h2>Decision</h2>
-        @if (Model.DecisionsSupported)
+        @if (Model.Decisions.Count > 0)
         {
             <form method="post" asp-page-handler="Decide" asp-route-id="@item.ItemId">
                 @if (Model.DraftRestored)
@@ -134,13 +147,23 @@
                 }
                 <fieldset>
                     <legend>Decision</legend>
-                    <label><input type="radio" name="decision" value="approve" required checked="@(Model.DraftDecision == "approve")"> Approve</label>
-                    <label><input type="radio" name="decision" value="reject" required checked="@(Model.DraftDecision == "reject")"> Reject</label>
+                    @foreach (var option in Model.Decisions)
+                    {
+                        <label><input type="radio" name="decision" value="@option" required checked="@(Model.DraftDecision == option)"> @(char.ToUpperInvariant(option[0]) + option[1..])</label>
+                    }
                 </fieldset>
                 <label for="rationale" class="field-label">Rationale (required)</label>
                 <textarea id="rationale" name="rationale" required maxlength="4000" aria-describedby="rationale-hint">@Model.DraftRationale</textarea>
-                <p id="rationale-hint" class="muted">Explain why you approve or reject. Do not paste record values, personal data or parameter values. Up to 4000 characters.</p>
-                <p class="muted">Decisions are final. Approving runs the simulated executor immediately; no real system is changed.</p>
+                @if (Model.IsIdentity)
+                {
+                    <p id="rationale-hint" class="muted">Do not include names, dates, identifiers or other record values. Up to 4000 characters.</p>
+                    <p class="muted">Accept and reject are final. Defer returns the item to the queue for any steward.</p>
+                }
+                else
+                {
+                    <p id="rationale-hint" class="muted">Explain why you approve or reject. Do not paste record values, personal data or parameter values. Up to 4000 characters.</p>
+                    <p class="muted">Decisions are final. Approving runs the simulated executor immediately; no real system is changed.</p>
+                }
                 <button type="submit" class="button button-primary">Submit decision</button>
             </form>
         }
