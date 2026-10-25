@@ -41,6 +41,17 @@ public sealed class QueueServiceDecideTests
             return Task.FromResult<ReleaseResult>(new ReleaseResult.NotFound());
         }
 
+        public int CreateCalls { get; private set; }
+        public Guid? LastTenant { get; private set; }
+        public string? LastProducer { get; private set; }
+        public Task<CreateIdentityResult> CreateIdentityItemAsync(Guid tenantId, string producer, string kind, string subtype, Guid producerRef, string subjectRef, string payloadRef, string rulesetVersion, string bodySha256, DateTimeOffset now, CancellationToken ct)
+        {
+            CreateCalls++;
+            LastTenant = tenantId;
+            LastProducer = producer;
+            return Task.FromResult<CreateIdentityResult>(new CreateIdentityResult.Created(Guid.NewGuid(), "open"));
+        }
+
         public Task<DecideResult> DecideAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, bool approveIdentityVerified, DateTimeOffset now, CancellationToken ct)
         {
             DecideCalls++;
