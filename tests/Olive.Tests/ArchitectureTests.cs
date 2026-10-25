@@ -278,6 +278,27 @@ public sealed class ArchitectureTests
 
     [Fact]
     [Trait("Category", "Architecture")]
+    public void IRQ_04_inbound_bearer_token_appears_only_on_popeye_ports()
+    {
+        var ports = OutboundPorts().ToArray();
+        foreach (var port in ports)
+        {
+            var carries = SignatureTypes(port).Any(t => t == typeof(Olive.Domain.InboundBearerToken));
+            if (DestinationOf(port) != Olive.Application.OutboundDestination.Popeye)
+            {
+                Assert.False(carries, $"{port.Name} is not a popeye port but its signature mentions InboundBearerToken");
+            }
+        }
+
+        // Non-vacuous: the verifier port carries it, and is marked as a popeye port.
+        var verifier = typeof(Olive.Application.IServiceTokenVerifier);
+        Assert.Equal(Olive.Application.OutboundDestination.Popeye, DestinationOf(verifier));
+        Assert.Contains(SignatureTypes(verifier), t => t == typeof(Olive.Domain.InboundBearerToken));
+        Assert.DoesNotContain(SignatureTypes(verifier), t => SessionKeyTypes.Contains(t) || ServiceTokenTypes.Contains(t));
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
     public void IDN_08_every_application_port_implemented_in_an_integration_assembly_is_marked_outbound()
     {
         var appAssembly = typeof(Olive.Application.AssemblyMarker).Assembly;

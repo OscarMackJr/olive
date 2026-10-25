@@ -27,7 +27,7 @@ public sealed class SourceHygieneTests
             .Where(f => File.ReadAllText(f).Contains("ExposeSecret(", StringComparison.Ordinal))
             .Select(f => Path.GetRelativePath(src, f).Replace('\\', '/'))
             .Where(f => !f.StartsWith("Olive.Integrations.Popeye/", StringComparison.Ordinal)
-                        && f != "Olive.Domain/SessionKey.cs" && f != "Olive.Domain/ServiceToken.cs" && f != "Olive.Domain/OidcClientSecret.cs"
+                        && f != "Olive.Domain/SessionKey.cs" && f != "Olive.Domain/ServiceToken.cs" && f != "Olive.Domain/OidcClientSecret.cs" && f != "Olive.Domain/InboundBearerToken.cs"
                         && f != "Olive.Host/Auth/ReviewerOidc.cs")
             .ToList();
         // AgentKeyHeader mentions no ExposeSecret( call; any offender here is a leak path.
