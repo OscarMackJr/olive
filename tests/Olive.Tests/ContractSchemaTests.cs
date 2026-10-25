@@ -7,7 +7,7 @@ public sealed class ContractSchemaTests
 {
     private static readonly string[] Folders =
     [
-        "contracts/proposal/v1", "contracts/catalog/v1", "contracts/queue-item/v1", "contracts/execution-record/v1", "contracts/trace-resolution", "contracts/identity", "contracts/reviewer",
+        "contracts/proposal/v1", "contracts/catalog/v1", "contracts/queue-item/v1", "contracts/execution-record/v1", "contracts/trace-resolution", "contracts/identity", "contracts/reviewer", "contracts/service-token",
     ];
 
     public static TheoryData<string> SchemaFiles()

@@ -26,6 +26,12 @@ public sealed class RecordingKeyIntrospector(IKeyIntrospector inner, List<string
     }
 }
 
+// Not INonProductionOnly and not an IComponentDecorator: lets production positive controls run with fixture data, like RecordingKeyIntrospector.
+public sealed class PassThroughServiceTokenVerifier(IServiceTokenVerifier inner) : IServiceTokenVerifier
+{
+    public Task<ServiceTokenResult> VerifyAsync(InboundBearerToken token, CancellationToken ct) => inner.VerifyAsync(token, ct);
+}
+
 public sealed class ThrowingKeyIntrospector : IKeyIntrospector
 {
     public Task<IntrospectionResult> IntrospectAsync(SessionKey key, CancellationToken ct) =>
