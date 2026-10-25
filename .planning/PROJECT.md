@@ -137,6 +137,8 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-24 after Phase 6 (Simulated Execution and Audit Chain) completed, including gap closure 06-08 and 06-09. An approved proposal now executes exactly once in simulation and is recorded in an INSERT-only ledger. The startup sweep runs only after every startup guard has passed. The full chain can be queried through `execution_chain`, and the beat 2 demo runs through the API. 1209 tests are green.*
+*Last updated: 2026-10-24 after Phase 7 (Reviewer UI and Entra OIDC) completed. Reviewers sign in through OIDC or a dev picker that is available only in stub mode. They work the queue in a minimal Razor Pages UI, and the approver role is re-checked at decision time. Code review fixes CR-01 and WR-01 are applied. 1394 tests are green.*
+
+*Previously: 2026-10-24 after Phase 6 (Simulated Execution and Audit Chain) completed, including gap closure 06-08 and 06-09. An approved proposal now executes exactly once in simulation and is recorded in an INSERT-only ledger. The startup sweep runs only after every startup guard has passed. The full chain can be queried through `execution_chain`, and the beat 2 demo runs through the API. 1209 tests are green.*
 
 *Previously: 2026-10-23 after Phase 5 (Generic Review Queue and Action Approval) completed. A proposal that passes policy now appears in a reference-only IR-1 queue, and a named reviewer other than the requester can claim it and approve or reject with a rationale. Every queue action is recorded. Reviewer and agent callers are hard-separated, expiry is committed lazily before `proposal_expired` is returned, and self-approval is refused by oid+tid. The Beat 4 demo shows an out-of-purpose proposal refused and absent from the queue. 1128 tests are green.*
