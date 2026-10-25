@@ -2,7 +2,7 @@
 
 These checks cannot run in CI because they need a real Microsoft Entra tenant and a real browser. They are external dependencies and do not block phase completion; CI already proves the same flows against mock-oauth2-server. Record pass or fail and what you observed under each item. If the tenant or group does not exist yet, mark the item `deferred: external dependency`.
 
-Status: pending human response (non-blocking; orchestrator will collect approved/deferred).
+Status: deferred: external dependency (user decision 2026-10-24; Entra tenant and supervisor group not yet available).
 
 ## 0. Entra prerequisites
 
