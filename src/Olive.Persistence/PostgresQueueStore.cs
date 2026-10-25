@@ -382,4 +382,45 @@ public sealed class PostgresQueueStore(TenantUnitOfWork uow, TimeProvider? time 
             return new DecideResult.Decided(await Reload(conn, tx, tenantId, itemId, ct));
         }, ct);
     }
+
+    // IRQ-03: no lock and no write; the unit of work only sets the tenant context for forced RLS.
+    public Task<IReadOnlyList<QueueItemDetail>> ListDecidedForProducerAsync(Guid tenantId, string producer, DateTime? afterAtUtc, Guid? afterItemId, int limit, CancellationToken ct) =>
+        uow.ExecuteAsync<IReadOnlyList<QueueItemDetail>>(tenantId, async (conn, tx) =>
+        {
+            var rows = await conn.QueryAsync<ItemRow>(new CommandDefinition(QueueSql.PollDecided, new
+            {
+                tenant_id = tenantId,
+                producer,
+                after_at = afterAtUtc is { } a ? DateTime.SpecifyKind(a, DateTimeKind.Utc) : (DateTime?)null,
+                after_id = afterItemId,
+                limit,
+            }, tx, cancellationToken: ct));
+            return rows.Select(ToDetail).ToList();
+        }, ct);
+
+    // IRQ-03 / D-17: absent, other-producer and other-kind rows are indistinguishable (NotFound). Withdraw races decide under the row lock.
+    public Task<WithdrawResult> WithdrawByProducerAsync(Guid tenantId, string producer, Guid itemId, string reason, CancellationToken ct) =>
+        uow.ExecuteAsync<WithdrawResult>(tenantId, async (conn, tx) =>
+        {
+            var row = await LockItem(conn, tx, tenantId, itemId, ct);
+            if (row is null || !string.Equals(row.Producer, producer, StringComparison.Ordinal) || row.Kind != QueueStates.IdentityReview)
+            {
+                return new WithdrawResult.NotFound();
+            }
+
+            if (row.State == QueueStates.Decided) { return new WithdrawResult.Closed(); }
+            if (row.State == QueueStates.Withdrawn)
+            {
+                return string.Equals(row.WithdrawnReason, reason, StringComparison.Ordinal)
+                    ? new WithdrawResult.AlreadyWithdrawn(itemId)
+                    : new WithdrawResult.Closed();
+            }
+
+            var n = await conn.ExecuteAsync(new CommandDefinition(QueueSql.WithdrawByProducer,
+                new { tenant_id = tenantId, item_id = itemId, producer, reason }, tx, cancellationToken: ct));
+            if (n != 1) { throw new InvalidOperationException("Withdraw did not affect exactly one row."); }
+            var detail = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string> { ["reason"] = reason });
+            await InsertItemEvent(conn, tx, tenantId, itemId, QueueStates.EventWithdrawn, row.State, QueueStates.Withdrawn, producer, detail, ct);
+            return new WithdrawResult.Withdrawn(itemId);
+        }, ct);
 }

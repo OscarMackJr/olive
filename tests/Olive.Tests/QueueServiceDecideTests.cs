@@ -47,6 +47,8 @@ public sealed class QueueServiceDecideTests
         public int CreateCalls { get; private set; }
         public Guid? LastTenant { get; private set; }
         public string? LastProducer { get; private set; }
+        public Task<IReadOnlyList<QueueItemDetail>> ListDecidedForProducerAsync(Guid tenantId, string producer, DateTime? afterAtUtc, Guid? afterItemId, int limit, CancellationToken ct) => throw new NotSupportedException();
+        public Task<WithdrawResult> WithdrawByProducerAsync(Guid tenantId, string producer, Guid itemId, string reason, CancellationToken ct) => throw new NotSupportedException();
         public Task<CreateIdentityResult> CreateIdentityItemAsync(Guid tenantId, string producer, string kind, string subtype, Guid producerRef, string subjectRef, string payloadRef, string rulesetVersion, string bodySha256, DateTimeOffset now, CancellationToken ct)
         {
             CreateCalls++;

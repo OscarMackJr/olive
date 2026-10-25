@@ -67,4 +67,16 @@ public static class QueueSql
     public const string Withdraw =
         "update queue_item set state = 'withdrawn', withdrawn_reason = @reason " +
         "where tenant_id = @tenant_id and item_id = @item_id and state in ('open','claimed')";
+
+    // IRQ-03 / D-15: only accept and reject decisions; deferred events never make an item match. Tenant and producer predicates always apply.
+    public const string PollDecided =
+        "select " + DetailColumns + " from queue_item where tenant_id = @tenant_id and producer = @producer " +
+        "and kind = 'identity_review' and state = 'decided' and decision in ('accept','reject') " +
+        "and (@after_at::timestamptz is null or (decided_at, item_id) > (@after_at::timestamptz, @after_id::uuid)) " +
+        "order by decided_at, item_id limit @limit";
+
+    // IRQ-03 / D-17: clears the claim in the same statement so queue_item_state_shape holds for a withdrawn row.
+    public const string WithdrawByProducer =
+        "update queue_item set state = 'withdrawn', withdrawn_reason = @reason, claimed_by = null, claimed_at = null " +
+        "where tenant_id = @tenant_id and item_id = @item_id and producer = @producer and kind = 'identity_review' and state in ('open','claimed')";
 }
