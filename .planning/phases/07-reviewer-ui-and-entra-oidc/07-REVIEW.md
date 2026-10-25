@@ -96,6 +96,8 @@ The three executor-reported items are covered by WR-02 (production start), WR-04
 
 ### CR-01: Queue list shows only `open` items, so claimed items (including the reviewer's own) disappear
 
+**Resolution:** FIXED in commit 06cf906 (see 07-REVIEW-FIX.md).
+
 **File:** `src/Olive.Host/Pages/Review/Index.cshtml.cs:19`
 **Issue:** `queue.ListAsync(Reviewer!, null, "open", null, ct)` passes `state = "open"`. `QueueSql.List` applies it as an exact match (`state = @state`). UI-SPEC section `/review` says the State column shows badge text "`open`, `claimed`", so the list must include claimed items. As written:
 - Once a reviewer claims an item, it disappears from every reviewer's queue page, the claimant's included.
@@ -118,6 +120,8 @@ Add a test: after claiming, the item still appears on `/review` with the `claime
 ## Warnings
 
 ### WR-01: Dev picker is always registered, so any non-production deployment has an unauthenticated sign-in path, even with Entra configured
+
+**Resolution:** FIXED in commit 33efa88 (see 07-REVIEW-FIX.md).
 
 **File:** `src/Olive.Host/Program.cs:142`, `src/Olive.Host/Pages/Dev/SignIn.cshtml.cs:12-43`, `src/Olive.Host/Auth/DecisionFreshness.cs:40-50`
 **Issue:**
