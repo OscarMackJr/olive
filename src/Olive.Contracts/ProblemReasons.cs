@@ -34,5 +34,7 @@ public static class ProblemReasons
     public const string RoleNotHeld = "role_not_held";
     public const string GroupsOverage = "groups_overage";
     public const string NoReviewerTenant = "no_reviewer_tenant";
+    public const string TenantNotPermitted = "tenant_not_permitted";
+    public const string ProducerNotRegistered = "producer_not_registered";
     public const string InternalError = "internal_error";
 }

@@ -4,5 +4,7 @@
   "fixture-key-user": "user.json",
   "fixture-key-application": "application.json",
   "fixture-key-agent-not-allowlisted": "agent-not-allowlisted.json",
-  "fixture-key-inactive": "inactive.json"
+  "fixture-key-inactive": "inactive.json",
+  "fixture-service-token-bluto-alpha": "inactive.json",
+  "fixture-service-token-bluto-beta": "inactive.json"
 }

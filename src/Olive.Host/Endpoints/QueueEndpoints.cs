@@ -11,25 +11,16 @@ public static class QueueEndpoints
     // D-01/D-03: reviewer list, get, claim and release. There is deliberately no create and no withdraw route in Phase 5.
     public static IEndpointRouteBuilder MapQueueEndpoints(this IEndpointRouteBuilder app)
     {
+        // D-01: one policy scheme picks DevReviewer or ServiceToken by header shape. Create, withdraw and poll attach ProducerOnly in plans 04 and 06.
         var group = app.MapGroup("/v1/queue/items")
-            .RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = DevReviewerAuthenticationHandler.SchemeName })
-            .AddEndpointFilter(async (ctx, next) =>
-            {
-                // D-08: the tenant comes only from the claim set by the server-side group map, never query, header or body.
-                if (ctx.HttpContext.User.ToReviewerContext() is null)
-                {
-                    return ProblemResults.Result(StatusCodes.Status403Forbidden, ProblemReasons.ReviewerTenantUnresolved);
-                }
-
-                return await next(ctx);
-            });
-        group.MapGet("", ListAsync);
-        group.MapGet("/{id:guid}", GetAsync);
-        group.MapGet("/{id:guid}/payload", PayloadAsync);
-        group.MapGet("/{id:guid}/events", EventsAsync);
-        group.MapPost("/{id:guid}/claim", ClaimAsync);
-        group.MapPost("/{id:guid}/release", ReleaseAsync);
-        group.MapPost("/{id:guid}/decision", DecisionAsync);
+            .RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = QueueCaller.SchemeName });
+        group.MapGet("", ListAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
+        group.MapGet("/{id:guid}", GetAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
+        group.MapGet("/{id:guid}/payload", PayloadAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
+        group.MapGet("/{id:guid}/events", EventsAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
+        group.MapPost("/{id:guid}/claim", ClaimAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
+        group.MapPost("/{id:guid}/release", ReleaseAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
+        group.MapPost("/{id:guid}/decision", DecisionAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
         return app;
     }
 

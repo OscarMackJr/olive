@@ -64,6 +64,8 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
 
     public RecordingUserIdentityResolver UserIdentity { get; private set; } = null!;
 
+    public RecordingServiceTokenVerifier ServiceTokens { get; private set; } = null!;
+
     public RecordingAlarm Alarms { get; } = new();
 
     public List<OutboundCall> OutboundCalls { get; } = [];
@@ -133,6 +135,8 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
                     o => o.BackchannelHttpHandler = new ScenarioTokenRequestHandler(Scenario, new HttpClientHandler()));
             }
 
+            ServiceTokens = new RecordingServiceTokenVerifier(StubServiceTokenVerifier.CreateDefault(TimeProvider.System));
+            services.AddSingleton<IServiceTokenVerifier>(ServiceTokens);
             services.AddSingleton<IOperationalAlarm>(Alarms);
             services.AddSingleton<ITokenIssuer>(new RecordingTokenIssuer(innerIssuer ?? new StubTokenIssuer(inner, TimeProvider.System), Events, OutboundCalls));
             var recordingResolver = new RecordingTraceResolver(innerResolver ?? (traceMode == TraceMode.Explicit ? FixtureResolver : new AutoFixtureTraceResolver(FixtureResolver)), Events, OutboundCalls);
@@ -183,6 +187,13 @@ public sealed class OliveApiFactory(TestDatabase db, IKeyIntrospector? introspec
     {
         var client = CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(AgentKeyHeader.Scheme, sessionKey);
+        return client;
+    }
+
+    public HttpClient CreateServiceClient(string token)
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return client;
     }
 

@@ -79,3 +79,19 @@ public sealed class RecordingDirectoryResolver(IDirectoryGroupResolver inner, Li
         return inner.ResolveAsync(tenantId, onBehalfOf, ct);
     }
 }
+
+// Counts inbound service-token verifications and delegates to the real stub (D-05).
+public sealed class RecordingServiceTokenVerifier(IServiceTokenVerifier inner) : IServiceTokenVerifier, IComponentDecorator
+{
+    private int _calls;
+
+    public object Inner => inner;
+
+    public int Calls => Volatile.Read(ref _calls);
+
+    public Task<ServiceTokenResult> VerifyAsync(InboundBearerToken token, CancellationToken ct)
+    {
+        Interlocked.Increment(ref _calls);
+        return inner.VerifyAsync(token, ct);
+    }
+}
