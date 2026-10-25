@@ -351,8 +351,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 8 plans
 **Wave 1**
 
-- [ ] 08-01-PLAN.md — Migration 0010, IR-1 SHA-256 pin, steward fixtures, identity seeding helper (IRQ-01, IRQ-02, IRQ-03)
-- [ ] 08-02-PLAN.md — Inbound service-token port and stub, contracts/service-token, producers.yaml registry and startup guard (IRQ-04, IDN-03)
+- [x] 08-01-PLAN.md — Migration 0010, IR-1 SHA-256 pin, steward fixtures, identity seeding helper (IRQ-01, IRQ-02, IRQ-03)
+- [x] 08-02-PLAN.md — Inbound service-token port and stub, contracts/service-token, producers.yaml registry and startup guard (IRQ-04, IDN-03)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -417,5 +417,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 5. Generic Review Queue and Action Approval | 10/10 | Complete    | 2026-10-23 |
 | 6. Simulated Execution and Audit Chain | 9/9 | Complete    | 2026-10-24 |
 | 7. Reviewer UI and Entra OIDC | 6/6 | Complete    | 2026-10-25 |
-| 8. Identity Review Queue Kind | 0/TBD | Not started | - |
+| 8. Identity Review Queue Kind | 2/8 | In Progress|  |
 | 9. Contract and Evidence Pack | 0/TBD | Not started | - |
