@@ -1,0 +1,7 @@
+# Producers allowed to file queue items (D-06). Source-controlled; not overridable by environment variable or appsettings.
+producers:
+  - client_id: bluto-stub
+    producer: bluto
+    kinds:
+      - kind: identity_review
+        subtypes: [candidate_pair]

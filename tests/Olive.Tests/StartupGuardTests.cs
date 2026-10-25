@@ -106,6 +106,17 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task FND_05_production_with_stub_service_token_verifier_refuses()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, environment: "production", replaceIntrospector: false,
+            configureServices: s => { ProductionSafePorts(s); s.RemoveAll<IKeyIntrospector>(); s.AddSingleton<IKeyIntrospector, ThrowingKeyIntrospector>(); s.RemoveAll<IServiceTokenVerifier>(); s.AddSingleton<IServiceTokenVerifier>(StubServiceTokenVerifier.CreateDefault(TimeProvider.System)); });
+        var guard = await TryStartAsync(factory);
+        Assert.NotNull(guard);
+        Assert.Equal("FND-05", guard.Rule);
+    }
+
+    [Fact]
     public async Task FND_05_production_with_stub_instance_registration_refuses()
     {
         await using var db = await fixture.CreateDatabaseAsync();
@@ -198,6 +209,8 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
     {
         s.RemoveAll<ITokenIssuer>();
         s.AddSingleton<ITokenIssuer>(new FakeTokenIssuer());
+        s.RemoveAll<IServiceTokenVerifier>();
+        s.AddSingleton<IServiceTokenVerifier>(new PassThroughServiceTokenVerifier(StubServiceTokenVerifier.CreateDefault(TimeProvider.System)));
         s.RemoveAll<ITraceResolver>();
         s.AddSingleton<ITraceResolver>(new FakeTraceResolver());
         s.RemoveAll<IDirectoryGroupResolver>();
@@ -659,6 +672,15 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
         await using var db = await fixture.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db);
         Assert.Null(await TryStartAsync(factory));
+    }
+
+    [Fact]
+    public async Task QUE_02_host_starts_with_shipped_producer_registry()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        Assert.Null(await TryStartAsync(factory));
+        Assert.True(factory.Services.GetRequiredService<IProducerRegistry>().TryGetByClientId("bluto-stub", out _));
     }
 
     [Fact]

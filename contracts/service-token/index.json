@@ -1,0 +1,12 @@
+{
+  "fixture-service-token-bluto-alpha": "bluto-alpha.json",
+  "fixture-service-token-bluto-beta": "bluto-beta.json",
+  "fixture-service-token-unknown-client": "unknown-client.json",
+  "fixture-service-token-unknown-tenant": "unknown-tenant.json",
+  "fixture-service-token-delegated-agent": "delegated-agent.json",
+  "fixture-service-token-inactive": "inactive.json",
+  "fixture-service-token-expired": "expired.json",
+  "fixture-service-token-malformed": "malformed.json",
+  "fixture-key-liam-alpha": "agent.json",
+  "fixture-key-user": "user.json"
+}

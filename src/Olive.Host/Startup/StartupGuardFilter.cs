@@ -14,6 +14,7 @@ public sealed class StartupGuardFilter(IConfiguration configuration, IServicePro
         StartupGuards.CheckVendoredVocabulary(Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml"));
         StartupGuards.CheckCatalog(provider);
         StartupGuards.CheckQueueKinds(provider);
+        StartupGuards.CheckProducers(provider);
         StartupGuards.CheckNoNonProductionComponents(accessor.Services, provider, env);
         StartupGuards.CheckDevReviewerNotInProduction(provider, env);
         StartupGuards.CheckOidcConfiguration(configuration, env, accessor.Services);

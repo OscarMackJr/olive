@@ -15,6 +15,7 @@ public sealed class SecretTypeTests
         [(Func<string, object>)(s => new SessionKey(s))],
         [(Func<string, object>)(s => new ServiceToken(s))],
         [(Func<string, object>)(s => new OidcClientSecret(s))],
+        [(Func<string, object>)(s => new InboundBearerToken(s))],
     ];
 
     [Theory]
@@ -84,6 +85,8 @@ public sealed class SecretTypeTests
         Assert.Equal("A service token must not be empty.", ex2.Message);
         var ex3 = Assert.Throws<ArgumentException>(() => new OidcClientSecret(value!));
         Assert.Equal("An OIDC client secret must not be empty.", ex3.Message);
+        var ex4 = Assert.Throws<ArgumentException>(() => new InboundBearerToken(value!));
+        Assert.Equal("An inbound bearer token must not be empty.", ex4.Message);
     }
 
     [Fact]
@@ -94,7 +97,32 @@ public sealed class SecretTypeTests
         Assert.Equal(s, new SessionKey(s).ExposeSecret());
         Assert.Equal(s, new ServiceToken(s).ExposeSecret());
         Assert.Equal(s, new OidcClientSecret(s).ExposeSecret());
+        Assert.Equal(s, new InboundBearerToken(s).ExposeSecret());
     }
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void IRQ_04_inbound_bearer_token_try_read_returns_the_token_for_a_well_formed_header()
+    {
+        Assert.Equal("x", InboundBearerToken.TryRead("Bearer x")!.ExposeSecret());
+        Assert.Equal("x", InboundBearerToken.TryRead("bearer x")!.ExposeSecret());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("Bearer")]
+    [InlineData("Bearer ")]
+    [InlineData("Basic x")]
+    [InlineData("Bearer a b")]
+    [Trait("Category", "Unit")]
+    public void IRQ_04_inbound_bearer_token_try_read_rejects_malformed_headers(string? header) =>
+        Assert.Null(InboundBearerToken.TryRead(header));
+
+    [Fact]
+    [Trait("Category", "Unit")]
+    public void IRQ_04_inbound_bearer_token_try_read_rejects_an_oversize_header() =>
+        Assert.Null(InboundBearerToken.TryRead("Bearer " + new string('a', 4096)));
 
     [Fact]
     [Trait("Category", "Unit")]

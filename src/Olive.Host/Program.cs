@@ -62,6 +62,8 @@ builder.Services.AddSingleton<ExecutionSweep>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ExecutionSweep>());
 // Phase 1 has only the stub introspector; the production guard in 01-06 refuses it.
 builder.Services.AddSingleton<IKeyIntrospector>(sp => StubKeyIntrospector.CreateDefault(sp.GetRequiredService<TimeProvider>()));
+// D-05: inbound service-token verification (bluto -> Olive). Fixture-backed and barred in production by the startup guard (FND-05).
+builder.Services.AddSingleton<IServiceTokenVerifier>(sp => StubServiceTokenVerifier.CreateDefault(sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<IOperationalAlarm, LoggingOperationalAlarm>();
 builder.Services.AddSingleton<ITokenIssuer>(sp => StubTokenIssuer.CreateDefault(sp.GetRequiredService<TimeProvider>()));
 builder.Services.AddSingleton<ITraceResolver>(_ => new CachingTraceResolver(FixtureTraceResolver.CreateDefault()));
@@ -84,6 +86,7 @@ builder.Services.AddSingleton<IUserIdentityResolver>(_ => FixtureUserIdentityRes
 builder.Services.AddSingleton<UserIdentityVerifier>();
 builder.Services.AddSingleton<ApprovalIdentityCheck>();
 builder.Services.AddSingleton<IAgentAllowlist>(_ => AgentAllowlist.LoadEmbedded());
+builder.Services.AddSingleton<IProducerRegistry>(_ => ProducerRegistry.LoadEmbedded());
 builder.Services.AddSingleton<IQueueKindRegistry>(_ => QueueKindRegistry.LoadEmbedded());
 builder.Services.AddSingleton<IReviewerTenantMap>(_ => ReviewerTenantMap.LoadEmbedded());
 builder.Services.AddSingleton(_ => CatalogLoader.LoadEmbedded(Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml")));

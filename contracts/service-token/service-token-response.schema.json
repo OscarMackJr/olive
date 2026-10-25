@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olive.example.test/olive/service-token/v1/service-token-response.schema.json",
+  "title": "popeye inbound service-token verification response (fixture shape, unratified; assumption A1)",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "active"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "const": false
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "active",
+        "principal_type",
+        "client_id",
+        "tenant_id",
+        "expires_at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "const": true
+        },
+        "principal_type": {
+          "enum": [
+            "user",
+            "application",
+            "agent"
+          ]
+        },
+        "client_id": {
+          "type": "string",
+          "pattern": "^.+$"
+        },
+        "tenant_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "delegated_agent_id": {
+          "type": "string",
+          "pattern": "^.+$"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  ]
+}
