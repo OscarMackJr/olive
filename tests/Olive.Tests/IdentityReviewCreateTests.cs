@@ -57,6 +57,7 @@ public sealed class IdentityReviewCreateTests(PostgresFixture fixture)
         public Task<ClaimResult> ClaimAsync(Guid tenantId, Guid itemId, string actor, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
         public Task<ReleaseResult> ReleaseAsync(Guid tenantId, Guid itemId, string actor, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
         public Task<DecideResult> DecideAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, bool approveIdentityVerified, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
+        public Task<DecideResult> DecideIdentityAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, DateTimeOffset now, CancellationToken ct) => throw new NotSupportedException();
     }
 
     private static (QueueService Service, CountingStore Store) BuildService()

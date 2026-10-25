@@ -124,6 +124,7 @@ public static class QueueEndpoints
             PayloadResult.Found f => Results.Ok(new ReviewerPayloadResponse(f.Payload.ActionType, ParseJson(f.Payload.ParametersJson), f.Payload.Justification, f.Payload.OnBehalfOf, f.Payload.ExpiresAt, f.Payload.TraceRef)),
             PayloadResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
             PayloadResult.RoleNotPermitted => ProblemResults.Result(StatusCodes.Status403Forbidden, ProblemReasons.RoleNotPermitted),
+            PayloadResult.NoPayload => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.NoPayload),
             _ => throw new InvalidOperationException("Unknown payload result."),
         };
     }
@@ -163,6 +164,7 @@ public static class QueueEndpoints
             ReleaseResult.NotClaimed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemNotClaimed),
             ReleaseResult.ProposalExpired => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ProposalExpired),
             ReleaseResult.Closed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemClosed),
+            ReleaseResult.Withdrawn => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemWithdrawn),
             ReleaseResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
             _ => throw new InvalidOperationException("Unknown release result."),
         };
@@ -204,6 +206,8 @@ public static class QueueEndpoints
         {
             DecisionResult.Decided d => Results.Ok(ToDto(service.ToView(d.Item))),
             DecisionResult.AlreadyDecidedSame d => Results.Ok(ToDto(service.ToView(d.Item))),
+            DecisionResult.Deferred d => Results.Ok(ToDto(service.ToView(d.Item))),
+            DecisionResult.Withdrawn => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemWithdrawn),
             DecisionResult.Conflict => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.DecisionConflict),
             DecisionResult.NotClaimant => ProblemResults.Result(StatusCodes.Status403Forbidden, ProblemReasons.NotClaimant),
             DecisionResult.NotClaimed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemNotClaimed),
@@ -228,5 +232,5 @@ public static class QueueEndpoints
     }
 
     private static QueueItemDto ToDto(QueueItemView v) => new(v.TenantId, v.ItemId, v.Kind, v.Subtype, v.Producer, v.ProducerRef, v.State,
-        v.SubjectRef, v.PayloadRef, v.CreatedAt, v.AgeSeconds, v.ClaimedBy, v.ExpiresAt, v.Decision, v.DecidedBy, v.DecidedAt, v.AuthSource, v.WithdrawnReason);
+        v.SubjectRef, v.PayloadRef, v.CreatedAt, v.AgeSeconds, v.ClaimedBy, v.ExpiresAt, v.Decision, v.DecidedBy, v.DecidedAt, v.AuthSource, v.WithdrawnReason, v.RulesetVersion);
 }

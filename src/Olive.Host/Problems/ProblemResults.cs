@@ -54,6 +54,8 @@ public static class ProblemResults
         ProblemReasons.TenantNotPermitted => "This tenant is not permitted for this caller.",
         ProblemReasons.ProducerNotRegistered => "This producer is not registered.",
         ProblemReasons.ServerAssignedField => "The request sets a field that only the server assigns.",
+        ProblemReasons.ItemWithdrawn => "The queue item was withdrawn by its producer.",
+        ProblemReasons.NoPayload => "This queue item has no payload to read.",
         _ => "An internal error occurred.",
     };
 

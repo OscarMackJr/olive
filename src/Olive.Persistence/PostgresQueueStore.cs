@@ -6,7 +6,7 @@ using Olive.Domain;
 namespace Olive.Persistence;
 
 // Business outcomes are result values, never exceptions, so lazy expiry commits before a 409 is returned (POL-08).
-public sealed class PostgresQueueStore(TenantUnitOfWork uow) : IQueueStore
+public sealed class PostgresQueueStore(TenantUnitOfWork uow, TimeProvider? time = null) : IQueueStore
 {
     static PostgresQueueStore() => DefaultTypeMap.MatchNamesWithUnderscores = true;
 
@@ -254,6 +254,7 @@ public sealed class PostgresQueueStore(TenantUnitOfWork uow) : IQueueStore
             }
 
             if (IsWithdrawnExpired(row)) { return new ReleaseResult.ProposalExpired(); }
+            if (row.State == QueueStates.Withdrawn && row.Kind == QueueStates.IdentityReview) { return new ReleaseResult.Withdrawn(); }
             if (row.State == QueueStates.Open) { return new ReleaseResult.NotClaimed(); }
             if (row.State != QueueStates.Claimed) { return new ReleaseResult.Closed(); }
             if (!string.Equals(row.ClaimedBy, actor, StringComparison.Ordinal)) { return new ReleaseResult.NotClaimant(); }
@@ -331,6 +332,52 @@ public sealed class PostgresQueueStore(TenantUnitOfWork uow) : IQueueStore
                 actor,
                 detail,
             }, tx, cancellationToken: ct));
+            await InsertItemEvent(conn, tx, tenantId, itemId, QueueStates.EventDecided, QueueStates.Claimed, QueueStates.Decided, actor, detail, ct);
+            return new DecideResult.Decided(await Reload(conn, tx, tenantId, itemId, ct));
+        }, ct);
+    }
+
+    // IRQ-02 / D-09. Separate from DecideAsync so the action_approval path is untouched. decided_at is read from the TimeProvider right
+    // after the row lock (research Pitfall 7b); the caller's now is not used for the stamp. The rationale is stored once on the item row for
+    // accept and reject, and appears only in the deferred event detail (the events API strips it for reviewers without the kind role).
+    public Task<DecideResult> DecideIdentityAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, DateTimeOffset now, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(actor)) { throw new ArgumentException("A reviewer is required.", nameof(actor)); }
+        if (string.IsNullOrWhiteSpace(rationale)) { throw new ArgumentException("A rationale is required.", nameof(rationale)); }
+        if (string.IsNullOrWhiteSpace(authSource)) { throw new ArgumentException("An auth source is required.", nameof(authSource)); }
+        if (decision is not (QueueStates.Accept or QueueStates.Reject or QueueStates.Defer)) { throw new ArgumentException("Decision must be accept, reject or defer.", nameof(decision)); }
+
+        return uow.ExecuteAsync<DecideResult>(tenantId, async (conn, tx) =>
+        {
+            var row = await LockItem(conn, tx, tenantId, itemId, ct);
+            if (row is null) { return new DecideResult.NotFound(); }
+            var stamp = (time ?? TimeProvider.System).GetUtcNow();
+            if (row.State == QueueStates.Decided)
+            {
+                if (!string.Equals(row.DecidedBy, actor, StringComparison.Ordinal)) { return new DecideResult.NotClaimant(); }
+                return string.Equals(row.Decision, decision, StringComparison.Ordinal)
+                    ? new DecideResult.AlreadyDecidedSame(ToDetail(row))
+                    : new DecideResult.Conflict();
+            }
+
+            if (row.State == QueueStates.Withdrawn) { return new DecideResult.Withdrawn(); }
+            if (row.State == QueueStates.Open) { return new DecideResult.NotClaimed(); }
+            if (!string.Equals(row.ClaimedBy, actor, StringComparison.Ordinal)) { return new DecideResult.NotClaimant(); }
+
+            if (decision == QueueStates.Defer)
+            {
+                var r = await conn.ExecuteAsync(new CommandDefinition(QueueSql.Release,
+                    new { tenant_id = tenantId, item_id = itemId, actor }, tx, cancellationToken: ct));
+                if (r != 1) { throw new InvalidOperationException("Defer did not affect exactly one row."); }
+                var deferDetail = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string> { ["decision"] = QueueStates.Defer, ["auth_source"] = authSource, ["rationale"] = rationale });
+                await InsertItemEvent(conn, tx, tenantId, itemId, QueueStates.EventDeferred, QueueStates.Claimed, QueueStates.Open, actor, deferDetail, ct);
+                return new DecideResult.Deferred(await Reload(conn, tx, tenantId, itemId, ct));
+            }
+
+            var n = await conn.ExecuteAsync(new CommandDefinition(QueueSql.Decide,
+                new { tenant_id = tenantId, item_id = itemId, actor, now = stamp.UtcDateTime, decision, rationale, auth_source = authSource }, tx, cancellationToken: ct));
+            if (n != 1) { throw new InvalidOperationException("Decide did not affect exactly one row."); }
+            var detail = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, string> { ["decision"] = decision, ["auth_source"] = authSource });
             await InsertItemEvent(conn, tx, tenantId, itemId, QueueStates.EventDecided, QueueStates.Claimed, QueueStates.Decided, actor, detail, ct);
             return new DecideResult.Decided(await Reload(conn, tx, tenantId, itemId, ct));
         }, ct);

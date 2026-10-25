@@ -44,7 +44,7 @@ public sealed class AuditModel(QueueService queue, IQueueStore queueStore, IAudi
         {
             case PayloadResult.Found: CanSeeFields = true; break;
             case PayloadResult.RoleNotPermitted: CanSeeFields = false; break;
-            case PayloadResult.NotFound: return NotFound();
+            case PayloadResult.NotFound: case PayloadResult.NoPayload: return NotFound();
             default: throw new InvalidOperationException("Unknown payload result.");
         }
 

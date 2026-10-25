@@ -22,7 +22,8 @@ public sealed record QueueItemDto(
     [property: JsonPropertyName("decided_by"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DecidedBy = null,
     [property: JsonPropertyName("decided_at"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? DecidedAt = null,
     [property: JsonPropertyName("auth_source"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AuthSource = null,
-    [property: JsonPropertyName("withdrawn_reason"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? WithdrawnReason = null);
+    [property: JsonPropertyName("withdrawn_reason"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? WithdrawnReason = null,
+    [property: JsonPropertyName("ruleset_version"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RulesetVersion = null);
 
 // Request body for the decision route. Only these two members are accepted; the rationale is write-only (never echoed).
 public sealed record DecisionRequest(

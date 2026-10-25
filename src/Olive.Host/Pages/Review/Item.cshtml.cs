@@ -76,6 +76,7 @@ public sealed class ItemModel(
                 PayloadHidden = true;
                 break;
             case PayloadResult.NotFound:
+            case PayloadResult.NoPayload:
                 return NotFoundPage();
             default:
                 throw new InvalidOperationException("Unknown payload result.");
@@ -137,6 +138,7 @@ public sealed class ItemModel(
             ReleaseResult.NotClaimed => "item_not_claimed",
             ReleaseResult.ProposalExpired => "proposal_expired",
             ReleaseResult.Closed => "item_closed",
+            ReleaseResult.Withdrawn => "item_closed",
             ReleaseResult.NotFound => null,
             _ => throw new InvalidOperationException("Unknown release result."),
         };
@@ -191,6 +193,8 @@ public sealed class ItemModel(
             case DecisionResult.NotClaimant: code = "not_claimant"; break;
             case DecisionResult.NotClaimed: code = "item_not_claimed"; break;
             case DecisionResult.Closed: code = "item_closed"; break;
+            case DecisionResult.Withdrawn: code = "item_closed"; break;
+            case DecisionResult.Deferred: code = "released"; break;
             case DecisionResult.ProposalExpired: code = "proposal_expired"; break;
             case DecisionResult.NotFound: return NotFoundPage();
             case DecisionResult.SelfApproval: code = "self_approval_forbidden"; break;
