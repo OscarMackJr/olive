@@ -27,8 +27,11 @@ public sealed class QueueServiceDecideTests
         public Task<IReadOnlyList<QueueItemSummary>> ListAsync(Guid tenantId, string? kind, string? state, DateTimeOffset now, int limit, CancellationToken ct) => throw new NotSupportedException();
         public Task<QueueItemDetail?> GetAsync(Guid tenantId, Guid itemId, CancellationToken ct) => Task.FromResult(item);
         public Task<IReadOnlyList<QueueItemEventRecord>?> EventsAsync(Guid tenantId, Guid itemId, CancellationToken ct) => throw new NotSupportedException();
-        public Task<ReviewerPayload?> GetPayloadAsync(Guid tenantId, Guid itemId, CancellationToken ct) =>
-            Task.FromResult<ReviewerPayload?>(new ReviewerPayload(itemId, "action_approval", "crm.case_note@1", "{}", "j", "analyst.alpha@example.test", null, null));
+        public Task<ReviewerPayload?> GetPayloadAsync(Guid tenantId, Guid itemId, CancellationToken ct)
+        {
+            PayloadCalls++;
+            return Task.FromResult<ReviewerPayload?>(new ReviewerPayload(itemId, "action_approval", "crm.case_note@1", "{}", "j", "analyst.alpha@example.test", null, null));
+        }
         public Task<ClaimResult> ClaimAsync(Guid tenantId, Guid itemId, string actor, DateTimeOffset now, CancellationToken ct)
         {
             ClaimCalls++;
@@ -58,6 +61,17 @@ public sealed class QueueServiceDecideTests
             LastVerified = approveIdentityVerified;
             return Task.FromResult(Outcome);
         }
+
+        public int IdentityDecideCalls { get; private set; }
+        public int PayloadCalls { get; private set; }
+        public string? LastIdentityDecision { get; private set; }
+
+        public Task<DecideResult> DecideIdentityAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, DateTimeOffset now, CancellationToken ct)
+        {
+            IdentityDecideCalls++;
+            LastIdentityDecision = decision;
+            return Task.FromResult(Outcome);
+        }
     }
 
     private static QueueItemDetail Item(string kind = "action_approval", string state = "claimed", string? claimedBy = "rev-1", DateTimeOffset? expires = null) =>
@@ -84,9 +98,9 @@ public sealed class QueueServiceDecideTests
     }
 
     [Fact]
-    public async Task QUE_07_identity_review_item_is_kind_not_supported_and_unknown_decision_is_invalid()
+    public async Task QUE_07_unregistered_kind_is_kind_not_supported_and_unknown_decision_is_invalid()
     {
-        var (service, store, _) = Build(Item("identity_review"));
+        var (service, store, _) = Build(Item("unknown_kind"));
         Assert.IsType<DecisionResult.KindNotSupported>(await service.DecideAsync(Reviewer(), Guid.NewGuid(), "accept", "ok", Ct));
 
         var (service2, store2, _) = Build(Item());

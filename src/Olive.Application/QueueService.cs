@@ -40,14 +40,36 @@ public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry,
             return new PayloadResult.RoleNotPermitted();
         }
 
+        // D-10: an item without a proposal has only references; Olive never resolves bluto evidence.
+        if (item.ProposalId is null) { return new PayloadResult.NoPayload(); }
+
         var payload = await store.GetPayloadAsync(reviewer.TenantId, itemId, ct);
         return payload is null ? new PayloadResult.NotFound() : new PayloadResult.Found(payload);
     }
 
+    // Pitfall 10: the defer rationale is visible only to reviewers holding the item's required role.
     public async Task<EventsResult> EventsAsync(ReviewerContext reviewer, Guid itemId, CancellationToken ct)
     {
         var events = await store.EventsAsync(reviewer.TenantId, itemId, ct);
-        return events is null ? new EventsResult.NotFound() : new EventsResult.Found(events);
+        if (events is null) { return new EventsResult.NotFound(); }
+
+        var item = await store.GetAsync(reviewer.TenantId, itemId, ct);
+        var permitted = item is not null && registry.TryGet(item.Kind, out var definition) && reviewer.Groups.Contains(definition.RequiredRole, StringComparer.Ordinal);
+        return new EventsResult.Found(permitted ? events : events.Select(StripRationale).ToList());
+    }
+
+    private static QueueItemEventRecord StripRationale(QueueItemEventRecord e)
+    {
+        if (e.DetailJson is null) { return e; }
+        try
+        {
+            if (System.Text.Json.Nodes.JsonNode.Parse(e.DetailJson) is not System.Text.Json.Nodes.JsonObject obj || !obj.Remove("rationale")) { return e; }
+            return e with { DetailJson = obj.ToJsonString() };
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return e;
+        }
     }
 
     // claimed_by holds the Entra oid (A4). Role is deliberately not required to claim or release.
@@ -73,12 +95,18 @@ public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry,
 
         var item = await store.GetAsync(reviewer.TenantId, itemId, ct);
         if (item is null) { return new DecisionResult.NotFound(); }
-        if (item.Kind != QueueStates.ActionApproval || !registry.TryGet(item.Kind, out var definition)) { return new DecisionResult.KindNotSupported(); }
+        if (!registry.TryGet(item.Kind, out var definition)) { return new DecisionResult.KindNotSupported(); }
         if (decision is null || !definition.Decisions.Contains(decision, StringComparer.Ordinal)) { return new DecisionResult.InvalidRequest(); }
         if (string.IsNullOrWhiteSpace(rationale) || rationale.Length > MaxRationaleLength || rationale.Contains('\0')) { return new DecisionResult.InvalidRequest(); }
         if (!reviewer.Groups.Contains(definition.RequiredRole, StringComparer.Ordinal)) { return new DecisionResult.RoleNotPermitted(); }
 
         var now = time.GetUtcNow();
+        if (item.Kind == QueueStates.IdentityReview)
+        {
+            // D-11: no approval identity check, no payload read, no proposal and no execution for identity items.
+            return MapDecide(await store.DecideIdentityAsync(reviewer.TenantId, itemId, reviewer.Oid, reviewer.AuthSource, decision, rationale, now, ct));
+        }
+
         var live = item.State == QueueStates.Claimed
             && string.Equals(item.ClaimedBy, reviewer.Oid, StringComparison.Ordinal)
             && (item.ExpiresAt is null || item.ExpiresAt > now);
@@ -99,19 +127,23 @@ public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry,
         }
 
         var result = await store.DecideAsync(reviewer.TenantId, itemId, reviewer.Oid, reviewer.AuthSource, decision, rationale, identityVerified, now, ct);
-        return result switch
-        {
-            DecideResult.Decided d => new DecisionResult.Decided(d.Item),
-            DecideResult.AlreadyDecidedSame d => new DecisionResult.AlreadyDecidedSame(d.Item),
-            DecideResult.Conflict => new DecisionResult.Conflict(),
-            DecideResult.NotClaimant => new DecisionResult.NotClaimant(),
-            DecideResult.NotClaimed => new DecisionResult.NotClaimed(),
-            DecideResult.Closed => new DecisionResult.Closed(),
-            DecideResult.ProposalExpired => new DecisionResult.ProposalExpired(),
-            DecideResult.NotFound => new DecisionResult.NotFound(),
-            _ => throw new InvalidOperationException("Unknown decide result."),
-        };
+        return MapDecide(result);
     }
+
+    private static DecisionResult MapDecide(DecideResult result) => result switch
+    {
+        DecideResult.Decided d => new DecisionResult.Decided(d.Item),
+        DecideResult.AlreadyDecidedSame d => new DecisionResult.AlreadyDecidedSame(d.Item),
+        DecideResult.Deferred d => new DecisionResult.Deferred(d.Item),
+        DecideResult.Withdrawn => new DecisionResult.Withdrawn(),
+        DecideResult.Conflict => new DecisionResult.Conflict(),
+        DecideResult.NotClaimant => new DecisionResult.NotClaimant(),
+        DecideResult.NotClaimed => new DecisionResult.NotClaimed(),
+        DecideResult.Closed => new DecisionResult.Closed(),
+        DecideResult.ProposalExpired => new DecisionResult.ProposalExpired(),
+        DecideResult.NotFound => new DecisionResult.NotFound(),
+        _ => throw new InvalidOperationException("Unknown decide result."),
+    };
 
     public QueueItemView ToView(QueueItemDetail d) => new(d.TenantId, d.ItemId, d.Kind, d.Subtype, d.Producer, d.ProducerRef, d.State, d.SubjectRef, d.PayloadRef, d.ClaimedBy, d.CreatedAt, AgeSeconds(d.CreatedAt, time.GetUtcNow()), d.ExpiresAt, d.Decision, d.DecidedBy, d.DecidedAt, d.AuthSource, d.WithdrawnReason, d.ProposalId, d.RulesetVersion);
 
@@ -160,6 +192,8 @@ public abstract record PayloadResult
     public sealed record NotFound : PayloadResult;
 
     public sealed record RoleNotPermitted : PayloadResult;
+
+    public sealed record NoPayload : PayloadResult;
 }
 
 public abstract record DecisionResult
@@ -167,6 +201,10 @@ public abstract record DecisionResult
     public sealed record Decided(QueueItemDetail Item) : DecisionResult;
 
     public sealed record AlreadyDecidedSame(QueueItemDetail Item) : DecisionResult;
+
+    public sealed record Deferred(QueueItemDetail Item) : DecisionResult;
+
+    public sealed record Withdrawn : DecisionResult;
 
     public sealed record Conflict : DecisionResult;
 

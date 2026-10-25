@@ -22,6 +22,7 @@ public static class QueueStates
     public const string EventClaimed = "claimed";
     public const string EventReleased = "released";
     public const string EventDecided = "decided";
+    public const string EventDeferred = "deferred";
     public const string EventWithdrawn = "withdrawn";
 
     public const string ProposalExpired = "proposal_expired";

@@ -26,6 +26,10 @@ public interface IQueueStore
     // so the client retries and the check then runs. Reject is unaffected (D-18).
     Task<DecideResult> DecideAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, bool approveIdentityVerified, DateTimeOffset now, CancellationToken ct);
 
+    // IRQ-02 / D-09: identity_review decisions. accept and reject decide the item; defer returns it to open with the claim cleared.
+    // No proposal is touched. decided_at is stamped from the store's TimeProvider inside the transaction after the row lock.
+    Task<DecideResult> DecideIdentityAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, DateTimeOffset now, CancellationToken ct);
+
     // IRQ-01/IRQ-02: idempotent insert keyed on (tenant, producer, producer_ref). Same body hash replays the current state; a different hash conflicts.
     Task<CreateIdentityResult> CreateIdentityItemAsync(Guid tenantId, string producer, string kind, string subtype, Guid producerRef, string subjectRef, string payloadRef, string rulesetVersion, string bodySha256, DateTimeOffset now, CancellationToken ct);
 }
@@ -44,6 +48,10 @@ public abstract record DecideResult
     public sealed record Decided(QueueItemDetail Item) : DecideResult;
 
     public sealed record AlreadyDecidedSame(QueueItemDetail Item) : DecideResult;
+
+    public sealed record Deferred(QueueItemDetail Item) : DecideResult;
+
+    public sealed record Withdrawn : DecideResult;
 
     public sealed record Conflict : DecideResult;
 
@@ -78,6 +86,8 @@ public abstract record ReleaseResult
     public sealed record NotClaimant : ReleaseResult;
 
     public sealed record NotClaimed : ReleaseResult;
+
+    public sealed record Withdrawn : ReleaseResult;
 
     public sealed record ProposalExpired : ReleaseResult;
 
