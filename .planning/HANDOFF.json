@@ -9,31 +9,109 @@
   "total_tasks": 8,
   "status": "paused",
   "completed_tasks": [
-    {"id": "08-01", "name": "Migration 0010, steward fixtures, IR-1 pin", "status": "done", "commit": "f03a42f"},
-    {"id": "08-02", "name": "Service-token port, stub verifier, producer registry", "status": "done", "commit": "2abcddc"},
-    {"id": "08-03", "name": "Credential dispatch and service-token auth", "status": "done", "commit": "1ddb36c"},
-    {"id": "08-04", "name": "Identity create slice (IRQ-01)", "status": "done", "commit": "26b155e"},
-    {"id": "08-05", "name": "Reviewer decide/defer API (IRQ-02)", "status": "done", "commit": "00cff40"},
-    {"id": "08-06", "name": "Producer poll and withdraw (IRQ-03)", "status": "done", "commit": "f4f5314"},
-    {"id": "08-07", "name": "Reviewer pages for identity items", "status": "done", "commit": "03a75af"},
-    {"id": "08-08", "name": "Evidence slice (matrix, demo, bluto note)", "status": "done", "commit": "c233853"},
-    {"id": "code-review", "name": "08-REVIEW.md", "status": "done", "commit": "263985a"}
+    {
+      "id": "08-01",
+      "name": "Migration 0010, steward fixtures, IR-1 pin",
+      "status": "done",
+      "commit": "f03a42f"
+    },
+    {
+      "id": "08-02",
+      "name": "Service-token port, stub verifier, producer registry",
+      "status": "done",
+      "commit": "2abcddc"
+    },
+    {
+      "id": "08-03",
+      "name": "Credential dispatch and service-token auth",
+      "status": "done",
+      "commit": "1ddb36c"
+    },
+    {
+      "id": "08-04",
+      "name": "Identity create slice (IRQ-01)",
+      "status": "done",
+      "commit": "26b155e"
+    },
+    {
+      "id": "08-05",
+      "name": "Reviewer decide/defer API (IRQ-02)",
+      "status": "done",
+      "commit": "00cff40"
+    },
+    {
+      "id": "08-06",
+      "name": "Producer poll and withdraw (IRQ-03)",
+      "status": "done",
+      "commit": "f4f5314"
+    },
+    {
+      "id": "08-07",
+      "name": "Reviewer pages for identity items",
+      "status": "done",
+      "commit": "03a75af"
+    },
+    {
+      "id": "08-08",
+      "name": "Evidence slice (matrix, demo, bluto note)",
+      "status": "done",
+      "commit": "c233853"
+    },
+    {
+      "id": "code-review",
+      "name": "08-REVIEW.md",
+      "status": "done",
+      "commit": "263985a"
+    },
+    {
+      "id": "verify",
+      "name": "08-VERIFICATION.md gaps_found",
+      "status": "done"
+    }
   ],
   "remaining_tasks": [
-    {"id": "verify", "name": "gsd-verifier -> 08-VERIFICATION.md (interrupted by pause)", "status": "not_started"},
-    {"id": "secure", "name": "/gsd-secure-phase 8", "status": "not_started"},
-    {"id": "complete", "name": "phase.complete + PROJECT.md evolve", "status": "not_started"}
+    {
+      "id": "gaps",
+      "name": "/gsd-plan-phase 8 --gaps (CR-01 + WR-03), then /gsd-execute-phase 8 --gaps-only",
+      "status": "not_started"
+    },
+    {
+      "id": "secure",
+      "name": "/gsd-secure-phase 8",
+      "status": "not_started"
+    },
+    {
+      "id": "complete",
+      "name": "phase.complete + PROJECT.md evolve",
+      "status": "not_started"
+    }
   ],
   "blockers": [
-    {"description": "CR-01: poll cursor (decided_at,item_id) can permanently skip decisions; decided_at stamped pre-commit under READ COMMITTED", "type": "technical", "workaround": "likely gap-closure plan (settle window / advisory lock / commit-ordered feed)"},
-    {"description": "WR-01: service token vs agent key verifier crossover; service token on /v1/proposals gives 401 not D-07 403", "type": "technical", "workaround": "verifier to judge"}
+    {
+      "description": "CR-01: poll cursor (decided_at,item_id) can permanently skip decisions; decided_at stamped pre-commit under READ COMMITTED",
+      "type": "technical",
+      "workaround": "likely gap-closure plan (settle window / advisory lock / commit-ordered feed)"
+    },
+    {
+      "description": "WR-01: service token vs agent key verifier crossover; service token on /v1/proposals gives 401 not D-07 403",
+      "type": "technical",
+      "workaround": "verifier to judge"
+    }
   ],
   "human_actions_pending": [],
   "decisions": [
-    {"decision": "Code review scoped to 33 production files (tests excluded)", "rationale": "phase touched 67 files", "phase": "08"},
-    {"decision": "Manual worktree merges instead of SDK cleanup-wave", "rationale": "cleanup-wave re-copies SUMMARY into main and self-blocks", "phase": "08"}
+    {
+      "decision": "Code review scoped to 33 production files (tests excluded)",
+      "rationale": "phase touched 67 files",
+      "phase": "08"
+    },
+    {
+      "decision": "Manual worktree merges instead of SDK cleanup-wave",
+      "rationale": "cleanup-wave re-copies SUMMARY into main and self-blocks",
+      "phase": "08"
+    }
   ],
   "uncommitted_files": [],
-  "next_action": "Run /gsd-execute-phase 8 (skips to verification) or spawn gsd-verifier for phase 08 with the review blockers",
+  "next_action": "/gsd-plan-phase 8 --gaps",
   "context_notes": "Main is clean at 263985a with all 1688 tests passing. ROADMAP already shows Phase 8 [x] from update-plan-progress, which is premature until verification passes."
 }
