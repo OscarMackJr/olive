@@ -241,3 +241,10 @@ public static class ServiceDecoration
         });
     }
 }
+
+// Popeye unavailable during inbound service-token verification (D-05): must fail closed with 503.
+public sealed class FaultingServiceTokenVerifier : IServiceTokenVerifier
+{
+    public Task<ServiceTokenResult> VerifyAsync(InboundBearerToken token, CancellationToken ct) =>
+        throw new IntrospectionUnavailableException("service_token_verifier_unavailable");
+}

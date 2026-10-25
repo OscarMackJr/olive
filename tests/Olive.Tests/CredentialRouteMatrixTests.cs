@@ -11,7 +11,7 @@ using Olive.Host.Startup;
 
 namespace Olive.Tests;
 
-public enum Cred { None, AgentKey, DevHeader, DevCookie, OidcCookie, ForgedCookie, ExpiredCookie }
+public enum Cred { None, AgentKey, DevHeader, DevCookie, OidcCookie, ForgedCookie, ExpiredCookie, ServiceToken }
 
 public enum Route { Proposals, Catalog, QueueItems, Review, DevSignIn }
 
@@ -112,6 +112,10 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
         Route.Proposals => cred switch
         {
             Cred.AgentKey => new(HttpStatusCode.NotFound),
+            // IDN-03: a service token is refused on the agent routes (ServiceToken falls to AgentUnauthenticated below). IDN-03 is
+            // satisfied by 401 or 403. The session-key introspection fixture answers inactive for service tokens (a service token
+            // is not a session key), so the cell is 401 key_inactive. The non-agent 403 check lives only in POST /v1/proposals,
+            // so it cannot pin 403 for these GET routes.
             Cred.DevHeader => NotPermitted,
             _ => AgentUnauthenticated,
         },
@@ -124,7 +128,8 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
         Route.QueueItems => cred switch
         {
             Cred.DevHeader => Ok,
-            Cred.AgentKey => NotPermitted,
+            // Interim (superseded by the poll view in plan 06): a service token on the reviewer list is a wrong caller type.
+            Cred.AgentKey or Cred.ServiceToken => NotPermitted,
             _ => ReviewerUnauthenticated,
         },
         Route.Review => cred is Cred.DevCookie or Cred.OidcCookie ? Ok : ToSignIn,
@@ -144,6 +149,7 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
         switch (cred)
         {
             case Cred.AgentKey: request.Headers.Authorization = new AuthenticationHeaderValue(Olive.Application.AgentKeyHeader.Scheme, ApiProposalTests.AlphaKey); break;
+            case Cred.ServiceToken: request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "fixture-service-token-bluto-alpha"); break;
             case Cred.DevHeader: request.Headers.Add(DevReviewerAuthenticationHandler.HeaderName, "alpha-sup-1"); break;
             case Cred.DevCookie or Cred.ExpiredCookie: request.Headers.TryAddWithoutValidation("Cookie", ReviewerCookie.CookieName + "=" + host.DevCookie); break;
             case Cred.OidcCookie: request.Headers.TryAddWithoutValidation("Cookie", ReviewerCookie.CookieName + "=" + host.OidcCookie); break;
@@ -184,7 +190,7 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
 
             // The agent key is introspected only on the agent route groups; never on /review, /dev or /v1/queue.
             var agentRoute = route is Route.Proposals or Route.Catalog;
-            if (!(agentRoute && cred == Cred.AgentKey))
+            if (!(agentRoute && cred is Cred.AgentKey or Cred.ServiceToken))
             {
                 Assert.Equal(calls, host.Factory.Introspector.Calls);
             }
@@ -193,9 +199,9 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
     }
 
     [Fact]
-    public void UI_07_cell_table_covers_seven_credentials_by_five_routes()
+    public void UI_07_cell_table_covers_eight_credentials_by_five_routes()
     {
-        Assert.Equal(35, Enum.GetValues<Cred>().Length * Enum.GetValues<Route>().Length);
+        Assert.Equal(40, Enum.GetValues<Cred>().Length * Enum.GetValues<Route>().Length);
     }
 
     [Fact]

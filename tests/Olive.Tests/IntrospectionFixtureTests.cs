@@ -17,7 +17,7 @@ public sealed class IntrospectionFixtureTests
     public void IDN_01_all_introspection_fixtures_validate_against_schema()
     {
         var index = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(Path.Combine(Dir, "index.json")))!;
-        Assert.Equal(6, index.Count);
+        Assert.Equal(8, index.Count);
         foreach (var file in index.Values)
         {
             Assert.Null(Validator.Validate(Load(file)));

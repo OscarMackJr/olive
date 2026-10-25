@@ -51,6 +51,8 @@ public static class ProblemResults
         ProblemReasons.RoleNotHeld => "The reviewer no longer holds the required role.",
         ProblemReasons.GroupsOverage => "The sign-in token did not include the reviewer groups.",
         ProblemReasons.NoReviewerTenant => "The reviewer account is not mapped to exactly one tenant.",
+        ProblemReasons.TenantNotPermitted => "This tenant is not permitted for this caller.",
+        ProblemReasons.ProducerNotRegistered => "This producer is not registered.",
         _ => "An internal error occurred.",
     };
 

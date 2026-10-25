@@ -96,6 +96,8 @@ var oidc = OidcConfig.Read(builder.Configuration);
 var authentication = builder.Services.AddAuthentication(AgentKeyAuthenticationHandler.SchemeName)
     .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, AgentKeyAuthenticationHandler>(AgentKeyAuthenticationHandler.SchemeName, _ => { })
     .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, DevReviewerAuthenticationHandler>(DevReviewerAuthenticationHandler.SchemeName, _ => { })
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ServiceTokenAuthenticationHandler>(ServiceTokenAuthenticationHandler.SchemeName, _ => { })
+    .AddPolicyScheme(QueueCaller.SchemeName, null, o => o.ForwardDefaultSelector = QueueCaller.Select)
     .AddReviewerSession(oidc is null ? ReviewerCookie.LoginPath : "/auth/sign-in");
 if (oidc is not null)
 {
