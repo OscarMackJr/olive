@@ -38,6 +38,8 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 - ✓ An approved proposal is executed exactly once in simulation, keyed on `proposal_id`, under a lock-holder transaction against the INSERT-only `execution_ledger`. A retry returns the first result. Expired proposals are refused at execute time. Executor exceptions after the `started` row become `execution_in_doubt`. Validated in Phase 6: Simulated Execution and Audit Chain.
 - ✓ A startup sweep resolves approved and in-doubt proposals. It runs only after every startup guard has passed (CR-01). Validated in Phase 6: Simulated Execution and Audit Chain.
 - ✓ The `security_invoker` view `execution_chain` lets you query the whole core-value chain (trace → policy → reviewer and rationale → execution) from the execution record. The scripted beat 2 demo runs through the API. Validated in Phase 6: Simulated Execution and Audit Chain.
+- ✓ A minimal Razor Pages reviewer UI with list (open and claimed), claim, release, decide (antiforgery and PRG, rationale required) and audit views (hashed fields, `body_sha256`, `proposal_hash`, fixture-trace banner). No dashboards, bulk operations or SLAs. Validated in Phase 7: Reviewer UI and Entra OIDC.
+- ✓ Entra OIDC through the real OpenIdConnect handler (tested against mock-oauth2-server), with a dev IdP picker that is available only when OIDC is not configured and is refused in production. The role is re-checked at decide time, and a stale `auth_time` forces re-authentication. A 7x5 credential-by-route matrix proves route-group isolation. Live Entra checks are deferred until the tenant and the `role:case_supervisor` group exist. Validated in Phase 7: Reviewer UI and Entra OIDC.
 
 ### Active
 
@@ -65,8 +67,7 @@ Olive is the POC-2 program's action broker and shared review queue. It is the sm
 - [ ] Approval rules: per proposal, an authenticated reviewer, no self-approval (the approver is not `on_behalf_of`), and the role is checked at decision time. (Phase 5 delivered authenticated reviewers, oid+tid self-approval refusal and the kind's `required_role` check against stub groups; the real-IdP role check is APR-03 in Phase 7.)
 
 **Reviewer UI (Decision §8, §11)**
-- [ ] A minimal Razor Pages queue UI with list, claim, decide and audit views. No dashboards, bulk operations or SLAs.
-- [ ] Entra OIDC wiring behind an interface, with a local dev identity-provider stub. Live approvals stay blocked until the `role:case_supervisor` group is named.
+- [ ] Live Entra approvals: run the deferred checks in `07-HUMAN-UAT.md` once the `role:case_supervisor` group is named.
 
 **Evidence (milestone done-criteria)**
 - [ ] Every test case in Decision §16.8 and §17.4, plus charter TC-ACT-01..06 and TC-QUE-01..04, runs green in CI.
