@@ -42,22 +42,41 @@ public sealed class ReviewerPagesListTests(PostgresFixture fixture)
     }
 
     [Fact]
-    public async Task UI_02_claimed_items_are_absent_from_the_open_list()
+    public async Task UI_02_claimed_items_are_listed_with_a_claimed_badge_and_decided_or_expired_items_are_not()
     {
         await using var db = await fixture.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db);
         using var agent = factory.CreateKeyClient(ApiProposalTests.AlphaKey);
-        await ReviewerTenantTests.SubmitAsync(agent, "ui-c1");
-        await ReviewerTenantTests.SubmitAsync(agent, "ui-c2");
+        foreach (var run in new[] { "ui-c1", "ui-c2", "ui-c3", "ui-c4", "ui-c5" }) { await ReviewerTenantTests.SubmitAsync(agent, run); }
         using var api = factory.CreateReviewerClient("alpha-sup-1");
         var ids = (await ReviewerTenantTests.ListAsync(api)).Select(i => i.GetProperty("item_id").GetGuid()).ToArray();
-        var claim = await api.PostAsync("/v1/queue/items/" + ids[0] + "/claim", null, Ct);
-        Assert.Equal(HttpStatusCode.OK, claim.StatusCode);
+        Assert.Equal(5, ids.Length);
+        var (claimed, open, decided, expiredOpen, expiredClaimed) = (ids[0], ids[1], ids[2], ids[3], ids[4]);
+        foreach (var id in new[] { claimed, decided, expiredClaimed })
+        {
+            Assert.Equal(HttpStatusCode.OK, (await api.PostAsync("/v1/queue/items/" + id + "/claim", null, Ct)).StatusCode);
+        }
 
-        using var ui = await factory.SignInDevAsync("alpha-sup-2");
-        var html = await ui.GetStringAsync("/review", Ct);
-        Assert.DoesNotContain(ids[0].ToString(), html);
-        Assert.Contains("/review/items/" + ids[1], html);
+        Assert.Equal(HttpStatusCode.OK, (await DecisionHttp.Decide(factory, "alpha-sup-1", decided, "reject")).StatusCode);
+        await db.AdminExecAsync($"update queue_item set expires_at = now() - interval '1 minute' where item_id in ('{expiredOpen}', '{expiredClaimed}')");
+
+        // Another reviewer and the claimant both still see the claimed item, badged "claimed", in creation order.
+        foreach (var reviewer in new[] { "alpha-sup-2", "alpha-sup-1" })
+        {
+            using var ui = await factory.SignInDevAsync(reviewer);
+            var html = await ui.GetStringAsync("/review", Ct);
+            var claimedAt = html.IndexOf("/review/items/" + claimed, StringComparison.Ordinal);
+            var openAt = html.IndexOf("/review/items/" + open, StringComparison.Ordinal);
+            Assert.True(claimedAt >= 0, reviewer + " does not see the claimed item");
+            Assert.True(openAt > claimedAt, reviewer + " does not see the open item after the older claimed item");
+            Assert.Contains("<span class=\"badge\">claimed</span>", html);
+            Assert.Contains("<span class=\"badge\">open</span>", html);
+            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(html, "<span class=\"badge\">").Count);
+            Assert.DoesNotContain(decided.ToString(), html);
+            Assert.DoesNotContain(expiredOpen.ToString(), html);
+            Assert.DoesNotContain(expiredClaimed.ToString(), html);
+            Assert.DoesNotContain("<span class=\"badge\">decided</span>", html);
+        }
     }
 
     [Fact]
