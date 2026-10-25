@@ -53,6 +53,7 @@ public static class ProblemResults
         ProblemReasons.NoReviewerTenant => "The reviewer account is not mapped to exactly one tenant.",
         ProblemReasons.TenantNotPermitted => "This tenant is not permitted for this caller.",
         ProblemReasons.ProducerNotRegistered => "This producer is not registered.",
+        ProblemReasons.ServerAssignedField => "The request sets a field that only the server assigns.",
         _ => "An internal error occurred.",
     };
 

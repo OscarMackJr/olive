@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Olive.Application;
 using Olive.Contracts;
+using Olive.Domain;
 using Olive.Host.Auth;
 using Olive.Host.Problems;
 
@@ -14,6 +15,7 @@ public static class QueueEndpoints
         // D-01: one policy scheme picks DevReviewer or ServiceToken by header shape. Create, withdraw and poll attach ProducerOnly in plans 04 and 06.
         var group = app.MapGroup("/v1/queue/items")
             .RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = QueueCaller.SchemeName });
+        group.MapPost("", CreateAsync).AddEndpointFilter(QueueCallerFilters.ProducerOnly);
         group.MapGet("", ListAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
         group.MapGet("/{id:guid}", GetAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
         group.MapGet("/{id:guid}/payload", PayloadAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
@@ -22,6 +24,65 @@ public static class QueueEndpoints
         group.MapPost("/{id:guid}/release", ReleaseAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
         group.MapPost("/{id:guid}/decision", DecisionAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
         return app;
+    }
+
+    private static readonly HashSet<string> ServerAssigned = new(StringComparer.Ordinal)
+    {
+        "tenant_id", "producer", "item_id", "state", "decision", "decided_by", "decided_at", "rationale", "claimed_by", "claimed_at",
+        "auth_source", "withdrawn_reason", "expires_at", "created_at", "proposal_id",
+    };
+
+    private static readonly string[] CreateFields = ["kind", "subtype", "producer_ref", "subject_ref", "payload_ref", "ruleset_version"];
+
+    // IRQ-01: tenant and producer come only from the verified token (ProducerOnly filter). The body is hashed exactly as parsed (RFC 8785).
+    private static async Task<IResult> CreateAsync(HttpContext http, QueueService service, CancellationToken ct)
+    {
+        var invalid = ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.InvalidRequest);
+        if (!http.Request.HasJsonContentType()) { return invalid; }
+        var bytes = await ProposalEndpoints.ReadBoundedAsync(http.Request, ct);
+        if (bytes is null) { return ProblemResults.Result(StatusCodes.Status413PayloadTooLarge, ProblemReasons.PayloadTooLarge); }
+
+        System.Text.Json.JsonDocument doc;
+        try
+        {
+            doc = System.Text.Json.JsonDocument.Parse(bytes, new System.Text.Json.JsonDocumentOptions { MaxDepth = JsonGate.MaxDepth, AllowDuplicateProperties = false });
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException)
+        {
+            return invalid;
+        }
+
+        using (doc)
+        {
+            var root = doc.RootElement;
+            if (root.ValueKind != System.Text.Json.JsonValueKind.Object || !JsonGate.Walk(root)) { return invalid; }
+            if (root.EnumerateObject().Any(p => ServerAssigned.Contains(p.Name)))
+            {
+                return ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.ServerAssignedField);
+            }
+
+            var values = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var p in root.EnumerateObject())
+            {
+                if (!CreateFields.Contains(p.Name, StringComparer.Ordinal) || p.Value.ValueKind != System.Text.Json.JsonValueKind.String) { return invalid; }
+                values[p.Name] = p.Value.GetString()!;
+            }
+
+            if (values.Count != CreateFields.Length) { return invalid; }
+
+            var producer = (ProducerContext)http.Items[QueueCallerFilters.ProducerItemKey]!;
+            var hash = Jcs.Sha256Hex(Jcs.Canonicalize(root));
+            var request = new CreateItemRequest(values["kind"], values["subtype"], values["producer_ref"], values["subject_ref"], values["payload_ref"], values["ruleset_version"]);
+            var result = await service.CreateAsync(producer, request, hash, ct);
+            return result switch
+            {
+                CreateResult.Created c => Results.Json(new CreateItemResponse(c.ItemId, c.State), statusCode: StatusCodes.Status201Created),
+                CreateResult.Replay r => Results.Ok(new CreateItemResponse(r.ItemId, r.State)),
+                CreateResult.Conflict => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.IdempotencyConflict),
+                CreateResult.InvalidRequest => invalid,
+                _ => throw new InvalidOperationException("Unknown create result."),
+            };
+        }
     }
 
     private static async Task<IResult> ListAsync(HttpContext http, QueueService service, string? kind, string? state, string? limit, CancellationToken ct)

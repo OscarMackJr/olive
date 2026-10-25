@@ -51,3 +51,6 @@ public sealed record QueueItemEventDto(
     [property: JsonPropertyName("detail"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] JsonElement? Detail = null);
 
 public sealed record QueueItemEventsResponse([property: JsonPropertyName("events")] IReadOnlyList<QueueItemEventDto> Events);
+
+// Slim create response: no claimed_by or any reviewer identity may reach the producer.
+public sealed record CreateItemResponse([property: JsonPropertyName("item_id")] Guid ItemId, [property: JsonPropertyName("state")] string State);
