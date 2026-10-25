@@ -11,9 +11,9 @@ using Olive.Host.Startup;
 
 namespace Olive.Tests;
 
-public enum Cred { None, AgentKey, DevHeader, DevCookie, OidcCookie, ForgedCookie, ExpiredCookie, ServiceToken }
+public enum Cred { None, AgentKey, DevHeader, DevCookie, OidcCookie, ForgedCookie, ExpiredCookie, ServiceToken, UserKey }
 
-public enum Route { Proposals, Catalog, QueueItems, Review, DevSignIn }
+public enum Route { Proposals, Catalog, QueueItems, Review, DevSignIn, QueueCreate, QueueWithdraw, QueuePoll }
 
 // Expected admission for one cell. Status is pinned explicitly; Reason applies to JSON routes, LocationPrefix to redirects.
 public sealed record Expected(HttpStatusCode Status, string? Reason = null, string? LocationPrefix = null);
@@ -91,7 +91,21 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
 {
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    private static readonly string[] Paths = ["/v1/proposals/00000000-0000-4000-8000-0000000000aa", "/v1/catalog/1", "/v1/queue/items", "/review", "/dev/sign-in"];
+    private static readonly string[] Paths =
+    [
+        "/v1/proposals/00000000-0000-4000-8000-0000000000aa", "/v1/catalog/1", "/v1/queue/items", "/review", "/dev/sign-in",
+        "/v1/queue/items", "/v1/queue/items/00000000-0000-4000-8000-0000000000bb/withdraw", "/v1/queue/items?kind=identity_review&state=decided",
+    ];
+
+    // HTTP method and JSON body per route; the original five routes are GETs with no body.
+    private static HttpMethod MethodOf(Route route) => route is Route.QueueCreate or Route.QueueWithdraw ? HttpMethod.Post : HttpMethod.Get;
+
+    private static string? BodyOf(Route route) => route switch
+    {
+        Route.QueueCreate => "{}",
+        Route.QueueWithdraw => "{\"reason\":\"source_changed\"}",
+        _ => null,
+    };
 
     public static TheoryData<Cred, Route> Cells()
     {
@@ -106,13 +120,40 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
     private static readonly Expected NotPermitted = new(HttpStatusCode.Forbidden, "principal_not_permitted");
     private static readonly Expected ToSignIn = new(HttpStatusCode.Redirect, LocationPrefix: "/auth/sign-in");
     private static readonly Expected Ok = new(HttpStatusCode.OK);
+    private static readonly Expected ItemNotFound = new(HttpStatusCode.NotFound, "item_not_found");
 
     // The intended admission, written down independently of what the handlers do today.
     public static Expected Expect(Cred cred, Route route) => route switch
     {
+        // D-04 / IDN-03: producer routes admit only the popeye service token. Every other credential that presents itself as an
+        // API caller (agent key, user key, dev header) is the wrong caller type; every browser or absent credential is unauthenticated.
+        Route.QueueCreate => cred switch
+        {
+            Cred.ServiceToken => InvalidRequest,
+            Cred.AgentKey or Cred.UserKey or Cred.DevHeader => NotPermitted,
+            _ => ReviewerUnauthenticated,
+        },
+        Route.QueueWithdraw => cred switch
+        {
+            Cred.ServiceToken => ItemNotFound,
+            Cred.AgentKey or Cred.UserKey or Cred.DevHeader => NotPermitted,
+            _ => ReviewerUnauthenticated,
+        },
+        Route.QueuePoll => cred switch
+        {
+            Cred.ServiceToken => Ok,
+            // D-02: GET /v1/queue/items dispatches on credential. A dev reviewer on this path gets the reviewer list (it ignores the
+            // producer-only query), so it is admitted as a reviewer, not as a producer.
+            Cred.DevHeader => Ok,
+            Cred.AgentKey or Cred.UserKey => NotPermitted,
+            _ => ReviewerUnauthenticated,
+        },
         Route.Proposals => cred switch
         {
             Cred.AgentKey => new(HttpStatusCode.NotFound),
+            // Pre-existing (plan 03 deviation 1): the non-agent 403 lives only in POST /v1/proposals, so a user key passes the
+            // agent handler on this GET and reaches the lookup. Pinned as-is; not changed by Phase 8.
+            Cred.UserKey => new(HttpStatusCode.NotFound),
             // IDN-03: a service token is refused on the agent routes (ServiceToken falls to AgentUnauthenticated below). IDN-03 is
             // satisfied by 401 or 403. The session-key introspection fixture answers inactive for service tokens (a service token
             // is not a session key), so the cell is 401 key_inactive. The non-agent 403 check lives only in POST /v1/proposals,
@@ -123,6 +164,7 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
         Route.Catalog => cred switch
         {
             Cred.AgentKey => Ok,
+            Cred.UserKey => Ok, // pre-existing, see Proposals
             Cred.DevHeader => NotPermitted,
             _ => AgentUnauthenticated,
         },
@@ -131,7 +173,7 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
             Cred.DevHeader => Ok,
             // D-02: the bare GET (no query) from a service token is not a valid poll, so it is a 400, not a wrong-caller refusal.
             Cred.ServiceToken => InvalidRequest,
-            Cred.AgentKey => NotPermitted,
+            Cred.AgentKey or Cred.UserKey => NotPermitted,
             _ => ReviewerUnauthenticated,
         },
         Route.Review => cred is Cred.DevCookie or Cred.OidcCookie ? Ok : ToSignIn,
@@ -147,11 +189,13 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
 
     private static HttpRequestMessage Build(MatrixHost host, Cred cred, Route route)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, Paths[(int)route]);
+        var request = new HttpRequestMessage(MethodOf(route), Paths[(int)route]);
+        if (BodyOf(route) is { } body) { request.Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json"); }
         switch (cred)
         {
             case Cred.AgentKey: request.Headers.Authorization = new AuthenticationHeaderValue(Olive.Application.AgentKeyHeader.Scheme, ApiProposalTests.AlphaKey); break;
             case Cred.ServiceToken: request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "fixture-service-token-bluto-alpha"); break;
+            case Cred.UserKey: request.Headers.Authorization = new AuthenticationHeaderValue(Olive.Application.AgentKeyHeader.Scheme, "fixture-key-user"); break;
             case Cred.DevHeader: request.Headers.Add(DevReviewerAuthenticationHandler.HeaderName, "alpha-sup-1"); break;
             case Cred.DevCookie or Cred.ExpiredCookie: request.Headers.TryAddWithoutValidation("Cookie", ReviewerCookie.CookieName + "=" + host.DevCookie); break;
             case Cred.OidcCookie: request.Headers.TryAddWithoutValidation("Cookie", ReviewerCookie.CookieName + "=" + host.OidcCookie); break;
@@ -177,6 +221,7 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
             var before = clock.GetUtcNow();
             if (cred == Cred.ExpiredCookie) { clock.Advance(TimeSpan.FromHours(9)); }
             var calls = host.Factory.Introspector.Calls;
+            var serviceCalls = host.Factory.ServiceTokens.Calls;
             HttpResponseMessage response;
             try { response = await host.Client.SendAsync(Build(host, cred, route), Ct); }
             finally { clock.Set(before); }
@@ -192,18 +237,24 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
 
             // The agent key is introspected only on the agent route groups; never on /review, /dev or /v1/queue.
             var agentRoute = route is Route.Proposals or Route.Catalog;
-            if (!(agentRoute && cred is Cred.AgentKey or Cred.ServiceToken))
+            if (!(agentRoute && cred is Cred.AgentKey or Cred.ServiceToken or Cred.UserKey))
             {
                 Assert.Equal(calls, host.Factory.Introspector.Calls);
+            }
+
+            // The service-token verifier is never consulted on the agent routes, /review or /dev (IDN-03).
+            if (route is Route.Proposals or Route.Catalog or Route.Review or Route.DevSignIn)
+            {
+                Assert.Equal(serviceCalls, host.Factory.ServiceTokens.Calls);
             }
         }
         finally { state.Gate.Release(); }
     }
 
     [Fact]
-    public void UI_07_cell_table_covers_eight_credentials_by_five_routes()
+    public void UI_07_cell_table_covers_nine_credentials_by_eight_routes()
     {
-        Assert.Equal(40, Enum.GetValues<Cred>().Length * Enum.GetValues<Route>().Length);
+        Assert.Equal(72, Enum.GetValues<Cred>().Length * Enum.GetValues<Route>().Length);
     }
 
     [Fact]

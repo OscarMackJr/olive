@@ -12,3 +12,10 @@ Fields are exactly `active`, `principal_type`, `client_id`, `tenant_id`, `expire
 principal, so Olive's own principal check (403) runs for them. A real popeye adapter's behavior for non-application principals is
 unratified (assumption A1). Inactive, expired and unknown tokens return `{"active": false}` (no probing).
 `malformed.json` omits `client_id` on purpose: the stub treats it as an unavailable verifier and fails closed.
+
+## Non-production only
+
+`StubServiceTokenVerifier` and these fixtures exist for CI and local use. They are refused in production (FND-05) and no real popeye
+adapter or live bluto token is configured. Service tokens are covered by the IDN-08 sentinel scans (`SecretLeakageTests`): the token never
+appears in logs, responses or stored rows. The additive fields bluto sees on the producer routes are collected in
+`.planning/phases/08-identity-review-queue-kind/08-BLUTO-ADDITIVE-FIELDS.md`.
