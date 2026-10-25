@@ -348,7 +348,33 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. bluto can poll decisions through the IR-1 mechanism and withdraw its own items.
   4. Agent and user credentials are refused on the service-caller path, and the proposal endpoint refuses service credentials. No live bluto traffic is enabled.
 
-**Plans**: TBD
+**Plans**: 8 plans
+**Wave 1**
+
+- [ ] 08-01-PLAN.md — Migration 0010, IR-1 SHA-256 pin, steward fixtures, identity seeding helper (IRQ-01, IRQ-02, IRQ-03)
+- [ ] 08-02-PLAN.md — Inbound service-token port and stub, contracts/service-token, producers.yaml registry and startup guard (IRQ-04, IDN-03)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 08-03-PLAN.md — ServiceToken auth handler, QueueCaller dispatch, caller filters, matrix ServiceToken row (IRQ-04, IDN-03)
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 08-04-PLAN.md — Slice: bluto creates identity_review items, idempotent replay, server_assigned_field (IRQ-01)
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 08-05-PLAN.md — Slice: steward accept, reject, defer through the reviewer API (IRQ-02)
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 08-06-PLAN.md — Slice: bluto polls decisions with cursor and withdraws items (IRQ-03)
+- [ ] 08-07-PLAN.md — Slice: reviewer pages for identity items (IRQ-02)
+
+**Wave 6** *(blocked on Wave 5)*
+
+- [ ] 08-08-PLAN.md — Full credential matrix, identity demo and transcript, bluto additive-field note, sentinel coverage (IDN-03, IRQ-01..04)
+
 **Notes**: Uses the Q7 claimant-only release (identity items never expire). IR-1 contract changes need agreement from both the olive and bluto owners.
 
 ### Phase 9: Contract and Evidence Pack
