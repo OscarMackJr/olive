@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
  (completed 2026-10-23)
 - [x] **Phase 6: Simulated Execution and Audit Chain** - Exactly-once simulated execution, INSERT-only ledger, chain view, and the beat 2 demo through the API (completed 2026-10-24)
 - [x] **Phase 7: Reviewer UI and Entra OIDC** - Minimal Razor Pages reviewer UI with OIDC behind an interface, a dev IdP stub, and a role check at decision time (completed 2026-10-24)
-- [ ] **Phase 8: Identity Review Queue Kind** - The identity_review / candidate_pair kind on stub bluto traffic, with a service-token inbound path and IR-1 polling
+- [x] **Phase 8: Identity Review Queue Kind** - The identity_review / candidate_pair kind on stub bluto traffic, with a service-token inbound path and IR-1 polling (completed 2026-10-25)
 - [ ] **Phase 9: Contract and Evidence Pack** - OpenAPI 3.1 with drift test, COMPATIBILITY.md, Liam fixtures, full named test suite, credential audit, and refreshed docs
 
 ## Phase Details
@@ -373,7 +373,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 6** *(blocked on Wave 5)*
 
-- [ ] 08-08-PLAN.md — Full credential matrix, identity demo and transcript, bluto additive-field note, sentinel coverage (IDN-03, IRQ-01..04)
+- [x] 08-08-PLAN.md — Full credential matrix, identity demo and transcript, bluto additive-field note, sentinel coverage (IDN-03, IRQ-01..04)
 
 **Notes**: Uses the Q7 claimant-only release (identity items never expire). IR-1 contract changes need agreement from both the olive and bluto owners.
 
@@ -417,5 +417,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 5. Generic Review Queue and Action Approval | 10/10 | Complete    | 2026-10-23 |
 | 6. Simulated Execution and Audit Chain | 9/9 | Complete    | 2026-10-24 |
 | 7. Reviewer UI and Entra OIDC | 6/6 | Complete    | 2026-10-25 |
-| 8. Identity Review Queue Kind | 7/8 | In Progress|  |
+| 8. Identity Review Queue Kind | 8/8 | Complete   | 2026-10-25 |
 | 9. Contract and Evidence Pack | 0/TBD | Not started | - |
