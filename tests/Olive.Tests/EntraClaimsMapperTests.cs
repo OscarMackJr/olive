@@ -76,6 +76,14 @@ public sealed class EntraClaimsMapperTests
 
     [Fact]
     [Trait("Category", "Unit")]
+    public void IRQ_01_identity_steward_role_becomes_a_role_group()
+    {
+        var r = Map(Base(("groups", "tenant-alpha-reviewers"), ("roles", "identity_steward")));
+        Assert.Contains("role:identity_steward", r.Identity.Groups);
+    }
+
+    [Fact]
+    [Trait("Category", "Unit")]
     public void UI_01_role_prefixed_group_values_are_dropped()
     {
         var r = Map(Base(("groups", "tenant-alpha-reviewers"), ("groups", "role:case_supervisor")));

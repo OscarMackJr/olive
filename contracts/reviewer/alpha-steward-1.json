@@ -1,0 +1,7 @@
+{
+  "reviewer_id": "alpha-steward-1",
+  "oid": "aaaaaaaa-0000-4000-8000-000000000009",
+  "tid": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+  "upn": "steward1.alpha@example.test",
+  "groups": ["tenant-alpha-reviewers", "role:identity_steward"]
+}

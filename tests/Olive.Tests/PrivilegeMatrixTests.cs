@@ -197,7 +197,7 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
     }
 
     private static readonly string[] QueueInsertable =
-        ["tenant_id", "item_id", "kind", "subtype", "producer", "producer_ref", "subject_ref", "payload_ref", "proposal_id", "ruleset_version", "expires_at"];
+        ["tenant_id", "item_id", "kind", "subtype", "producer", "producer_ref", "subject_ref", "payload_ref", "proposal_id", "ruleset_version", "expires_at", "body_sha256"];
 
     private static readonly string[] QueueUpdatable =
         ["state", "claimed_by", "claimed_at", "decision", "decided_by", "decided_at", "rationale", "auth_source", "withdrawn_reason"];
@@ -222,6 +222,13 @@ public class PrivilegeMatrixTests(PostgresFixture fx)
 
     [Fact]
     public Task QUE_09_app_insert_on_queue_item_is_limited_to_reference_columns() => AssertQueueColumnPrivilegesAsync(QueueInsertable, "INSERT");
+
+    [Fact]
+    public void IRQ_01_body_sha256_is_insertable_but_never_updatable()
+    {
+        Assert.Contains("body_sha256", QueueInsertable);
+        Assert.DoesNotContain("body_sha256", QueueUpdatable);
+    }
 
     [Fact]
     public Task QUE_09_app_update_on_queue_item_is_limited_to_workflow_columns() => AssertQueueColumnPrivilegesAsync(QueueUpdatable, "UPDATE");

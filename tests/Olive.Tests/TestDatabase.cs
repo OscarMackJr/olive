@@ -106,6 +106,47 @@ public sealed class TestDatabase(PostgresFixture fixture, string name) : IAsyncD
         return itemId;
     }
 
+    // Inserts an identity_review queue_item in any state shape (container superuser, bypasses RLS and grants) and returns the item_id.
+    public async Task<Guid> SeedIdentityItemAsync(
+        Guid tenantId,
+        Guid producerRef,
+        string state = "open",
+        string? claimedBy = null,
+        string? decision = null,
+        string? decidedBy = null,
+        DateTimeOffset? decidedAt = null,
+        string? withdrawnReason = null,
+        string producer = "bluto")
+    {
+        var itemId = Guid.NewGuid();
+        var bodySha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(producerRef.ToByteArray()));
+        var claimed = state is "claimed" or "decided";
+        var decided = state == "decided";
+        await using var conn = new NpgsqlConnection(fixture.AdminConnectionString(Name));
+        await conn.OpenAsync();
+        await using var ins = new NpgsqlCommand(
+            "insert into queue_item (tenant_id, item_id, kind, subtype, producer, producer_ref, subject_ref, payload_ref, ruleset_version, body_sha256, " +
+            "state, claimed_by, claimed_at, decision, decided_by, decided_at, rationale, auth_source, withdrawn_reason) " +
+            "values (@t, @i, 'identity_review', 'candidate_pair', @pr, @ref, 'bluto:candidate/' || @ref::text, 'bluto:review-evidence/' || @ref::text, 'test-ruleset', @h, " +
+            "@s, @cb, @ca, @d, @db, @da, @r, @au, @w)", conn);
+        ins.Parameters.AddWithValue("t", tenantId);
+        ins.Parameters.AddWithValue("i", itemId);
+        ins.Parameters.AddWithValue("pr", producer);
+        ins.Parameters.AddWithValue("ref", producerRef);
+        ins.Parameters.AddWithValue("h", bodySha);
+        ins.Parameters.AddWithValue("s", state);
+        ins.Parameters.AddWithValue("cb", (object?)(claimed ? claimedBy ?? "seed-reviewer" : claimedBy) ?? DBNull.Value);
+        ins.Parameters.AddWithValue("ca", claimed ? DateTimeOffset.UtcNow : DBNull.Value);
+        ins.Parameters.AddWithValue("d", (object?)decision ?? DBNull.Value);
+        ins.Parameters.AddWithValue("db", (object?)(decided ? decidedBy ?? claimedBy ?? "seed-reviewer" : decidedBy) ?? DBNull.Value);
+        ins.Parameters.AddWithValue("da", decided ? decidedAt ?? DateTimeOffset.UtcNow : (object?)decidedAt ?? DBNull.Value);
+        ins.Parameters.AddWithValue("r", decided ? "seeded rationale" : DBNull.Value);
+        ins.Parameters.AddWithValue("au", decided ? "stub" : DBNull.Value);
+        ins.Parameters.AddWithValue("w", (object?)withdrawnReason ?? DBNull.Value);
+        await ins.ExecuteNonQueryAsync();
+        return itemId;
+    }
+
     // Test-only: runs SQL as the container superuser (bypasses RLS and column grants), e.g. to backdate created_at.
     public async Task<int> AdminExecAsync(string sql)
     {
