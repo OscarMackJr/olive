@@ -360,7 +360,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 08-04-PLAN.md — Slice: bluto creates identity_review items, idempotent replay, server_assigned_field (IRQ-01)
+- [x] 08-04-PLAN.md — Slice: bluto creates identity_review items, idempotent replay, server_assigned_field (IRQ-01)
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -417,5 +417,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → (6 | 7 | 8) → 9
 | 5. Generic Review Queue and Action Approval | 10/10 | Complete    | 2026-10-23 |
 | 6. Simulated Execution and Audit Chain | 9/9 | Complete    | 2026-10-24 |
 | 7. Reviewer UI and Entra OIDC | 6/6 | Complete    | 2026-10-25 |
-| 8. Identity Review Queue Kind | 3/8 | In Progress|  |
+| 8. Identity Review Queue Kind | 4/8 | In Progress|  |
 | 9. Contract and Evidence Pack | 0/TBD | Not started | - |
