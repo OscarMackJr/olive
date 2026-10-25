@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olive.invalid/contracts/queue-item/v1/identity-poll-response.schema.json",
+  "title": "Identity review decided-items poll response (IR-1 section 4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items", "next_cursor"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item_id", "kind", "subtype", "producer_ref", "subject_ref", "payload_ref", "ruleset_version", "state", "decision", "decided_by", "decided_at"],
+        "properties": {
+          "item_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+          "kind": { "const": "identity_review" },
+          "subtype": { "enum": ["candidate_pair"] },
+          "producer_ref": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+          "subject_ref": { "type": "string", "pattern": "^bluto:candidate/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+          "payload_ref": { "type": "string", "pattern": "^bluto:review-evidence/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+          "ruleset_version": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$" },
+          "state": { "const": "decided" },
+          "decision": { "enum": ["accept", "reject"] },
+          "decided_by": { "type": "string", "minLength": 1 },
+          "decided_at": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "next_cursor": { "type": ["string", "null"], "maxLength": 128 }
+  }
+}

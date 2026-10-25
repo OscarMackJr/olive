@@ -16,13 +16,15 @@ public static class QueueEndpoints
         var group = app.MapGroup("/v1/queue/items")
             .RequireAuthorization(new AuthorizeAttribute { AuthenticationSchemes = QueueCaller.SchemeName });
         group.MapPost("", CreateAsync).AddEndpointFilter(QueueCallerFilters.ProducerOnly);
-        group.MapGet("", ListAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
+        // D-01: the credential decides the view; the handler dispatches, so no filter is attached here.
+        group.MapGet("", ListOrPollAsync);
         group.MapGet("/{id:guid}", GetAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
         group.MapGet("/{id:guid}/payload", PayloadAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
         group.MapGet("/{id:guid}/events", EventsAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
         group.MapPost("/{id:guid}/claim", ClaimAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
         group.MapPost("/{id:guid}/release", ReleaseAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
         group.MapPost("/{id:guid}/decision", DecisionAsync).AddEndpointFilter(QueueCallerFilters.ReviewerOnly);
+        group.MapPost("/{id:guid}/withdraw", WithdrawAsync).AddEndpointFilter(QueueCallerFilters.ProducerOnly);
         return app;
     }
 
@@ -83,6 +85,94 @@ public static class QueueEndpoints
                 _ => throw new InvalidOperationException("Unknown create result."),
             };
         }
+    }
+
+    // D-01: reviewer credentials get the reviewer list unchanged; service credentials get the producer poll (D-02).
+    private static async Task<IResult> ListOrPollAsync(HttpContext http, QueueService service, string? kind, string? state, string? limit, CancellationToken ct)
+    {
+        var authType = http.User.Identity?.AuthenticationType;
+        if (authType == DevReviewerAuthenticationHandler.SchemeName)
+        {
+            return QueueCallerFilters.ReviewerCheck(http) ?? await ListAsync(http, service, kind, state, limit, ct);
+        }
+
+        if (authType == ServiceTokenAuthenticationHandler.SchemeName)
+        {
+            var services = http.RequestServices;
+            var refusal = QueueCallerFilters.ProducerCheck(http, services.GetRequiredService<IProducerRegistry>(), services.GetRequiredService<IReviewerTenantMap>(), out var producer);
+            return refusal ?? await PollAsync(http, service, producer!, ct);
+        }
+
+        return ProblemResults.Result(StatusCodes.Status403Forbidden, ProblemReasons.PrincipalNotPermitted);
+    }
+
+    private static readonly string[] PollKeys = ["kind", "state", "decided_after"];
+
+    // D-02: exactly {kind, state} or {kind, state, decided_after}, each once; the limit parameter is not accepted (D-16).
+    private static async Task<IResult> PollAsync(HttpContext http, QueueService service, ProducerContext producer, CancellationToken ct)
+    {
+        var invalid = ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.InvalidRequest);
+        var query = http.Request.Query;
+        if (query.Count is not (2 or 3)) { return invalid; }
+        foreach (var key in query.Keys)
+        {
+            if (!PollKeys.Contains(key, StringComparer.Ordinal) || query[key].Count != 1) { return invalid; }
+        }
+
+        if (query["kind"].ToString() != QueueStates.IdentityReview || query["state"].ToString() != QueueStates.Decided) { return invalid; }
+        string? after = null;
+        if (query.Count == 3)
+        {
+            if (!query.ContainsKey("decided_after")) { return invalid; }
+            after = query["decided_after"].ToString();
+        }
+
+        var result = await service.PollDecisionsAsync(producer, after, ct);
+        return result switch
+        {
+            PollResult.Ok ok => Results.Ok(new IdentityPollResponse(
+                ok.Items.Select(i => new IdentityPollItemDto(i.ItemId, i.Kind, i.Subtype, i.ProducerRef, i.SubjectRef, i.PayloadRef, i.RulesetVersion, i.State, i.Decision, i.DecidedBy, i.DecidedAt)).ToList(),
+                ok.NextCursor)),
+            PollResult.Invalid => invalid,
+            _ => throw new InvalidOperationException("Unknown poll result."),
+        };
+    }
+
+    // IRQ-03 / D-17: body is exactly one string property named reason. Tenant and producer come only from the verified token.
+    private static async Task<IResult> WithdrawAsync(Guid id, HttpContext http, QueueService service, CancellationToken ct)
+    {
+        var invalid = ProblemResults.Result(StatusCodes.Status400BadRequest, ProblemReasons.InvalidRequest);
+        if (!http.Request.HasJsonContentType()) { return invalid; }
+        var bytes = await ProposalEndpoints.ReadBoundedAsync(http.Request, ct);
+        if (bytes is null) { return ProblemResults.Result(StatusCodes.Status413PayloadTooLarge, ProblemReasons.PayloadTooLarge); }
+
+        string? reason = null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(bytes, new System.Text.Json.JsonDocumentOptions { MaxDepth = 8, AllowDuplicateProperties = false });
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) { return invalid; }
+            foreach (var p in doc.RootElement.EnumerateObject())
+            {
+                if (p.Name != "reason" || p.Value.ValueKind != System.Text.Json.JsonValueKind.String) { return invalid; }
+                reason = p.Value.GetString();
+            }
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException)
+        {
+            return invalid;
+        }
+
+        var producer = (ProducerContext)http.Items[QueueCallerFilters.ProducerItemKey]!;
+        var result = await service.WithdrawAsync(producer, id, reason, ct);
+        return result switch
+        {
+            WithdrawResult.Withdrawn w => Results.Ok(new WithdrawItemResponse(w.ItemId, QueueStates.Withdrawn)),
+            WithdrawResult.AlreadyWithdrawn w => Results.Ok(new WithdrawItemResponse(w.ItemId, QueueStates.Withdrawn)),
+            WithdrawResult.Closed => ProblemResults.Result(StatusCodes.Status409Conflict, ProblemReasons.ItemClosed),
+            WithdrawResult.NotFound => ProblemResults.Result(StatusCodes.Status404NotFound, ProblemReasons.ItemNotFound),
+            WithdrawResult.InvalidRequest => invalid,
+            _ => throw new InvalidOperationException("Unknown withdraw result."),
+        };
     }
 
     private static async Task<IResult> ListAsync(HttpContext http, QueueService service, string? kind, string? state, string? limit, CancellationToken ct)

@@ -31,7 +31,26 @@ public interface IQueueStore
     Task<DecideResult> DecideIdentityAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, DateTimeOffset now, CancellationToken ct);
 
     // IRQ-01/IRQ-02: idempotent insert keyed on (tenant, producer, producer_ref). Same body hash replays the current state; a different hash conflicts.
+    // IRQ-03 / D-13..D-16: decided accept/reject identity items of one producer in one tenant, oldest first by (decided_at, item_id). Single read, no lock.
+    Task<IReadOnlyList<QueueItemDetail>> ListDecidedForProducerAsync(Guid tenantId, string producer, DateTime? afterAtUtc, Guid? afterItemId, int limit, CancellationToken ct);
+
+    // IRQ-03 / D-17: producer withdraw of an undecided identity item. The claim is cleared and the event written in one transaction.
+    Task<WithdrawResult> WithdrawByProducerAsync(Guid tenantId, string producer, Guid itemId, string reason, CancellationToken ct);
+
     Task<CreateIdentityResult> CreateIdentityItemAsync(Guid tenantId, string producer, string kind, string subtype, Guid producerRef, string subjectRef, string payloadRef, string rulesetVersion, string bodySha256, DateTimeOffset now, CancellationToken ct);
+}
+
+public abstract record WithdrawResult
+{
+    public sealed record Withdrawn(Guid ItemId) : WithdrawResult;
+
+    public sealed record AlreadyWithdrawn(Guid ItemId) : WithdrawResult;
+
+    public sealed record Closed : WithdrawResult;
+
+    public sealed record NotFound : WithdrawResult;
+
+    public sealed record InvalidRequest : WithdrawResult;
 }
 
 public abstract record CreateIdentityResult

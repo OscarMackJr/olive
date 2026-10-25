@@ -102,6 +102,7 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
 
     private static readonly Expected AgentUnauthenticated = new(HttpStatusCode.Unauthorized, "key_inactive");
     private static readonly Expected ReviewerUnauthenticated = new(HttpStatusCode.Unauthorized, "reviewer_unauthenticated");
+    private static readonly Expected InvalidRequest = new(HttpStatusCode.BadRequest, "invalid_request");
     private static readonly Expected NotPermitted = new(HttpStatusCode.Forbidden, "principal_not_permitted");
     private static readonly Expected ToSignIn = new(HttpStatusCode.Redirect, LocationPrefix: "/auth/sign-in");
     private static readonly Expected Ok = new(HttpStatusCode.OK);
@@ -128,8 +129,9 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
         Route.QueueItems => cred switch
         {
             Cred.DevHeader => Ok,
-            // Interim (superseded by the poll view in plan 06): a service token on the reviewer list is a wrong caller type.
-            Cred.AgentKey or Cred.ServiceToken => NotPermitted,
+            // D-02: the bare GET (no query) from a service token is not a valid poll, so it is a 400, not a wrong-caller refusal.
+            Cred.ServiceToken => InvalidRequest,
+            Cred.AgentKey => NotPermitted,
             _ => ReviewerUnauthenticated,
         },
         Route.Review => cred is Cred.DevCookie or Cred.OidcCookie ? Ok : ToSignIn,

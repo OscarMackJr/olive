@@ -172,6 +172,35 @@ public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry,
         };
     }
 
+    private static readonly string[] WithdrawReasons = ["superseded_by_rule", "source_changed", "ruleset_retired"];
+
+    // IRQ-03 / D-02, D-13..D-16: a malformed cursor is Invalid. Page size is fixed. Items carry exactly the D-14 fields and nothing reviewer-authored.
+    public async Task<PollResult> PollDecisionsAsync(ProducerContext producer, string? decidedAfter, CancellationToken ct)
+    {
+        DateTime? afterAt = null;
+        Guid? afterId = null;
+        if (decidedAfter is not null)
+        {
+            if (!ProducerCursor.TryDecode(decidedAfter, out var at, out var id)) { return new PollResult.Invalid(); }
+            afterAt = at;
+            afterId = id;
+        }
+
+        var rows = await store.ListDecidedForProducerAsync(producer.TenantId, producer.Producer, afterAt, afterId, DefaultLimit, ct);
+        var items = rows.Select(r => new PollItem(r.ItemId, r.Kind, r.Subtype, r.ProducerRef, r.SubjectRef, r.PayloadRef, r.RulesetVersion ?? "", r.State, r.Decision!, r.DecidedBy!, r.DecidedAt!.Value)).ToList();
+        var next = rows.Count > 0
+            ? ProducerCursor.Encode(rows[^1].DecidedAt!.Value.UtcDateTime, rows[^1].ItemId)
+            : decidedAfter;
+        return new PollResult.Ok(items, next);
+    }
+
+    // IRQ-03 / D-17. The reason is checked here; tenant and producer come only from the verified context.
+    public async Task<WithdrawResult> WithdrawAsync(ProducerContext producer, Guid itemId, string? reason, CancellationToken ct)
+    {
+        if (reason is null || !WithdrawReasons.Contains(reason, StringComparer.Ordinal)) { return new WithdrawResult.InvalidRequest(); }
+        return await store.WithdrawByProducerAsync(producer.TenantId, producer.Producer, itemId, reason, ct);
+    }
+
     private static long AgeSeconds(DateTimeOffset created, DateTimeOffset now) => Math.Max(0, (long)(now - created).TotalSeconds);
 }
 
@@ -249,4 +278,13 @@ public abstract record CreateResult
     public sealed record Conflict : CreateResult;
 
     public sealed record InvalidRequest : CreateResult;
+}
+
+public sealed record PollItem(Guid ItemId, string Kind, string Subtype, Guid ProducerRef, string SubjectRef, string PayloadRef, string RulesetVersion, string State, string Decision, string DecidedBy, DateTimeOffset DecidedAt);
+
+public abstract record PollResult
+{
+    public sealed record Ok(IReadOnlyList<PollItem> Items, string? NextCursor) : PollResult;
+
+    public sealed record Invalid : PollResult;
 }
