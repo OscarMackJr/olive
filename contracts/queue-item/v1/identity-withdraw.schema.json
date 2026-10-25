@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olive.invalid/contracts/queue-item/v1/identity-withdraw.schema.json",
+  "title": "Identity review item withdraw body (IR-1 section 4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reason"],
+  "properties": {
+    "reason": { "enum": ["superseded_by_rule", "source_changed", "ruleset_retired"] }
+  }
+}

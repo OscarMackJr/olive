@@ -28,3 +28,15 @@ Examples: `queue-item.valid.json`, `queue-item.invalid.json` (unknown property),
 `identity-create.schema.json` is the body bluto POSTs to `/v1/queue/items`: exactly `kind`, `subtype`, `producer_ref`, `subject_ref`, `payload_ref`, `ruleset_version`, `additionalProperties` false. `kind` is `identity_review`, `subtype` is `candidate_pair` only (`link_challenge` is rejected), the refs are `bluto:candidate/<producer_ref>` and `bluto:review-evidence/<producer_ref>`, and `ruleset_version` matches `^[A-Za-z0-9._-]{1,128}$` so no record value can ride in it. Tenant, producer and every decision or server field come from the verified token and `producers.yaml`, never the body.
 
 Examples: `identity-create.valid.json`, `identity-create.invalid.json` (inline `payload`), `identity-create.link-challenge.invalid.json`, `identity-create.server-assigned.invalid.json` (`tenant_id` in the body).
+
+## identity-withdraw (producer withdraw body)
+
+`identity-withdraw.schema.json` is the body bluto POSTs to `/v1/queue/items/{id}/withdraw`: exactly `reason`, one of `superseded_by_rule`, `source_changed`, `ruleset_retired`. A repeat withdraw with the same reason is 200; a different reason, or a decided item, is 409 `item_closed`. The request body is an additive wire field set to share with the bluto owner; IR-1 itself is not edited.
+
+Examples: `identity-withdraw.valid.json`, `identity-withdraw.invalid.json` (unknown reason).
+
+## identity-poll-response (producer poll)
+
+`identity-poll-response.schema.json` is the response of `GET /v1/queue/items?kind=identity_review&state=decided[&decided_after=<cursor>]` for a service credential: `items` (at most 100, oldest first by `decided_at`, `item_id`) and `next_cursor`. Each item carries exactly `item_id`, `kind`, `subtype`, `producer_ref`, `subject_ref`, `payload_ref`, `ruleset_version`, `state`, `decision` (accept or reject), `decided_by`, `decided_at`; never the reviewer text, claim or deferral history. `next_cursor` is an opaque string (the last returned row, or the supplied cursor for an empty page, else null); bluto persists it and re-sends it as `decided_after`. `next_cursor` is an additive wire field to share with the bluto owner.
+
+Examples: `identity-poll-response.valid.json`, `identity-poll-response.invalid.json` (reviewer text field present).

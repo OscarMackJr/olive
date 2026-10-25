@@ -86,6 +86,59 @@ public sealed class QueueSchemaTests
     [Fact]
     public void IRQ_01_create_ruleset_version_with_spaces_is_rejected() => Assert.NotNull(CheckCreate(CreateWith("ruleset_version", "rules 1")));
 
+    private static SchemaViolation? CheckFile(string schema, string instance)
+    {
+        var validator = SchemaValidator.Compile(Read(schema));
+        using var doc = JsonDocument.Parse(instance);
+        return validator.Validate(doc.RootElement);
+    }
+
+    [Fact]
+    public void IRQ_03_poll_response_valid_example_validates() =>
+        Assert.Null(CheckFile("identity-poll-response.schema.json", Read("identity-poll-response.valid.json")));
+
+    [Fact]
+    public void IRQ_03_poll_response_with_a_rationale_field_is_rejected() =>
+        Assert.NotNull(CheckFile("identity-poll-response.schema.json", Read("identity-poll-response.invalid.json")));
+
+    [Fact]
+    public void IRQ_03_poll_response_requires_next_cursor_and_allows_null()
+    {
+        var node = JsonNode.Parse(Read("identity-poll-response.valid.json"))!.AsObject();
+        node["next_cursor"] = null;
+        Assert.Null(CheckFile("identity-poll-response.schema.json", node.ToJsonString()));
+        node.Remove("next_cursor");
+        Assert.NotNull(CheckFile("identity-poll-response.schema.json", node.ToJsonString()));
+    }
+
+    [Fact]
+    public void IRQ_03_poll_item_with_a_deferred_decision_is_rejected()
+    {
+        var node = JsonNode.Parse(Read("identity-poll-response.valid.json"))!.AsObject();
+        node["items"]![0]!["decision"] = "defer";
+        Assert.NotNull(CheckFile("identity-poll-response.schema.json", node.ToJsonString()));
+    }
+
+    [Theory]
+    [InlineData("superseded_by_rule")]
+    [InlineData("source_changed")]
+    [InlineData("ruleset_retired")]
+    public void IRQ_09_withdraw_accepts_the_three_reasons(string reason) =>
+        Assert.Null(CheckFile("identity-withdraw.schema.json", "{\"reason\":\"" + reason + "\"}"));
+
+    [Fact]
+    public void IRQ_09_withdraw_valid_and_invalid_examples()
+    {
+        Assert.Null(CheckFile("identity-withdraw.schema.json", Read("identity-withdraw.valid.json")));
+        Assert.NotNull(CheckFile("identity-withdraw.schema.json", Read("identity-withdraw.invalid.json")));
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"reason\":\"source_changed\",\"extra\":1}")]
+    public void IRQ_09_withdraw_requires_exactly_reason(string body) =>
+        Assert.NotNull(CheckFile("identity-withdraw.schema.json", body));
+
     [Fact]
     public void IRQ_11_create_link_challenge_subtype_is_rejected_by_the_schema()
     {
