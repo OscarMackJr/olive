@@ -87,7 +87,8 @@ builder.Services.AddSingleton<IAgentAllowlist>(_ => AgentAllowlist.LoadEmbedded(
 builder.Services.AddSingleton<IQueueKindRegistry>(_ => QueueKindRegistry.LoadEmbedded());
 builder.Services.AddSingleton<IReviewerTenantMap>(_ => ReviewerTenantMap.LoadEmbedded());
 builder.Services.AddSingleton(_ => CatalogLoader.LoadEmbedded(Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml")));
-// UI-01: Entra sign-in is configured only from environment variables; absent settings leave the dev picker as the only sign-in path.
+// UI-01: Entra sign-in is configured only from environment variables; absent settings leave the dev picker as the only sign-in path,
+// and present settings remove the picker (WR-01).
 var oidc = OidcConfig.Read(builder.Configuration);
 var authentication = builder.Services.AddAuthentication(AgentKeyAuthenticationHandler.SchemeName)
     .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, AgentKeyAuthenticationHandler>(AgentKeyAuthenticationHandler.SchemeName, _ => { })
@@ -123,8 +124,13 @@ if (builder.Configuration["OLIVE_DATA_PROTECTION_PATH"] is { Length: > 0 } keyPa
     dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyPath));
 }
 
-// D-02 / D-18: unconditional; as an INonProductionOnly marker it makes FND-05 refuse production while the picker exists.
-builder.Services.AddSingleton<DevSignInGate>();
+// D-02 / D-18: the /dev/sign-in picker exists only in stub mode. With Entra configured the gate is absent, so the picker
+// returns 404 and OIDC is the only way to get a reviewer cookie. As an INonProductionOnly marker it also makes FND-05
+// refuse production while the picker exists.
+if (oidc is null)
+{
+    builder.Services.AddSingleton<DevSignInGate>();
+}
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
 

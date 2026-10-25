@@ -160,3 +160,36 @@ public sealed class DevSignInTests(PostgresFixture fixture)
         StartupGuards.CheckNoNonProductionComponents(services, provider, new OliveEnvironment("ci"));
     }
 }
+
+// UI-01 / WR-01: with Entra configured the dev picker is not a sign-in path. The gate is never registered, /dev/sign-in is 404
+// on both verbs, no reviewer cookie is issued and an anonymous /review goes to the OIDC sign-in, never to the picker.
+[Trait("Category", "Integration")]
+public sealed class DevSignInOidcModeTests(PostgresFixture fixture, MockOidcFixture mock) : IClassFixture<MockOidcFixture>
+{
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task UI_01_dev_sign_in_is_not_reachable_when_oidc_is_configured()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db, mockOidc: mock);
+        Assert.Null(factory.Services.GetService<DevSignInGate>());
+        using var client = factory.CreateUiClient();
+
+        var get = await client.GetAsync("/dev/sign-in", Ct);
+        Assert.Equal(HttpStatusCode.NotFound, get.StatusCode);
+        Assert.DoesNotContain("Development sign-in", await get.Content.ReadAsStringAsync(Ct));
+        Assert.DoesNotContain("alpha-sup-1", await get.Content.ReadAsStringAsync(Ct));
+
+        var post = await client.PostAsync("/dev/sign-in", new FormUrlEncodedContent(new Dictionary<string, string> { ["reviewerId"] = "alpha-sup-1", ["returnUrl"] = "" }), Ct);
+        Assert.NotEqual(HttpStatusCode.Redirect, post.StatusCode);
+        Assert.False((int)post.StatusCode is >= 200 and < 400, "picker POST was admitted: " + post.StatusCode);
+        Assert.False(post.Headers.TryGetValues("Set-Cookie", out var cookies) && cookies.Any(v => v.StartsWith(ReviewerCookie.CookieName + "=", StringComparison.Ordinal)));
+
+        var review = await client.GetAsync("/review", Ct);
+        Assert.Equal(HttpStatusCode.Redirect, review.StatusCode);
+        var location = review.Headers.Location!;
+        var path = location.IsAbsoluteUri ? location.AbsolutePath : location.OriginalString;
+        Assert.StartsWith("/auth/sign-in", path, StringComparison.Ordinal);
+    }
+}

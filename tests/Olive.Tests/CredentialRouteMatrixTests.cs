@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Olive.Host.Auth;
 using Olive.Host.Startup;
 
@@ -46,10 +49,10 @@ public sealed class MatrixHost : IAsyncDisposable
     {
         var db = await pg.CreateDatabaseAsync();
         var factory = new OliveApiFactory(db, mockOidc: oidc);
-        using var dev = new OidcFlowDriver(factory);
-        var picked = await dev.PostWithAntiforgeryAsync("/dev/sign-in", "/dev/sign-in", new Dictionary<string, string> { ["reviewerId"] = "alpha-sup-1", ["returnUrl"] = "" });
-        Assert.Equal(HttpStatusCode.Redirect, picked.StatusCode);
-        var devCookie = dev.GetCookie(ReviewerCookie.CookieName);
+        // WR-01: with Entra configured the picker is 404, so the dev cookie cell is minted the way the picker would mint it
+        // (stub auth source, server-side identity and tenant) and sealed with this host's cookie protector. It models a stub
+        // cookie that reaches an Entra host; anonymous callers cannot obtain one here.
+        var devCookie = MintDevCookie(factory, "alpha-sup-1");
         Assert.False(string.IsNullOrEmpty(devCookie));
 
         // The OIDC cookie comes from the real OpenIdConnect handler against the mock IdP.
@@ -58,6 +61,20 @@ public sealed class MatrixHost : IAsyncDisposable
         var oidcCookie = real.GetCookie(ReviewerCookie.CookieName);
         Assert.False(string.IsNullOrEmpty(oidcCookie));
         return new MatrixHost { Db = db, Factory = factory, Client = factory.CreateUiClient(handleCookies: false), DevCookie = devCookie!, OidcCookie = oidcCookie! };
+    }
+
+    private static string MintDevCookie(OliveApiFactory factory, string reviewerId)
+    {
+        var services = factory.Services;
+        var identity = services.GetRequiredService<Olive.Application.IReviewerIdentitySource>().Find(reviewerId)!;
+        var tenants = services.GetRequiredService<Olive.Application.IReviewerTenantMap>().TenantsFor(identity.Groups).Distinct().ToArray();
+        Guid? tenant = tenants.Length == 1 ? tenants[0] : null;
+        var now = factory.Clock!.GetUtcNow();
+        var principal = ReviewerClaims.WithSession(
+            ReviewerClaims.ToPrincipal(identity, tenant, Olive.Domain.QueueStates.Stub, ReviewerCookie.Scheme), now, identity.ReviewerId, null, null);
+        var properties = new AuthenticationProperties { IsPersistent = false, IssuedUtc = now, ExpiresUtc = now + ReviewerCookie.IdleTimeout };
+        var options = services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>().Get(ReviewerCookie.Scheme);
+        return options.TicketDataFormat.Protect(new AuthenticationTicket(principal, properties, ReviewerCookie.Scheme));
     }
 
     public async ValueTask DisposeAsync()
@@ -111,7 +128,8 @@ public sealed class CredentialRouteMatrixTests(PostgresFixture pg, MockOidcFixtu
             _ => ReviewerUnauthenticated,
         },
         Route.Review => cred is Cred.DevCookie or Cred.OidcCookie ? Ok : ToSignIn,
-        _ => Ok,
+        // WR-01: this host has Entra configured, so the dev picker is not a sign-in path for any credential.
+        _ => new(HttpStatusCode.NotFound),
     };
 
     private static string ReasonOf(string body)

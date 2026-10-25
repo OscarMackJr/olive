@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace Olive.Tests;
 
 // D-20 / IDN-08 extension: every page type, as a supervisor, carries the strict CSP and no-store, and no secret reaches a body,
-// a header, a cookie or a log. Drives the dev picker and the real OpenIdConnect handler against the mock IdP.
+// a header, a cookie or a log. Drives the dev picker (stub-mode host) and the real OpenIdConnect handler against the mock IdP.
 [Trait("Category", "Integration")]
 public sealed class SentinelUiTests(PostgresFixture pg, MockOidcFixture mock) : IClassFixture<MockOidcFixture>
 {
@@ -46,16 +46,18 @@ public sealed class SentinelUiTests(PostgresFixture pg, MockOidcFixture mock) : 
     {
         await using var db = await pg.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db, mockOidc: mock);
+        // WR-01: the dev picker exists only when Entra is not configured, so the dev pages run on a stub-mode host over the same database.
+        await using var stub = new OliveApiFactory(db);
         var captured = new List<Captured>();
         var idTokens = new List<string>();
         var codes = new List<string>();
 
         // Dev picker session: list, item (open, claimed), audit, 404.
-        using var dev = new OidcFlowDriver(factory);
+        using var dev = new OidcFlowDriver(stub);
         captured.Add(await CaptureAsync("picker", "/dev/sign-in", await dev.GetAsync("/dev/sign-in")));
         captured.Add(await CaptureAsync("picker post", "/dev/sign-in", await dev.PostWithAntiforgeryAsync("/dev/sign-in", "/dev/sign-in",
             new Dictionary<string, string> { ["reviewerId"] = "alpha-sup-1", ["returnUrl"] = "" })));
-        var (itemA, _) = await SubmitAsync(factory, db, "sentinel-ui-a");
+        var (itemA, _) = await SubmitAsync(stub, db, "sentinel-ui-a");
         captured.Add(await CaptureAsync("list", "/review", await dev.GetAsync("/review")));
         captured.Add(await CaptureAsync("item open", UiHttp.ItemPath(itemA), await dev.GetAsync(UiHttp.ItemPath(itemA)), showsDraftOrParameters: true));
         captured.Add(await CaptureAsync("claim post", UiHttp.ItemPath(itemA), await dev.PostWithAntiforgeryAsync(UiHttp.ItemPath(itemA), UiHttp.ItemPath(itemA) + "?handler=Claim")));
@@ -65,7 +67,7 @@ public sealed class SentinelUiTests(PostgresFixture pg, MockOidcFixture mock) : 
         captured.Add(await CaptureAsync("stylesheet", "/olive.css", await dev.GetAsync("/olive.css")));
 
         // 403 pages: role not held (dev), no tenant (dev), groups overage (OIDC).
-        using (var other = new OidcFlowDriver(factory))
+        using (var other = new OidcFlowDriver(stub))
         {
             await other.PostWithAntiforgeryAsync("/dev/sign-in", "/dev/sign-in", new Dictionary<string, string> { ["reviewerId"] = "no-tenant", ["returnUrl"] = "" });
             var forbidden = await CaptureAsync("403 no_reviewer_tenant", "/review", await other.GetAsync("/review"));
@@ -75,7 +77,7 @@ public sealed class SentinelUiTests(PostgresFixture pg, MockOidcFixture mock) : 
         }
 
         // A reviewer without the decision role is not refused: the item page shows references only (APR-03).
-        using (var norole = new OidcFlowDriver(factory))
+        using (var norole = new OidcFlowDriver(stub))
         {
             await norole.PostWithAntiforgeryAsync("/dev/sign-in", "/dev/sign-in", new Dictionary<string, string> { ["reviewerId"] = "alpha-norole", ["returnUrl"] = "" });
             var restricted = await CaptureAsync("role_not_held item", UiHttp.ItemPath(itemA), await norole.GetAsync(UiHttp.ItemPath(itemA)), showsDraftOrParameters: true);
@@ -181,6 +183,7 @@ public sealed class SentinelUiTests(PostgresFixture pg, MockOidcFixture mock) : 
         foreach (var c in captured) { scan.AddSource(c.Name + " headers", c.Headers); scan.AddSource(c.Name + " body", c.Body); }
         scan.AddSource("cookies", cookieText);
         scan.AddSource("logs", factory.Logs.Text);
+        scan.AddSource("stub logs", stub.Logs.Text);
         scan.AssertAbsent(secrets.ToArray());
 
         // The rationale never appears except where the reviewer's own restored draft is echoed back and on the audit chain (which also shows parameter references to the role holder); the parameter reference is
@@ -203,6 +206,7 @@ public sealed class SentinelUiTests(PostgresFixture pg, MockOidcFixture mock) : 
         {
             s.AddSource("cookies", cookieText);
             s.AddSource("logs", factory.Logs.Text);
+            s.AddSource("stub logs", stub.Logs.Text);
         }
 
         rationaleScan.AssertAbsent(DecisionHttp.Rationale);
