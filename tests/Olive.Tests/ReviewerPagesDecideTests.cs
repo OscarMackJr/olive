@@ -64,7 +64,7 @@ public sealed class ReviewerPagesDecideTests(PostgresFixture fixture)
 
         var post = await UiHttp.PostAsync(ui, item, "Decide", Form("approve", rationale));
         var html = await UiHttp.FollowAsync(ui, post);
-        Assert.Contains("choose Approve or Reject and enter a rationale of up to 4000 characters", html);
+        Assert.Contains("choose a decision and enter a rationale of up to 4000 characters", html);
         Assert.Equal("claimed", await DecisionHttp.Scalar<string>(db, "select state from queue_item where item_id = @i", ("i", item)));
         Assert.Equal("awaiting_approval", await DecisionHttp.ProposalState(db, proposal));
     }

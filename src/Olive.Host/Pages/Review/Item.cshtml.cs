@@ -47,7 +47,13 @@ public sealed class ItemModel(
 
     public bool IsClaimant { get; private set; }
 
-    public bool DecisionsSupported { get; private set; }
+    public IReadOnlyList<string> Decisions { get; private set; } = [];
+
+    public bool IsIdentity { get; private set; }
+
+    public bool LacksRole { get; private set; }
+
+    public bool RefsOnly { get; private set; }
 
     public bool Expired { get; private set; }
 
@@ -75,8 +81,10 @@ public sealed class ItemModel(
             case PayloadResult.RoleNotPermitted:
                 PayloadHidden = true;
                 break;
-            case PayloadResult.NotFound:
             case PayloadResult.NoPayload:
+                RefsOnly = true;
+                break;
+            case PayloadResult.NotFound:
                 return NotFoundPage();
             default:
                 throw new InvalidOperationException("Unknown payload result.");
@@ -85,7 +93,13 @@ public sealed class ItemModel(
         Item = item;
         IsClaimant = item.State == "claimed" && item.ClaimedBy is not null && item.ClaimedBy == Reviewer!.Oid;
         Expired = item.ExpiresAt is { } expiry && expiry <= Now && item.State is "open" or "claimed";
-        DecisionsSupported = registry.TryGet(item.Kind, out var kind) && kind.Decisions.SequenceEqual(["approve", "reject"], StringComparer.Ordinal);
+        if (registry.TryGet(item.Kind, out var kind))
+        {
+            Decisions = kind.Decisions;
+            LacksRole = !Reviewer!.Groups.Contains(kind.RequiredRole, StringComparer.Ordinal);
+        }
+
+        IsIdentity = item.Kind == "identity_review";
         FixtureTrace = await IsFixtureTraceAsync(item, ct);
         Flash = FlashMessages.Resolve(TempData[FlashKey] as string);
 
@@ -138,7 +152,7 @@ public sealed class ItemModel(
             ReleaseResult.NotClaimed => "item_not_claimed",
             ReleaseResult.ProposalExpired => "proposal_expired",
             ReleaseResult.Closed => "item_closed",
-            ReleaseResult.Withdrawn => "item_closed",
+            ReleaseResult.Withdrawn => "item_withdrawn",
             ReleaseResult.NotFound => null,
             _ => throw new InvalidOperationException("Unknown release result."),
         };
@@ -160,7 +174,10 @@ public sealed class ItemModel(
         if (outcome is FreshnessOutcome.Stale)
         {
             // D-05, D-06: the Entra session is too old. Keep the draft server-side and re-authenticate; nothing is decided here.
-            if (decision is not ("approve" or "reject") || string.IsNullOrWhiteSpace(rationale) || rationale.Length > 4000)
+            var current = await queue.GetAsync(Reviewer!, id, ct);
+            if (current is null || !registry.TryGet(current.Kind, out var staleKind)
+                || decision is null || !staleKind.Decisions.Contains(decision, StringComparer.Ordinal)
+                || string.IsNullOrWhiteSpace(rationale) || rationale.Length > 4000)
             {
                 return Prg(id, "invalid_request");
             }
@@ -187,14 +204,14 @@ public sealed class ItemModel(
         string? code;
         switch (result)
         {
-            case DecisionResult.Decided: code = decision == "approve" ? "decided_approve" : "decided_reject"; break;
+            case DecisionResult.Decided: code = decision switch { "approve" => "decided_approve", "accept" => "decided_accept", _ => "decided_reject" }; break;
             case DecisionResult.AlreadyDecidedSame: code = "already_decided_same"; break;
             case DecisionResult.Conflict: code = "decision_conflict"; break;
             case DecisionResult.NotClaimant: code = "not_claimant"; break;
             case DecisionResult.NotClaimed: code = "item_not_claimed"; break;
             case DecisionResult.Closed: code = "item_closed"; break;
-            case DecisionResult.Withdrawn: code = "item_closed"; break;
-            case DecisionResult.Deferred: code = "released"; break;
+            case DecisionResult.Withdrawn: code = "item_withdrawn"; break;
+            case DecisionResult.Deferred: code = "deferred"; break;
             case DecisionResult.ProposalExpired: code = "proposal_expired"; break;
             case DecisionResult.NotFound: return NotFoundPage();
             case DecisionResult.SelfApproval: code = "self_approval_forbidden"; break;

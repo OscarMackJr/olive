@@ -39,7 +39,7 @@ else
             <tr>
                 <td>@Display.Timestamp(item.CreatedAt)</td>
                 <td>@Display.Age(item.AgeSeconds)</td>
-                <td>@item.Kind</td>
+                <td><span class="badge">@item.Kind</span></td>
                 <td>@item.Subtype</td>
                 <td class="mono">@item.SubjectRef</td>
                 <td><span class="badge">@item.State</span></td>

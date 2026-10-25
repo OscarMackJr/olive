@@ -5,7 +5,7 @@ using Olive.Application;
 namespace Olive.Host.Pages.Review;
 
 // UI-05 / D-12..D-14: read-only audit page. Data access goes through QueueService and IAuditStore only; no new endpoint.
-public sealed class AuditModel(QueueService queue, IQueueStore queueStore, IAuditStore audit) : ReviewerPageModel
+public sealed class AuditModel(QueueService queue, IAuditStore audit) : ReviewerPageModel
 {
     public Guid ItemId { get; private set; }
 
@@ -23,6 +23,8 @@ public sealed class AuditModel(QueueService queue, IQueueStore queueStore, IAudi
 
     public IReadOnlyList<QueueItemEventRecord> Events { get; private set; } = [];
 
+    public IReadOnlyList<KeyValuePair<long, string>> DeferRationales { get; private set; } = [];
+
     public async Task<IActionResult> OnGetAsync(Guid id, CancellationToken ct)
     {
         if (!TryGetReviewer()) { return Page(); }
@@ -32,19 +34,18 @@ public sealed class AuditModel(QueueService queue, IQueueStore queueStore, IAudi
         Item = item;
         ItemId = id;
 
-        var detail = await queueStore.GetAsync(Reviewer!.TenantId, id, ct);
-        if (detail is null) { return NotFound(); }
-        if (detail.ProposalId is { } proposalId)
+        if (item.ProposalId is { } proposalId)
         {
-            Record = await audit.GetAsync(Reviewer.TenantId, proposalId, ct);
+            Record = await audit.GetAsync(Reviewer!.TenantId, proposalId, ct);
         }
 
-        var payload = await queue.GetPayloadAsync(Reviewer, id, ct);
+        var payload = await queue.GetPayloadAsync(Reviewer!, id, ct);
         switch (payload)
         {
             case PayloadResult.Found: CanSeeFields = true; break;
             case PayloadResult.RoleNotPermitted: CanSeeFields = false; break;
-            case PayloadResult.NotFound: case PayloadResult.NoPayload: return NotFound();
+            case PayloadResult.NoPayload: CanSeeFields = true; break;
+            case PayloadResult.NotFound: return NotFound();
             default: throw new InvalidOperationException("Unknown payload result.");
         }
 
@@ -56,15 +57,38 @@ public sealed class AuditModel(QueueService queue, IQueueStore queueStore, IAudi
 
         ShowChain = Record is not null && item.State == "decided" && item.Decision == "approve";
 
-        var events = await queue.EventsAsync(Reviewer, id, ct);
+        var events = await queue.EventsAsync(Reviewer!, id, ct);
         switch (events)
         {
-            case EventsResult.Found found: Events = found.Events.OrderBy(e => e.Seq).ToList(); break;
+            case EventsResult.Found found:
+                Events = found.Events.OrderBy(e => e.Seq).ToList();
+                // The service already strips the rationale for reviewers without the kind role; it is shown only when they hold it.
+                if (CanSeeFields)
+                {
+                    DeferRationales = Events.Where(e => e.EventType == "deferred").Select(e => new KeyValuePair<long, string>(e.Seq, ReadRationale(e.DetailJson)))
+                        .Where(p => p.Value.Length > 0).ToList();
+                }
+                break;
             case EventsResult.NotFound: return NotFound();
             default: throw new InvalidOperationException("Unknown events result.");
         }
 
         return Page();
+    }
+
+    private static string ReadRationale(string? json)
+    {
+        if (string.IsNullOrEmpty(json)) { return ""; }
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            return doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("rationale", out var r) && r.ValueKind == JsonValueKind.String
+                ? r.GetString() ?? "" : "";
+        }
+        catch (JsonException)
+        {
+            return "";
+        }
     }
 
     // Top-level keys only; nested values are shown as compact JSON text. Malformed stored text yields no rows (fail closed).
