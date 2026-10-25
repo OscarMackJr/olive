@@ -127,7 +127,7 @@
 
 - [x] **APR-01**: Approval is per proposal and needs an authenticated reviewer identity; an approval without one is rejected.
 - [x] **APR-02**: The approver may not be the proposal's `on_behalf_of` user. The check uses the explicit oid and tid mapping, and a missing or ambiguous mapping is refused.
-- [ ] **APR-03**: `role:case_supervisor` is checked at decision time, not when the item is claimed.
+- [x] **APR-03**: `role:case_supervisor` is checked at decision time, not when the item is claimed.
 - [x] **APR-04**: An action_approval decision (approve or reject) updates the queue item and the proposal state in one transaction.
 - [x] **APR-05**: The reviewer's authentication source (`entra | stub`) is recorded with each decision.
 
@@ -142,13 +142,13 @@
 
 ### Reviewer UI (UI)
 
-- [ ] **UI-01**: A reviewer can sign in through the OpenIdConnect handler, configured for Entra behind an interface. A DevReviewer identity provider is available for local and CI use and is barred in production.
-- [ ] **UI-02**: A reviewer can see the open items in their tenant on a Razor Pages list page.
-- [ ] **UI-03**: A reviewer can claim and release an item. These POSTs use antiforgery and post-redirect-get.
-- [ ] **UI-04**: A reviewer can approve or reject with a required rationale.
-- [ ] **UI-05**: A reviewer can view an item's audit history. It shows the four hashed fields, `body_sha256` and `proposal_hash`, plus a banner when the trace was verified by fixture.
-- [ ] **UI-06**: The UI has no dashboards, bulk actions, SLA views or assignment rules.
-- [ ] **UI-07**: A CI test runs the real OIDC handler against `mock-oauth2-server`. Every credential type is tried against every route group.
+- [x] **UI-01**: A reviewer can sign in through the OpenIdConnect handler, configured for Entra behind an interface. A DevReviewer identity provider is available for local and CI use and is barred in production.
+- [x] **UI-02**: A reviewer can see the open items in their tenant on a Razor Pages list page.
+- [x] **UI-03**: A reviewer can claim and release an item. These POSTs use antiforgery and post-redirect-get.
+- [x] **UI-04**: A reviewer can approve or reject with a required rationale.
+- [x] **UI-05**: A reviewer can view an item's audit history. It shows the four hashed fields, `body_sha256` and `proposal_hash`, plus a banner when the trace was verified by fixture.
+- [x] **UI-06**: The UI has no dashboards, bulk actions, SLA views or assignment rules.
+- [x] **UI-07**: A CI test runs the real OIDC handler against `mock-oauth2-server`. Every credential type is tried against every route group.
 
 ### Identity review kind (IRQ)
 
@@ -265,7 +265,7 @@ Deferred. Tracked but not in the current roadmap.
 | QUE-10 | Phase 5 | Complete |
 | APR-01 | Phase 5 | Complete |
 | APR-02 | Phase 5 | Complete |
-| APR-03 | Phase 7 | Pending |
+| APR-03 | Phase 7 | Complete |
 | APR-04 | Phase 5 | Complete |
 | APR-05 | Phase 5 | Complete |
 | EXE-01 | Phase 6 | Complete |
@@ -274,13 +274,13 @@ Deferred. Tracked but not in the current roadmap.
 | EXE-04 | Phase 6 | Complete |
 | EXE-05 | Phase 6 | Complete |
 | EXE-06 | Phase 6 | Complete |
-| UI-01 | Phase 7 | Pending |
-| UI-02 | Phase 7 | Pending |
-| UI-03 | Phase 7 | Pending |
-| UI-04 | Phase 7 | Pending |
-| UI-05 | Phase 7 | Pending |
-| UI-06 | Phase 7 | Pending |
-| UI-07 | Phase 7 | Pending |
+| UI-01 | Phase 7 | Complete |
+| UI-02 | Phase 7 | Complete |
+| UI-03 | Phase 7 | Complete |
+| UI-04 | Phase 7 | Complete |
+| UI-05 | Phase 7 | Complete |
+| UI-06 | Phase 7 | Complete |
+| UI-07 | Phase 7 | Complete |
 | IRQ-01 | Phase 8 | Pending |
 | IRQ-02 | Phase 8 | Pending |
 | IRQ-03 | Phase 8 | Pending |
