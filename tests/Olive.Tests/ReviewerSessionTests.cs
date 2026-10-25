@@ -53,7 +53,9 @@ public sealed class ReviewerSessionTests(PostgresFixture fixture)
     public void UI_01_picker_source_lists_all_fixture_reviewers_in_ordinal_order()
     {
         var all = FixtureReviewerIdentitySource.CreateDefault().All();
-        Assert.Equal(8, all.Count);
+        Assert.Equal(11, all.Count);
+        foreach (var id in new[] { "alpha-steward-1", "alpha-steward-2", "beta-steward" })
+            Assert.Contains(id, all.Select(a => a.ReviewerId));
         Assert.Equal(all.Select(a => a.ReviewerId).OrderBy(x => x, StringComparer.Ordinal), all.Select(a => a.ReviewerId));
     }
 
