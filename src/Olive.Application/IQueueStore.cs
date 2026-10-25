@@ -25,6 +25,18 @@ public interface IQueueStore
     // Under the row lock an approve with the flag false is never applied; a claim that landed after the caller's pre-read yields NotClaimed
     // so the client retries and the check then runs. Reject is unaffected (D-18).
     Task<DecideResult> DecideAsync(Guid tenantId, Guid itemId, string actor, string authSource, string decision, string rationale, bool approveIdentityVerified, DateTimeOffset now, CancellationToken ct);
+
+    // IRQ-01/IRQ-02: idempotent insert keyed on (tenant, producer, producer_ref). Same body hash replays the current state; a different hash conflicts.
+    Task<CreateIdentityResult> CreateIdentityItemAsync(Guid tenantId, string producer, string kind, string subtype, Guid producerRef, string subjectRef, string payloadRef, string rulesetVersion, string bodySha256, DateTimeOffset now, CancellationToken ct);
+}
+
+public abstract record CreateIdentityResult
+{
+    public sealed record Created(Guid ItemId, string State) : CreateIdentityResult;
+
+    public sealed record Replay(Guid ItemId, string State) : CreateIdentityResult;
+
+    public sealed record Conflict : CreateIdentityResult;
 }
 
 public abstract record DecideResult
@@ -74,10 +86,10 @@ public abstract record ReleaseResult
     public sealed record NotFound : ReleaseResult;
 }
 
-public sealed record QueueItemSummary(Guid TenantId, Guid ItemId, string Kind, string Subtype, string Producer, Guid ProducerRef, string State, string SubjectRef, string PayloadRef, string? ClaimedBy, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt);
+public sealed record QueueItemSummary(Guid TenantId, Guid ItemId, string Kind, string Subtype, string Producer, Guid ProducerRef, string State, string SubjectRef, string PayloadRef, string? ClaimedBy, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt, string? RulesetVersion = null);
 
 // No rationale member: the rationale can never be echoed from a detail record.
-public sealed record QueueItemDetail(Guid TenantId, Guid ItemId, string Kind, string Subtype, string Producer, Guid ProducerRef, string State, string SubjectRef, string PayloadRef, string? ClaimedBy, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt, string? Decision, string? DecidedBy, DateTimeOffset? DecidedAt, string? AuthSource, string? WithdrawnReason, Guid? ProposalId);
+public sealed record QueueItemDetail(Guid TenantId, Guid ItemId, string Kind, string Subtype, string Producer, Guid ProducerRef, string State, string SubjectRef, string PayloadRef, string? ClaimedBy, DateTimeOffset CreatedAt, DateTimeOffset? ExpiresAt, string? Decision, string? DecidedBy, DateTimeOffset? DecidedAt, string? AuthSource, string? WithdrawnReason, Guid? ProposalId, string? RulesetVersion = null);
 
 public sealed record QueueItemEventRecord(long Seq, string EventType, string? FromState, string ToState, string Actor, DateTimeOffset CreatedAt, string? DetailJson);
 

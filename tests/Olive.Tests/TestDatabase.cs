@@ -156,6 +156,15 @@ public sealed class TestDatabase(PostgresFixture fixture, string name) : IAsyncD
         return await cmd.ExecuteNonQueryAsync();
     }
 
+    // Test-only: scalar query as the container superuser (bypasses RLS), e.g. row counts.
+    public async Task<long> AdminCountAsync(string sql)
+    {
+        await using var conn = new NpgsqlConnection(fixture.AdminConnectionString(Name));
+        await conn.OpenAsync();
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        return Convert.ToInt64(await cmd.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture);
+    }
+
     public async ValueTask DisposeAsync()
     {
         NpgsqlConnection.ClearAllPools();

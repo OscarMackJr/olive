@@ -20,14 +20,14 @@ public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry,
 
         var now = time.GetUtcNow();
         var rows = await store.ListAsync(reviewer.TenantId, kind, effectiveState, now, limit ?? DefaultLimit, ct);
-        return new QueueListResult.Ok(rows.Select(r => new QueueItemView(r.TenantId, r.ItemId, r.Kind, r.Subtype, r.Producer, r.ProducerRef, r.State, r.SubjectRef, r.PayloadRef, r.ClaimedBy, r.CreatedAt, AgeSeconds(r.CreatedAt, now), r.ExpiresAt, null, null, null, null, null)).ToList());
+        return new QueueListResult.Ok(rows.Select(r => new QueueItemView(r.TenantId, r.ItemId, r.Kind, r.Subtype, r.Producer, r.ProducerRef, r.State, r.SubjectRef, r.PayloadRef, r.ClaimedBy, r.CreatedAt, AgeSeconds(r.CreatedAt, now), r.ExpiresAt, null, null, null, null, null, null, r.RulesetVersion)).ToList());
     }
 
     public async Task<QueueItemView?> GetAsync(ReviewerContext reviewer, Guid itemId, CancellationToken ct)
     {
         var d = await store.GetAsync(reviewer.TenantId, itemId, ct);
         if (d is null) { return null; }
-        return new QueueItemView(d.TenantId, d.ItemId, d.Kind, d.Subtype, d.Producer, d.ProducerRef, d.State, d.SubjectRef, d.PayloadRef, d.ClaimedBy, d.CreatedAt, AgeSeconds(d.CreatedAt, time.GetUtcNow()), d.ExpiresAt, d.Decision, d.DecidedBy, d.DecidedAt, d.AuthSource, d.WithdrawnReason);
+        return new QueueItemView(d.TenantId, d.ItemId, d.Kind, d.Subtype, d.Producer, d.ProducerRef, d.State, d.SubjectRef, d.PayloadRef, d.ClaimedBy, d.CreatedAt, AgeSeconds(d.CreatedAt, time.GetUtcNow()), d.ExpiresAt, d.Decision, d.DecidedBy, d.DecidedAt, d.AuthSource, d.WithdrawnReason, d.ProposalId, d.RulesetVersion);
     }
 
     // D-19: the required role is read from the kind definition in the registry, never written in code.
@@ -113,7 +113,32 @@ public sealed class QueueService(IQueueStore store, IQueueKindRegistry registry,
         };
     }
 
-    public QueueItemView ToView(QueueItemDetail d) => new(d.TenantId, d.ItemId, d.Kind, d.Subtype, d.Producer, d.ProducerRef, d.State, d.SubjectRef, d.PayloadRef, d.ClaimedBy, d.CreatedAt, AgeSeconds(d.CreatedAt, time.GetUtcNow()), d.ExpiresAt, d.Decision, d.DecidedBy, d.DecidedAt, d.AuthSource, d.WithdrawnReason);
+    public QueueItemView ToView(QueueItemDetail d) => new(d.TenantId, d.ItemId, d.Kind, d.Subtype, d.Producer, d.ProducerRef, d.State, d.SubjectRef, d.PayloadRef, d.ClaimedBy, d.CreatedAt, AgeSeconds(d.CreatedAt, time.GetUtcNow()), d.ExpiresAt, d.Decision, d.DecidedBy, d.DecidedAt, d.AuthSource, d.WithdrawnReason, d.ProposalId, d.RulesetVersion);
+
+    private static readonly System.Text.RegularExpressions.Regex RulesetVersionPattern = new("^[A-Za-z0-9._-]{1,128}$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    private static readonly System.Text.RegularExpressions.Regex Sha256Pattern = new("^[0-9a-f]{64}$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    // IRQ-01: producer and tenant come only from the verified ProducerContext. Every failure is a static InvalidRequest (no value echoed).
+    public async Task<CreateResult> CreateAsync(ProducerContext producer, CreateItemRequest request, string bodySha256, CancellationToken ct)
+    {
+        var invalid = new CreateResult.InvalidRequest();
+        if (!registry.Kinds.Contains(request.Kind, StringComparer.Ordinal)
+            || !producer.KindSubtypes.TryGetValue(request.Kind, out var subtypes)
+            || !subtypes.Contains(request.Subtype)) { return invalid; }
+        if (!Guid.TryParseExact(request.ProducerRef, "D", out var producerRef) || producerRef.ToString("D") != request.ProducerRef) { return invalid; }
+        if (request.SubjectRef != "bluto:candidate/" + request.ProducerRef || request.PayloadRef != "bluto:review-evidence/" + request.ProducerRef) { return invalid; }
+        if (!RulesetVersionPattern.IsMatch(request.RulesetVersion) || !Sha256Pattern.IsMatch(bodySha256)) { return invalid; }
+
+        var result = await store.CreateIdentityItemAsync(producer.TenantId, producer.Producer, request.Kind, request.Subtype, producerRef,
+            request.SubjectRef, request.PayloadRef, request.RulesetVersion, bodySha256, time.GetUtcNow(), ct);
+        return result switch
+        {
+            CreateIdentityResult.Created c => new CreateResult.Created(c.ItemId, c.State),
+            CreateIdentityResult.Replay r => new CreateResult.Replay(r.ItemId, r.State),
+            CreateIdentityResult.Conflict => new CreateResult.Conflict(),
+            _ => throw new InvalidOperationException("Unknown create result."),
+        };
+    }
 
     private static long AgeSeconds(DateTimeOffset created, DateTimeOffset now) => Math.Max(0, (long)(now - created).TotalSeconds);
 }
@@ -126,7 +151,7 @@ public abstract record QueueListResult
 }
 
 // Reference-only view; no rationale, parameters, justification or on_behalf_of member exists.
-public sealed record QueueItemView(Guid TenantId, Guid ItemId, string Kind, string Subtype, string Producer, Guid ProducerRef, string State, string SubjectRef, string PayloadRef, string? ClaimedBy, DateTimeOffset CreatedAt, long AgeSeconds, DateTimeOffset? ExpiresAt, string? Decision, string? DecidedBy, DateTimeOffset? DecidedAt, string? AuthSource, string? WithdrawnReason);
+public sealed record QueueItemView(Guid TenantId, Guid ItemId, string Kind, string Subtype, string Producer, Guid ProducerRef, string State, string SubjectRef, string PayloadRef, string? ClaimedBy, DateTimeOffset CreatedAt, long AgeSeconds, DateTimeOffset? ExpiresAt, string? Decision, string? DecidedBy, DateTimeOffset? DecidedAt, string? AuthSource, string? WithdrawnReason, Guid? ProposalId = null, string? RulesetVersion = null);
 
 public abstract record PayloadResult
 {
@@ -173,4 +198,17 @@ public abstract record EventsResult
     public sealed record Found(IReadOnlyList<QueueItemEventRecord> Events) : EventsResult;
 
     public sealed record NotFound : EventsResult;
+}
+
+public sealed record CreateItemRequest(string Kind, string Subtype, string ProducerRef, string SubjectRef, string PayloadRef, string RulesetVersion);
+
+public abstract record CreateResult
+{
+    public sealed record Created(Guid ItemId, string State) : CreateResult;
+
+    public sealed record Replay(Guid ItemId, string State) : CreateResult;
+
+    public sealed record Conflict : CreateResult;
+
+    public sealed record InvalidRequest : CreateResult;
 }

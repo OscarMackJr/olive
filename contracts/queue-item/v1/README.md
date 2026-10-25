@@ -22,3 +22,9 @@ States: `open`, `claimed`, `decided`, `withdrawn`. A decided item carries `decid
 Optional: `ruleset_version`, `claimed_by`, `claimed_at`, `decision`, `decided_by`, `decided_at`, `rationale`, `auth_source`, `withdrawn_reason`, `expires_at`, `age_seconds`.
 
 Examples: `queue-item.valid.json`, `queue-item.invalid.json` (unknown property), `queue-item.inline-payload.invalid.json` (inline body in `payload_ref`).
+
+## identity-create (producer create body)
+
+`identity-create.schema.json` is the body bluto POSTs to `/v1/queue/items`: exactly `kind`, `subtype`, `producer_ref`, `subject_ref`, `payload_ref`, `ruleset_version`, `additionalProperties` false. `kind` is `identity_review`, `subtype` is `candidate_pair` only (`link_challenge` is rejected), the refs are `bluto:candidate/<producer_ref>` and `bluto:review-evidence/<producer_ref>`, and `ruleset_version` matches `^[A-Za-z0-9._-]{1,128}$` so no record value can ride in it. Tenant, producer and every decision or server field come from the verified token and `producers.yaml`, never the body.
+
+Examples: `identity-create.valid.json`, `identity-create.invalid.json` (inline `payload`), `identity-create.link-challenge.invalid.json`, `identity-create.server-assigned.invalid.json` (`tenant_id` in the body).

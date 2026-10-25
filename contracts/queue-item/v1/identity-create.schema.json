@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://olive.invalid/contracts/queue-item/v1/identity-create.schema.json",
+  "title": "Identity review item create body (IR-1 section 4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "subtype", "producer_ref", "subject_ref", "payload_ref", "ruleset_version"],
+  "properties": {
+    "kind": { "const": "identity_review" },
+    "subtype": { "enum": ["candidate_pair"] },
+    "producer_ref": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "subject_ref": { "type": "string", "pattern": "^bluto:candidate/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "payload_ref": { "type": "string", "pattern": "^bluto:review-evidence/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "ruleset_version": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$" }
+  }
+}

@@ -121,7 +121,7 @@ public sealed class QueueSurfaceInvariantTests(PostgresFixture fixture)
     }
 
     [Fact]
-    public async Task D_03_no_producer_route_exists_for_creating_or_withdrawing_queue_items()
+    public async Task D_03_only_the_producer_only_create_route_exists_and_there_is_no_withdraw_route()
     {
         await using var db = await fixture.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db);
@@ -132,7 +132,8 @@ public sealed class QueueSurfaceInvariantTests(PostgresFixture fixture)
             .ToArray();
 
         Assert.Contains(routes, r => r.Method == "GET" && r.Pattern.TrimEnd('/') == Items);
-        Assert.DoesNotContain(routes, r => r.Method == "POST" && r.Pattern.TrimEnd('/') == Items);
+        // Phase 8 (IRQ-01): exactly one POST on the collection, the service-token create route (ProducerOnly filter, asserted in IdentityReviewCreateTests).
+        Assert.Single(routes, r => r.Method == "POST" && r.Pattern.TrimEnd('/') == Items);
         Assert.DoesNotContain(routes, r => r.Pattern.EndsWith("/withdraw", StringComparison.Ordinal));
     }
 }

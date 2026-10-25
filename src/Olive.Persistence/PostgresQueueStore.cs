@@ -30,6 +30,14 @@ public sealed class PostgresQueueStore(TenantUnitOfWork uow) : IQueueStore
         public string? AuthSource { get; set; }
         public string? WithdrawnReason { get; set; }
         public Guid? ProposalId { get; set; }
+        public string? RulesetVersion { get; set; }
+    }
+
+    private sealed class ExistingRow
+    {
+        public Guid ItemId { get; set; }
+        public string State { get; set; } = "";
+        public string? BodySha256 { get; set; }
     }
 
     private sealed class EventRow
@@ -65,7 +73,7 @@ public sealed class PostgresQueueStore(TenantUnitOfWork uow) : IQueueStore
             var rows = await conn.QueryAsync<ItemRow>(new CommandDefinition(QueueSql.List,
                 new { tenant_id = tenantId, kind, state, now = now.UtcDateTime, limit }, tx, cancellationToken: ct));
             return rows.Select(r => new QueueItemSummary(r.TenantId, r.ItemId, r.Kind, r.Subtype, r.Producer, r.ProducerRef, r.State,
-                r.SubjectRef, r.PayloadRef, r.ClaimedBy, Utc(r.CreatedAt), Utc(r.ExpiresAt))).ToList();
+                r.SubjectRef, r.PayloadRef, r.ClaimedBy, Utc(r.CreatedAt), Utc(r.ExpiresAt), r.RulesetVersion)).ToList();
         }, ct);
 
     public Task<QueueItemDetail?> GetAsync(Guid tenantId, Guid itemId, CancellationToken ct) =>
@@ -75,7 +83,7 @@ public sealed class PostgresQueueStore(TenantUnitOfWork uow) : IQueueStore
                 new { tenant_id = tenantId, item_id = itemId }, tx, cancellationToken: ct));
             return r is null ? null : new QueueItemDetail(r.TenantId, r.ItemId, r.Kind, r.Subtype, r.Producer, r.ProducerRef, r.State,
                 r.SubjectRef, r.PayloadRef, r.ClaimedBy, Utc(r.CreatedAt), Utc(r.ExpiresAt), r.Decision, r.DecidedBy, Utc(r.DecidedAt),
-                r.AuthSource, r.WithdrawnReason, r.ProposalId);
+                r.AuthSource, r.WithdrawnReason, r.ProposalId, r.RulesetVersion);
         }, ct);
 
     public Task<IReadOnlyList<QueueItemEventRecord>?> EventsAsync(Guid tenantId, Guid itemId, CancellationToken ct) =>
@@ -101,9 +109,39 @@ public sealed class PostgresQueueStore(TenantUnitOfWork uow) : IQueueStore
             return r is null ? null : new ReviewerPayload(r.ItemId, r.Kind, r.ActionType, r.ParametersJson, r.Justification, r.OnBehalfOf, Utc(r.ExpiresAt), r.TraceRef);
         }, ct);
 
+    public Task<CreateIdentityResult> CreateIdentityItemAsync(Guid tenantId, string producer, string kind, string subtype, Guid producerRef, string subjectRef, string payloadRef, string rulesetVersion, string bodySha256, DateTimeOffset now, CancellationToken ct) =>
+        uow.ExecuteAsync<CreateIdentityResult>(tenantId, async (conn, tx) =>
+        {
+            var itemId = Guid.NewGuid();
+            var inserted = await conn.QuerySingleOrDefaultAsync<Guid?>(new CommandDefinition(QueueSql.InsertIdentityItem, new
+            {
+                tenant_id = tenantId,
+                item_id = itemId,
+                kind,
+                subtype,
+                producer,
+                producer_ref = producerRef,
+                subject_ref = subjectRef,
+                payload_ref = payloadRef,
+                ruleset_version = rulesetVersion,
+                body_sha256 = bodySha256,
+            }, tx, cancellationToken: ct));
+            if (inserted is not null)
+            {
+                await InsertItemEvent(conn, tx, tenantId, itemId, "created", null, QueueStates.Open, producer, null, ct);
+                return new CreateIdentityResult.Created(itemId, QueueStates.Open);
+            }
+
+            var existing = await conn.QuerySingleAsync<ExistingRow>(new CommandDefinition(QueueSql.FindByProducerRef,
+                new { tenant_id = tenantId, producer, producer_ref = producerRef }, tx, cancellationToken: ct));
+            return string.Equals(existing.BodySha256, bodySha256, StringComparison.Ordinal)
+                ? new CreateIdentityResult.Replay(existing.ItemId, existing.State)
+                : new CreateIdentityResult.Conflict();
+        }, ct);
+
     private static QueueItemDetail ToDetail(ItemRow r) => new(r.TenantId, r.ItemId, r.Kind, r.Subtype, r.Producer, r.ProducerRef, r.State,
         r.SubjectRef, r.PayloadRef, r.ClaimedBy, Utc(r.CreatedAt), Utc(r.ExpiresAt), r.Decision, r.DecidedBy, Utc(r.DecidedAt),
-        r.AuthSource, r.WithdrawnReason, r.ProposalId);
+        r.AuthSource, r.WithdrawnReason, r.ProposalId, r.RulesetVersion);
 
     private static Task<ItemRow?> LockItem(NpgsqlConnection conn, NpgsqlTransaction tx, Guid tenantId, Guid itemId, CancellationToken ct) =>
         conn.QuerySingleOrDefaultAsync<ItemRow>(new CommandDefinition(QueueSql.GetItemForUpdate,

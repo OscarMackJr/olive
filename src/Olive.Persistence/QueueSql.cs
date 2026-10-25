@@ -8,12 +8,22 @@ public static class QueueSql
         "insert into queue_item (tenant_id, item_id, kind, subtype, producer, producer_ref, subject_ref, payload_ref, proposal_id, expires_at) " +
         "values (@tenant_id, @item_id, @kind, @subtype, @producer, @producer_ref, @subject_ref, @payload_ref, @proposal_id, @expires_at)";
 
+    // IRQ-02: ON CONFLICT DO NOTHING (never catch 23505, which would abort the transaction) so a replay can read inside the same unit of work.
+    public const string InsertIdentityItem =
+        "insert into queue_item (tenant_id, item_id, kind, subtype, producer, producer_ref, subject_ref, payload_ref, ruleset_version, body_sha256) " +
+        "values (@tenant_id, @item_id, @kind, @subtype, @producer, @producer_ref, @subject_ref, @payload_ref, @ruleset_version, @body_sha256) " +
+        "on conflict (tenant_id, producer, producer_ref) do nothing returning item_id";
+
+    public const string FindByProducerRef =
+        "select item_id, state, body_sha256 from queue_item " +
+        "where tenant_id = @tenant_id and producer = @producer and producer_ref = @producer_ref";
+
     public const string InsertEvent =
         "insert into queue_item_event (tenant_id, event_id, item_id, event_type, from_state, to_state, actor, detail) " +
         "values (@tenant_id, @event_id, @item_id, @event_type, @from_state, @to_state, @actor, @detail::jsonb)";
 
     private const string ItemColumns =
-        "tenant_id, item_id, kind, subtype, producer, producer_ref, state, subject_ref, payload_ref, claimed_by, created_at, expires_at";
+        "tenant_id, item_id, kind, subtype, producer, producer_ref, state, subject_ref, payload_ref, claimed_by, created_at, expires_at, ruleset_version";
 
     private const string DetailColumns =
         ItemColumns + ", decision, decided_by, decided_at, auth_source, withdrawn_reason, proposal_id";

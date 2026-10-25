@@ -111,7 +111,7 @@ public sealed class ReviewerTenantTests(PostgresFixture fixture)
     }
 
     [Fact]
-    public async Task D_03_no_create_or_withdraw_route_exists()
+    public async Task D_03_no_reviewer_create_or_withdraw_route_exists()
     {
         await using var db = await fixture.CreateDatabaseAsync();
         await using var factory = new OliveApiFactory(db);
@@ -122,6 +122,8 @@ public sealed class ReviewerTenantTests(PostgresFixture fixture)
         {
             var methods = route.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods ?? [];
             var raw = route.RoutePattern.RawText!;
+            // Phase 8 (IRQ-01): the collection POST is the service-token-only create route; a reviewer POST to it is refused below.
+            if (raw.TrimEnd('/').Equals(Items, StringComparison.OrdinalIgnoreCase)) { continue; }
             if (!raw.EndsWith("/claim", StringComparison.OrdinalIgnoreCase) && !raw.EndsWith("/release", StringComparison.OrdinalIgnoreCase) && !raw.EndsWith("/decision", StringComparison.OrdinalIgnoreCase))
             {
                 Assert.DoesNotContain("POST", methods);

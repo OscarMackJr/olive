@@ -36,5 +36,6 @@ public static class ProblemReasons
     public const string NoReviewerTenant = "no_reviewer_tenant";
     public const string TenantNotPermitted = "tenant_not_permitted";
     public const string ProducerNotRegistered = "producer_not_registered";
+    public const string ServerAssignedField = "server_assigned_field";
     public const string InternalError = "internal_error";
 }
