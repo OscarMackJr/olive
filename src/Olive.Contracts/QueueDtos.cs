@@ -54,4 +54,25 @@ public sealed record QueueItemEventDto(
 public sealed record QueueItemEventsResponse([property: JsonPropertyName("events")] IReadOnlyList<QueueItemEventDto> Events);
 
 // Slim create response: no claimed_by or any reviewer identity may reach the producer.
+// IRQ-03 / D-14: exactly these members for a producer poll. No reviewer text, claim or deferral history can be added here.
+public sealed record IdentityPollItemDto(
+    [property: JsonPropertyName("item_id")] Guid ItemId,
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("subtype")] string Subtype,
+    [property: JsonPropertyName("producer_ref")] Guid ProducerRef,
+    [property: JsonPropertyName("subject_ref")] string SubjectRef,
+    [property: JsonPropertyName("payload_ref")] string PayloadRef,
+    [property: JsonPropertyName("ruleset_version")] string RulesetVersion,
+    [property: JsonPropertyName("state")] string State,
+    [property: JsonPropertyName("decision")] string Decision,
+    [property: JsonPropertyName("decided_by")] string DecidedBy,
+    [property: JsonPropertyName("decided_at")] DateTimeOffset DecidedAt);
+
+// next_cursor is always written (null when the producer has never polled a decision).
+public sealed record IdentityPollResponse(
+    [property: JsonPropertyName("items")] IReadOnlyList<IdentityPollItemDto> Items,
+    [property: JsonPropertyName("next_cursor")] string? NextCursor);
+
+public sealed record WithdrawItemResponse([property: JsonPropertyName("item_id")] Guid ItemId, [property: JsonPropertyName("state")] string State);
+
 public sealed record CreateItemResponse([property: JsonPropertyName("item_id")] Guid ItemId, [property: JsonPropertyName("state")] string State);

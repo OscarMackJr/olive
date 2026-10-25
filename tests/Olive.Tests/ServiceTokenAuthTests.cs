@@ -26,9 +26,9 @@ public sealed class ServiceTokenAuthTests(PostgresFixture fixture)
         using var client = factory.CreateServiceClient(AlphaToken);
         var response = await client.GetAsync(Items, Ct);
 
-        // Authenticated, then refused as a wrong caller type for the reviewer-only list route (interim until the poll view).
-        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        Assert.Equal("principal_not_permitted", ReasonOf(await response.Content.ReadAsStringAsync(Ct)));
+        // Authenticated as a producer, then refused as a non-poll query on the shared list route (D-02).
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("invalid_request", ReasonOf(await response.Content.ReadAsStringAsync(Ct)));
         Assert.Equal(1, factory.ServiceTokens.Calls);
         Assert.Equal(0, factory.Introspector.Calls);
     }

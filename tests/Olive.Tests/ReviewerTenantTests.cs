@@ -124,16 +124,19 @@ public sealed class ReviewerTenantTests(PostgresFixture fixture)
             var raw = route.RoutePattern.RawText!;
             // Phase 8 (IRQ-01): the collection POST is the service-token-only create route; a reviewer POST to it is refused below.
             if (raw.TrimEnd('/').Equals(Items, StringComparison.OrdinalIgnoreCase)) { continue; }
+            // Phase 8 (IRQ-03): the withdraw route is service-token-only; a reviewer POST to it is refused below.
+            if (raw.EndsWith("/withdraw", StringComparison.OrdinalIgnoreCase)) { continue; }
             if (!raw.EndsWith("/claim", StringComparison.OrdinalIgnoreCase) && !raw.EndsWith("/release", StringComparison.OrdinalIgnoreCase) && !raw.EndsWith("/decision", StringComparison.OrdinalIgnoreCase))
             {
                 Assert.DoesNotContain("POST", methods);
             }
-            Assert.False(route.RoutePattern.RawText!.EndsWith("/withdraw", StringComparison.OrdinalIgnoreCase));
         }
 
         using var client = factory.CreateReviewerClient("alpha-sup-1");
         var post = await client.PostAsync(Items, ApiProposalTests.Json("{}"), Ct);
         Assert.False(post.IsSuccessStatusCode);
+        var withdraw = await client.PostAsync(Items + "/" + Guid.NewGuid() + "/withdraw", ApiProposalTests.Json("{\"reason\":\"source_changed\"}"), Ct);
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, withdraw.StatusCode);
     }
 
     [Fact]
