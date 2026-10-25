@@ -86,6 +86,7 @@ builder.Services.AddSingleton<IUserIdentityResolver>(_ => FixtureUserIdentityRes
 builder.Services.AddSingleton<UserIdentityVerifier>();
 builder.Services.AddSingleton<ApprovalIdentityCheck>();
 builder.Services.AddSingleton<IAgentAllowlist>(_ => AgentAllowlist.LoadEmbedded());
+builder.Services.AddSingleton<IProducerRegistry>(_ => ProducerRegistry.LoadEmbedded());
 builder.Services.AddSingleton<IQueueKindRegistry>(_ => QueueKindRegistry.LoadEmbedded());
 builder.Services.AddSingleton<IReviewerTenantMap>(_ => ReviewerTenantMap.LoadEmbedded());
 builder.Services.AddSingleton(_ => CatalogLoader.LoadEmbedded(Path.Combine(AppContext.BaseDirectory, "contracts", "vendored", "vocabulary.yaml")));

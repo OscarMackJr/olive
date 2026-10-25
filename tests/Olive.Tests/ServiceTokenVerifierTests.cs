@@ -41,7 +41,7 @@ public sealed class ServiceTokenVerifierTests
     {
         var r = await Run("fixture-service-token-unknown-client");
         Assert.True(r.Active);
-        Assert.Equal("unregistered-client", r.Caller!.ClientId);
+        Assert.False(ProducerRegistry.LoadEmbedded().TryGetByClientId(r.Caller!.ClientId, out _));
     }
 
     [Fact]

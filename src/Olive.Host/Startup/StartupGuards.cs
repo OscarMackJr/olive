@@ -72,6 +72,34 @@ public static class StartupGuards
         }
     }
 
+    // D-06 / QUE-02: every producer's kinds, subtypes and ref scheme must be registered in the queue-kind registry, and the
+    // identity_review kind may only be filed by bluto (migration 0008 constrains it). Static message: no registry content is quoted.
+    public static void CheckProducers(IServiceProvider provider)
+    {
+        try
+        {
+            var producers = provider.GetRequiredService<IProducerRegistry>();
+            var kinds = provider.GetRequiredService<IQueueKindRegistry>();
+            foreach (var producer in producers.All)
+            {
+                foreach (var (kindName, subtypes) in producer.KindSubtypes)
+                {
+                    if (!kinds.TryGet(kindName, out var kind)
+                        || subtypes.Any(s => !kind.Subtypes.Contains(s))
+                        || !kind.RefSchemes.Contains(producer.Producer)
+                        || (kindName == "identity_review" && producer.Producer != "bluto"))
+                    {
+                        throw new InvalidOperationException();
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            throw new StartupGuardException("QUE-02", "the producer registry failed validation");
+        }
+    }
+
     // Q17 / T-05-20: the dev reviewer scheme must not exist in production, whatever identity source is registered.
     public static void CheckDevReviewerNotInProduction(IServiceProvider provider, OliveEnvironment env)
     {

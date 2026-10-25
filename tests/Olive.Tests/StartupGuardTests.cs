@@ -675,6 +675,15 @@ public sealed class StartupGuardTests(PostgresFixture fixture)
     }
 
     [Fact]
+    public async Task QUE_02_host_starts_with_shipped_producer_registry()
+    {
+        await using var db = await fixture.CreateDatabaseAsync();
+        await using var factory = new OliveApiFactory(db);
+        Assert.Null(await TryStartAsync(factory));
+        Assert.True(factory.Services.GetRequiredService<IProducerRegistry>().TryGetByClientId("bluto-stub", out _));
+    }
+
+    [Fact]
     public async Task QUE_02_host_refuses_start_on_role_drift()
     {
         await using var db = await fixture.CreateDatabaseAsync();
